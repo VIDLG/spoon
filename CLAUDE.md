@@ -49,11 +49,11 @@ For tool categories requiring independent, ongoing management (e.g., proxy, cont
 
 ### Release Steps
 
-1. Clean auto-inserted permissions from `.claude/settings.json`
+1. Clean auto-inserted permissions from `.claude/settings.json` — verify it only contains `hooks`, no `permissions` key
 2. Update `version` in `.claude-plugin/plugin.json`
 3. Check whether `README.md` and `README-zh.md` need updates to reflect changes
 4. Commit all changes and push to GitHub
-5. Create release with `gh release create`, tag matches version (e.g., `v0.1.1`)
+5. Create release with `gh release create`, tag matches version (e.g., `v0.2.1`)
 
 ### Versioning
 

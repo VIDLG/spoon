@@ -11,12 +11,5 @@
         ]
       }
     ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(git -C d:/projects/spoon add .claude/settings.json .claude-plugin/plugin.json .claude-plugin/marketplace.json)",
-      "Bash(git -C:*)",
-      "Bash(git -C d:/projects/spoon push origin main)"
-    ]
   }
 }
