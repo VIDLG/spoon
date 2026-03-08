@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -File d:/projects/spoon/skills/scripts/run-cmd.ps1 scoop search pkl)",
+      "Bash(powershell -File d:/projects/spoon/skills/scripts/run-cmd.ps1 git init)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/sync-docs.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+# Temporary files
+install.ps1
+
+# Local settings (contains machine-specific permissions)
+.claude/settings.local.json

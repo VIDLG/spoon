@@ -1,0 +1,5 @@
+{
+  "name": "spoon",
+  "version": "0.1.0",
+  "description": "Windows development environment management toolkit. Manages software installation, configuration, and maintenance via scoop and other tools."
+}
