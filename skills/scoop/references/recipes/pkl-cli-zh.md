@@ -25,11 +25,12 @@ pkl-cli 开箱即用，无需强制配置。可选设置：
 
 ### 编辑器支持
 
-如果用户使用 VS Code，建议安装 Pkl 扩展以获得语法高亮、代码补全和验证：
+如果用户使用 VS Code，建议安装 Pkl 扩展以获得语法高亮、代码补全和验证。该扩展**未发布到 VS Code Marketplace**，需从 GitHub 手动安装：
 
-```
-ext install apple.pkl-vscode
-```
+1. 从 https://github.com/apple/pkl-vscode/releases/latest/ 下载最新 `.vsix` 文件
+2. 在 VS Code 中：`Ctrl+Shift+P` → "Extensions: Install from VSIX..." → 选择下载的文件
+
+注意：该扩展需要 **Java 22+** 来运行 Pkl Language Server。默认从 `PATH` 或 `JAVA_HOME` 查找 Java，也可通过 `pkl.lsp.java.path` 设置配置。
 
 ### 环境变量（可选）
 

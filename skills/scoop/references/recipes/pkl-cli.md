@@ -23,11 +23,12 @@ pkl-cli works out of the box with no mandatory configuration. Optional setup:
 
 ### Editor support
 
-If the user works in VS Code, suggest installing the Pkl extension for syntax highlighting, code completion, and validation:
+If the user works in VS Code, suggest installing the Pkl extension for syntax highlighting, code completion, and validation. The extension is **not on the VS Code Marketplace** — it must be installed manually from GitHub:
 
-```
-ext install apple.pkl-vscode
-```
+1. Download the latest `.vsix` from https://github.com/apple/pkl-vscode/releases/latest/
+2. In VS Code: `Ctrl+Shift+P` → "Extensions: Install from VSIX..." → select the downloaded file
+
+Note: The extension requires **Java 22+** to run the Pkl Language Server. It looks for Java in `PATH` or `JAVA_HOME`, or can be configured via `pkl.lsp.java.path`.
 
 ### Environment variable (optional)
 
