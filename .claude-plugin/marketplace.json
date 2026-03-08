@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "spoon",
+  "version": "1.0.0",
+  "owner": {
+    "name": "VIDLG",
+    "email": "daleydeng@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "spoon",
+      "description": "Windows development environment management toolkit. Manages software installation, configuration, and maintenance via scoop and other tools.",
+      "source": ".",
+      "category": "development"
+    }
+  ]
+}

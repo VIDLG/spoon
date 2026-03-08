@@ -14,8 +14,8 @@
   },
   "permissions": {
     "allow": [
-      "Bash(git add .claude-plugin/plugin.json .claude/settings.json CLAUDE.md README.md README-zh.md)",
-      "Bash(git commit:*)"
+      "Bash(git -C d:/projects/spoon add .claude-plugin/plugin.json .claude-plugin/marketplace.json .claude/settings.json CLAUDE.md README.md README-zh.md)",
+      "Bash(git -C:*)"
     ]
   }
 }

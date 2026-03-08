@@ -28,7 +28,8 @@ Manages proxy and mirror configuration across development tools.
 ```
 spoon/
 ├── .claude-plugin/
-│   └── plugin.json          # Plugin metadata
+│   ├── plugin.json          # Plugin metadata
+│   └── marketplace.json     # Marketplace definition
 ├── skills/
 │   ├── scoop/
 │   │   ├── SKILL.md          # Scoop skill definition
@@ -53,17 +54,35 @@ spoon/
 
 ## Installation
 
-Add spoon as a local plugin in your Claude Code user settings (`~/.claude/settings.json`):
+In Claude Code, run:
+
+```
+/plugin marketplace add VIDLG/spoon
+```
+
+Then install the spoon plugin from the marketplace. The plugin will be available across all your projects.
+
+### Team setup
+
+To auto-enable spoon for all team members on a project, add to your project's `.claude/settings.json`:
 
 ```json
 {
+  "extraKnownMarketplaces": {
+    "spoon": {
+      "source": {
+        "source": "github",
+        "repo": "VIDLG/spoon"
+      }
+    }
+  },
   "enabledPlugins": {
-    "spoon@local": true
+    "spoon@spoon": true
   }
 }
 ```
 
-Then register the plugin path. Claude Code will discover the skills automatically from the `.claude-plugin/plugin.json` file.
+Team members will be prompted to install the plugin when they trust the project.
 
 ## Requirements
 
