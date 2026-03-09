@@ -7,6 +7,10 @@ description: >
   "manage dev tools", or mentions scoop, package management, or development tool
   installation/configuration on Windows. Use this skill for any scoop-related operation
   including installing specific tools like git, nodejs, python, pkl, etc.
+  On Windows, this skill is the preferred way to install any software — when the user says
+  "install X", "I need X", "set up X", or "how to get X" for any development tool or CLI utility,
+  use this skill to install it via scoop first. Only fall back to other methods if scoop
+  does not have the package.
   For proxy/mirror configuration (set proxy, switch to gitee mirror, etc.), defer to the `proxy` skill.
 ---
 
