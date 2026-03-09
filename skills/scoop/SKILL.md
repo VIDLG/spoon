@@ -240,6 +240,53 @@ powershell -Command "scoop checkup"          # run a health check on scoop
 powershell -Command "scoop reset <app>"      # reset an app (re-link shims and shortcuts)
 ```
 
+### Backup & Restore
+
+#### Export (backup)
+
+Export the list of installed apps, buckets, and their versions to a JSON file:
+
+```bash
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop export > <backup_path>/scoopfile.json
+```
+
+This only saves the **manifest** (app names, versions, bucket sources) — not the actual binaries or cached downloads.
+
+Use AskUserQuestion to let the user choose:
+1. **Backup location** — where to save `scoopfile.json` (e.g., `D:\Backup`, a cloud-synced folder, etc.)
+2. **Include download cache?** — whether to also copy `<scoop>/cache` to the backup location. This avoids re-downloading large packages (e.g., Flutter ~1GB) on restore. If yes:
+   ```bash
+   powershell -Command 'Copy-Item -Path "<scoop>\cache" -Destination "<backup_path>\scoop-cache" -Recurse -Force'
+   ```
+3. **Include persist data?** — whether to back up `<scoop>/persist` (app configs and data managed by scoop's persist feature). If yes:
+   ```bash
+   powershell -Command 'Copy-Item -Path "<scoop>\persist" -Destination "<backup_path>\scoop-persist" -Recurse -Force'
+   ```
+
+#### Import (restore)
+
+Restore on a new machine (scoop must already be installed). **Order matters**:
+
+1. **Restore cache first** (if backed up) — so `scoop import` skips downloading:
+   ```bash
+   powershell -Command 'Copy-Item -Path "<backup_path>\scoop-cache\*" -Destination "<scoop>\cache" -Recurse -Force'
+   ```
+
+2. **Import the manifest** — installs all apps and creates NTFS junctions:
+   ```bash
+   powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop import <backup_path>/scoopfile.json
+   ```
+   Buckets referenced in the file are added automatically.
+
+3. **Restore persist data** (if backed up) — after import, so junctions already point to the correct new paths:
+   ```bash
+   powershell -Command 'Copy-Item -Path "<backup_path>\scoop-persist\*" -Destination "<scoop>\persist" -Recurse -Force'
+   ```
+
+4. **Apply recipes** — check for recipes and run post-install configuration (e.g., git user config, gh auth login).
+
+**Path safety**: Cache files are path-independent (matched by filename/hash). Persist data is also safe — `scoop import` creates new NTFS junctions pointing to the new `<scoop>/persist` location, so even if the scoop install path changed, junctions are correct. In rare cases, an app's own config files inside persist may contain hardcoded absolute paths — these would need manual fixing.
+
 ## Recipes
 
 For tools that need post-install configuration beyond just `scoop install`, recipe files are stored in `references/recipes/`. Each recipe describes environment variables to set, config files to create, or verification steps to run after installation.

@@ -184,6 +184,53 @@ powershell -Command "scoop update"
 | 健康检查 | `powershell -Command "scoop checkup"` |
 | 重置应用 | `powershell -Command "scoop reset <应用名>"` |
 
+### 备份与恢复
+
+#### 导出（备份）
+
+将已安装的应用、bucket 和版本导出为 JSON 文件：
+
+```bash
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop export > <备份路径>/scoopfile.json
+```
+
+只保存**清单**（应用名、版本、bucket 来源），不含安装文件和缓存。
+
+通过 AskUserQuestion 询问用户：
+1. **备份位置** — `scoopfile.json` 保存到哪里（如 `D:\Backup`、云同步目录等）
+2. **是否备份下载缓存？** — 复制 `<scoop>/cache` 到备份目录，避免恢复时重新下载大包（如 Flutter ~1GB）。如需备份：
+   ```bash
+   powershell -Command 'Copy-Item -Path "<scoop>\cache" -Destination "<备份路径>\scoop-cache" -Recurse -Force'
+   ```
+3. **是否备份持久化数据？** — 备份 `<scoop>/persist`（scoop persist 管理的配置和数据）。如需备份：
+   ```bash
+   powershell -Command 'Copy-Item -Path "<scoop>\persist" -Destination "<备份路径>\scoop-persist" -Recurse -Force'
+   ```
+
+#### 导入（恢复）
+
+在新机器上恢复（需先安装 scoop）。**顺序很重要**：
+
+1. **先恢复缓存**（如有备份）——这样 `scoop import` 会跳过已缓存包的下载：
+   ```bash
+   powershell -Command 'Copy-Item -Path "<备份路径>\scoop-cache\*" -Destination "<scoop>\cache" -Recurse -Force'
+   ```
+
+2. **导入清单** — 安装所有应用并创建 NTFS junction：
+   ```bash
+   powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop import <备份路径>/scoopfile.json
+   ```
+   备份中引用的 bucket 会自动添加。
+
+3. **恢复持久化数据**（如有备份）——在导入之后，此时 junction 已指向新路径：
+   ```bash
+   powershell -Command 'Copy-Item -Path "<备份路径>\scoop-persist\*" -Destination "<scoop>\persist" -Recurse -Force'
+   ```
+
+4. **执行 recipe** — 检查并运行安装后配置（如 git 用户信息、gh 登录）。
+
+**路径安全性**：缓存文件与路径无关（按文件名/hash 匹配）。persist 数据也是安全的——`scoop import` 会创建新的 NTFS junction 指向新的 `<scoop>/persist` 位置，即使安装路径变了 junction 也是正确的。极少数情况下，应用自身的配置文件可能包含硬编码的绝对路径，这类需要手动修复。
+
 ## Recipes（配置方案）
 
 对于安装后需要额外配置的工具（如设环境变量、写配置文件），在 `references/recipes/` 下维护独立的配置文件。安装工具时自动检查是否有对应 recipe。
