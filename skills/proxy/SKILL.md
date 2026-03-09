@@ -250,7 +250,7 @@ Always confirm with the user before restoring, and report what was changed.
 ## Workflow
 
 ### Enable proxy
-1. Ask user for proxy address via AskUserQuestion
+1. Ask user for proxy address via AskUserQuestion (default: `http://127.0.0.1:7897`)
 2. Detect installed tools
 3. Configure proxy for all installed tools
 4. If any tools currently use mirrors, ask whether to restore official sources

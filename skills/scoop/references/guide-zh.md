@@ -46,7 +46,11 @@
 powershell -Command "irm get.scoop.sh -outfile 'install.ps1'; .\install.ps1 -ScoopDir '<路径>'"
 ```
 
-安装脚本自动设置 `SCOOP` 用户环境变量。
+安装脚本**不会**设置 `SCOOP` 环境变量，需要在安装后手动设置：
+
+```bash
+powershell -Command '[Environment]::SetEnvironmentVariable("SCOOP", "<安装路径>", "User")'
+```
 
 常用参数：
 - `-ScoopDir` — 安装目录
@@ -94,43 +98,12 @@ export PATH="$SCOOP/shims:$PATH"
 
 建议安装完成后**重启 VSCode**，这样后续所有会话都能直接使用。
 
-### 第五步：安装并配置 git
+### 第五步：安装 git 和 gh
 
-scoop 的 bucket 由 git 管理，所以 git 是必装的。同时安装 gh（GitHub CLI），用于 GitHub release 下载、仓库管理等，部分安装后 recipe 也会用到：
+scoop 的 bucket 由 git 管理，必须先安装 git 才能进行 bucket 操作。gh 强烈推荐，用于 GitHub 集成。
 
-```bash
-powershell -Command "scoop install git gh"
-```
-
-装完 git 后，先把 git 的 bash 和 Unix 工具加到 PATH。scoop 只 shim 了 `git`、`sh`、`git-bash` 等少数几个，`bash.exe` 和 Unix 工具（`less`、`awk` 等）在 git 自己的目录下，需要手动加 PATH：
-
-```bash
-# 把 git 的 bin 和 usr/bin 加到用户 PATH
-powershell -File <plugin_root>/skills/scripts/add-path.ps1 git bin usr/bin
-```
-
-单独卸载 git（保留 scoop）时移除：
-
-```bash
-powershell -File <plugin_root>/skills/scripts/add-path.ps1 git bin usr/bin -Remove
-```
-
-卸载 scoop 时，PATH 清理中的 `$_ -notmatch "Scoop"` 会自动移除这些条目（因为路径都包含 "Scoop"）。
-
-然后配置 git：
-
-1. **默认分支设为 main**（直接设置）：
-   ```bash
-   powershell -Command "git config --global init.defaultBranch main"
-   ```
-
-2. **询问用户姓名和邮箱**（git 提交必需）：
-   ```bash
-   powershell -Command "git config --global user.name '<姓名>'"
-   powershell -Command "git config --global user.email '<邮箱>'"
-   ```
-
-3. 如果已有 `~/.gitconfig`，先展示内容，避免覆盖。
+→ 参见 `recipes/git-zh.md`（必须）
+→ 参见 `recipes/gh-zh.md`（强烈推荐）
 
 ### 第六步：确认并添加 bucket
 
