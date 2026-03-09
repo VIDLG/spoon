@@ -27,14 +27,27 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 gh auth login
 
 This launches an interactive flow. The user can choose:
 - **GitHub.com** or GitHub Enterprise
-- **HTTPS** or SSH protocol
+- **HTTPS** or SSH protocol — recommend **SSH** for passwordless git operations
 - **Browser** or token-based authentication
+
+When the user chooses SSH, gh will:
+1. Generate an SSH key if none exists (`~/.ssh/id_ed25519`)
+2. Upload the public key to the user's GitHub account
+3. Configure git to use SSH for GitHub repos
 
 After login, verify the authentication status:
 
 ```bash
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 gh auth status
 ```
+
+If SSH was selected, also verify SSH connectivity:
+
+```bash
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 ssh -T git@github.com
+```
+
+Expected output: `Hi <username>! You've successfully authenticated, but GitHub does not provide shell access.`
 
 If the user skips login, warn that commands accessing private repos or GitHub APIs will fail.
 

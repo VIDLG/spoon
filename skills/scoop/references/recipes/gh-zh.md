@@ -27,14 +27,27 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 gh auth login
 
 这会启动交互式登录流程，用户可选择：
 - **GitHub.com** 或 GitHub Enterprise
-- **HTTPS** 或 SSH 协议
+- **HTTPS** 或 SSH 协议——推荐 **SSH**，实现免密 git 操作
 - **浏览器**或 token 认证
+
+选择 SSH 时，gh 会自动：
+1. 生成 SSH 密钥（如果不存在，`~/.ssh/id_ed25519`）
+2. 上传公钥到用户的 GitHub 账户
+3. 配置 git 使用 SSH 访问 GitHub 仓库
 
 登录后验证认证状态：
 
 ```bash
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 gh auth status
 ```
+
+如果选了 SSH，还需验证 SSH 连通性：
+
+```bash
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 ssh -T git@github.com
+```
+
+预期输出：`Hi <用户名>! You've successfully authenticated, but GitHub does not provide shell access.`
 
 如果用户跳过登录，警告访问私有仓库或 GitHub API 的命令会失败。
 
