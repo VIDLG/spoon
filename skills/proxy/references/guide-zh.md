@@ -27,6 +27,7 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 git --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 npm --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 pip --version 2>&1
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 rustup --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 cargo --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 ```
@@ -66,6 +67,10 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 | 开启 | `pip config set global.proxy <proxy_url>` |
 | 关闭 | `pip config unset global.proxy` |
 | 查看 | `pip config get global.proxy` |
+
+### Rustup
+
+通过 Windows 用户环境变量设置：`HTTP_PROXY` 和 `HTTPS_PROXY`。Rustup 本体镜像在后面的“Rustup — 工具链分发镜像”统一管理。
 
 ### Cargo (Rust)
 
@@ -107,6 +112,16 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 
 恢复官方：`pip config set global.index-url https://pypi.org/simple`
 
+### Rustup — 工具链分发镜像
+
+`rustup` 下载工具链，Cargo 下载 crate，这两者不是同一套配置。用户要配 Rust 镜像时，应询问是否同时配置两者。
+
+| 方案 | 提供商 | 环境变量 |
+|------|--------|----------|
+| 1（推荐）| 字节 (RsProxy) | `RUSTUP_DIST_SERVER=https://rsproxy.cn`，`RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup` |
+
+恢复官方：删除 `RUSTUP_DIST_SERVER` 和 `RUSTUP_UPDATE_ROOT`。
+
 ### Cargo — Crate 镜像
 
 | 方案 | 提供商 | Registry |
@@ -115,7 +130,7 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 | 2 | 清华 (TUNA) | `sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/` |
 | 3 | 字节 (RsProxy) | `sparse+https://rsproxy.cn/index/` |
 
-修改 `~/.cargo/config.toml`，恢复官方时删除 `[source.*]` 部分。
+修改 `~/.cargo/config.toml`，恢复官方时删除 `[source.*]` 部分。它只影响 Cargo，不影响 rustup 本体下载。
 
 ### Flutter / Dart — Pub 镜像
 
@@ -134,8 +149,9 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 1. 移除 `SCOOP_REPO` 配置，重新添加官方 bucket
 2. 重置 npm registry 为 `https://registry.npmjs.org`
 3. 重置 pip index 为 `https://pypi.org/simple`
-4. 删除 Cargo 镜像配置（`~/.cargo/config.toml` 中的 `[source.*]`）
-5. 删除 Flutter/Dart 环境变量（`PUB_HOSTED_URL`、`FLUTTER_STORAGE_BASE_URL`）
+4. 删除 Rustup 镜像环境变量（`RUSTUP_DIST_SERVER`、`RUSTUP_UPDATE_ROOT`）
+5. 删除 Cargo 镜像配置（`~/.cargo/config.toml` 中的 `[source.*]`）
+6. 删除 Flutter/Dart 环境变量（`PUB_HOSTED_URL`、`FLUTTER_STORAGE_BASE_URL`）
 
 操作前确认，操作后报告。
 

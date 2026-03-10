@@ -235,6 +235,15 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop export > <备份
 
 对于安装后需要额外配置的工具（如设环境变量、写配置文件），在 `references/recipes/` 下维护独立的配置文件。安装工具时自动检查是否有对应 recipe。
 
+有些用户说的工具名和实际安装包名、recipe 文件名不完全一致。遇到这类别名时，应先解析成实际安装目标，再应用对应 recipe。例如：
+
+- 用户说“安装 `npm`”时，实际应安装 `nodejs` 或 `nodejs-lts`
+- 通过 AskUserQuestion 让用户选择版本线；没有明确偏好时默认 `nodejs`
+- 安装完成后应用 `references/recipes/nodejs-zh.md`，而不是查找 `npm` recipe
+- 用户说“安装 `pip`”时，实际应安装 `python`
+- 除非用户明确要求其他版本线，否则默认安装 `python`
+- 安装完成后应用 `references/recipes/python-zh.md`，而不是查找 `pip` recipe
+
 ## 参考文件
 
 - **`commands.md`** — scoop 全部命令详解

@@ -36,6 +36,7 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 git --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 scoop --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 npm --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 pip --version 2>&1
+powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 rustup --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 cargo --version 2>&1
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 flutter --version 2>&1
 ```
@@ -193,7 +194,29 @@ powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 pip config set global.
 powershell -File <plugin_root>/skills/scripts/run-cmd.ps1 pip config unset global.trusted-host
 ```
 
+### Rustup — Toolchain distribution mirrors
+
+`rustup` toolchain downloads and Cargo crate downloads are separate. If the user wants Rust mirrors, ask whether to configure both together.
+
+Use AskUserQuestion with these options:
+
+| Option | Provider | Variables |
+|--------|----------|-----------|
+| 1 (Recommended) | 字节 (RsProxy) | `RUSTUP_DIST_SERVER=https://rsproxy.cn`, `RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup` |
+
+```bash
+# Set mirror
+powershell -Command '[Environment]::SetEnvironmentVariable("RUSTUP_DIST_SERVER", "https://rsproxy.cn", "User")'
+powershell -Command '[Environment]::SetEnvironmentVariable("RUSTUP_UPDATE_ROOT", "https://rsproxy.cn/rustup", "User")'
+
+# Restore official
+powershell -Command '[Environment]::SetEnvironmentVariable("RUSTUP_DIST_SERVER", [NullString]::Value, "User")'
+powershell -Command '[Environment]::SetEnvironmentVariable("RUSTUP_UPDATE_ROOT", [NullString]::Value, "User")'
+```
+
 ### Cargo (Rust) — Crate mirrors
+
+These settings affect Cargo package downloads only. They do NOT replace `rustup`'s own distribution mirror.
 
 Use AskUserQuestion with these options:
 
@@ -242,8 +265,9 @@ When the user re-enables proxy or wants to switch back to official sources:
 1. Remove `SCOOP_REPO` config, re-add official buckets
 2. Reset npm registry to `https://registry.npmjs.org`
 3. Reset pip index to `https://pypi.org/simple`
-4. Remove Cargo mirror config from `~/.cargo/config.toml`
-5. Remove Flutter/Dart env vars (`PUB_HOSTED_URL`, `FLUTTER_STORAGE_BASE_URL`)
+4. Remove Rustup mirror env vars (`RUSTUP_DIST_SERVER`, `RUSTUP_UPDATE_ROOT`)
+5. Remove Cargo mirror config from `~/.cargo/config.toml`
+6. Remove Flutter/Dart env vars (`PUB_HOSTED_URL`, `FLUTTER_STORAGE_BASE_URL`)
 
 Always confirm with the user before restoring, and report what was changed.
 

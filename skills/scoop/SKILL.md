@@ -201,6 +201,15 @@ powershell -Command "scoop install <app>"
 ```
 After installing, check if a recipe exists in `references/recipes/` for the app. If found (e.g., `references/recipes/claude-code.md`), read it and follow the post-install configuration steps.
 
+Some user-facing tool names map to a different scoop package and recipe name. Handle these aliases before installation. Example:
+
+- If the user asks to install **`npm`**, interpret that as installing **Node.js**.
+- Use AskUserQuestion to let the user choose **`nodejs`** or **`nodejs-lts`**. If the user has no preference, default to **`nodejs`**.
+- After installation, apply `references/recipes/nodejs.md` rather than looking for an `npm` recipe.
+- If the user asks to install **`pip`**, interpret that as installing **Python**.
+- Install **`python`** unless the user explicitly asks for a different version line.
+- After installation, apply `references/recipes/python.md` rather than looking for a `pip` recipe.
+
 Report side effects: shims created, PATH changes, environment variables set by the app.
 
 ### Uninstall a package
@@ -292,6 +301,10 @@ Restore on a new machine (scoop must already be installed). **Order matters**:
 For tools that need post-install configuration beyond just `scoop install`, recipe files are stored in `references/recipes/`. Each recipe describes environment variables to set, config files to create, or verification steps to run after installation.
 
 When installing a tool, check for a matching recipe and apply it automatically.
+
+Recipe matching is based on the resolved install target, not only the exact words the user typed. If the requested tool name is an alias, first map it to the actual scoop package and recipe. Example: a request to install `npm` maps to `nodejs` or `nodejs-lts`, then uses `references/recipes/nodejs.md`.
+
+Likewise, a request to install `pip` maps to `python`, then uses `references/recipes/python.md`.
 
 ## Additional Resources
 
