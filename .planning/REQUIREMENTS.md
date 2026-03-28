@@ -30,7 +30,7 @@
 
 ### Git Ownership
 
-- [ ] **GIT-01**: `spoon` 不再直接依赖 `gix`
+- [x] **GIT-01**: `spoon` 不再直接依赖 `gix`
 - [x] **GIT-02**: Git / bucket repo 的 clone、sync、progress 事件桥接由 `spoon-backend` 独占
 - [x] **GIT-03**: backend 暴露给 app 的 Git 相关接口不泄漏 `gix` 细节，而是返回 backend 级别的结果与事件
 
@@ -86,7 +86,7 @@
 | SCLF-03 | Phase 3 | Pending |
 | SCLF-04 | Phase 3 | Pending |
 | SCLF-05 | Phase 3 | Pending |
-| GIT-01 | Phase 1 | Pending |
+| GIT-01 | Phase 1 | Complete |
 | GIT-02 | Phase 1 | Complete |
 | GIT-03 | Phase 1 | Complete |
 | LAY-01 | Phase 1 | Pending |
