@@ -35,7 +35,7 @@ pub(crate) use spoon_backend::scoop::{
     ScoopBucketOperationOutcome, ScoopDoctorDetails, ScoopInstalledPackageEntry,
     ScoopPackageActionOutcome, ScoopPackageInstallState, ScoopPackageOperationOutcome,
     ScoopPackagePlan, add_bucket_to_registry_outcome, infer_tool_root, installed_package_states,
-    installed_package_states_filtered, load_buckets_from_registry, package_current_root,
+    load_buckets_from_registry,
     remove_bucket_from_registry_outcome, runtime_status, search_results, update_buckets_outcome,
     update_buckets_streaming_outcome,
 };

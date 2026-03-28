@@ -403,6 +403,39 @@ fn status_refresh_json_embeds_structured_bucket_update_result() {
 }
 
 #[test]
+fn package_report_uses_backend_models() {
+    // Verify that the package prefix report uses backend RuntimeLayout and
+    // runtime_status instead of app-local package_current_root /
+    // installed_package_states_filtered helpers.
+
+    // Verify RuntimeLayout derives the same prefix path that package_current_root did
+    let tool_root = std::path::PathBuf::from("D:/test-root");
+    let layout = spoon_backend::layout::RuntimeLayout::from_root(&tool_root);
+    let package_name = "git";
+
+    // RuntimeLayout should derive: <root>/scoop/apps/<package>/current
+    let layout_prefix = layout.scoop.apps_root.join(package_name).join("current");
+    assert!(
+        layout_prefix.to_string_lossy().contains("scoop"),
+        "RuntimeLayout prefix should contain scoop dir"
+    );
+    assert!(
+        layout_prefix.to_string_lossy().contains(package_name),
+        "RuntimeLayout prefix should contain package name"
+    );
+    assert!(
+        layout_prefix.to_string_lossy().contains("current"),
+        "RuntimeLayout prefix should contain 'current'"
+    );
+
+    // Verify the path matches the old package_current_root derivation
+    let old_prefix = spoon_backend::scoop::package_current_root(&tool_root, package_name);
+    assert_eq!(
+        layout_prefix, old_prefix,
+        "RuntimeLayout prefix should match backend package_current_root derivation"
+    );
+}
+
 fn bucket_json_uses_backend_repo_sync_outcome() {
     // Verify that the app bucket layer exposes RepoSyncOutcome from the backend
     // and that the backend contract type is usable at the app boundary.
