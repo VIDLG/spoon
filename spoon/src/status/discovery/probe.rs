@@ -2,6 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use spoon_backend::layout::RuntimeLayout;
 use spoon_backend::status::BackendStatusSnapshot;
 
 use crate::config;
@@ -136,8 +137,8 @@ fn configured_probe_path(tool: &'static Tool, install_root: Option<&Path>) -> Op
         .or_else(config::configured_tool_root)?;
     match tool.backend {
         crate::tool::Backend::Scoop => {
-            let shims_dir = config::shims_root_from(&root);
-            command_path_in_dirs(tool.command, std::iter::once(shims_dir))
+            let layout = RuntimeLayout::from_root(&root);
+            command_path_in_dirs(tool.command, std::iter::once(layout.shims))
         }
         _ => None,
     }
@@ -163,7 +164,8 @@ fn probe_msvc_toolchain(install_root: Option<&Path>) -> ProbeResult {
         };
     };
 
-    let managed_root = config::msvc_toolchain_root_from(&root);
+    let layout = RuntimeLayout::from_root(&root);
+    let managed_root = layout.msvc.managed.toolchain_root.clone();
     let managed_runtime_state = msvc::runtime_state_path(&root);
     if managed_runtime_state.exists() {
         return ProbeResult {
@@ -349,8 +351,8 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let msvc_root = crate::config::msvc_toolchain_root_from(&tool_root);
-        let state_root = crate::config::msvc_state_root_from(&tool_root);
+        let msvc_root = RuntimeLayout::from_root(&tool_root).msvc.managed.toolchain_root;
+        let state_root = RuntimeLayout::from_root(&tool_root).msvc.managed.state_root;
         fs::create_dir_all(&state_root).unwrap();
         fs::write(crate::service::msvc::runtime_state_path(&tool_root), "{}").unwrap();
 
@@ -413,7 +415,7 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let msvc_root = crate::config::msvc_toolchain_root_from(&tool_root);
+        let msvc_root = RuntimeLayout::from_root(&tool_root).msvc.managed.toolchain_root;
         fs::create_dir_all(&msvc_root).unwrap();
 
         let probe = probe_msvc_toolchain(Some(&tool_root));
@@ -435,7 +437,7 @@ mod tests {
                 .as_nanos()
         ));
         let root = base.join("root");
-        let shims = crate::config::shims_root_from(&root);
+        let shims = RuntimeLayout::from_root(&root).shims;
         fs::create_dir_all(&shims).unwrap();
         let managed = shims.join("gh.exe");
         fs::write(&managed, "").unwrap();
@@ -464,7 +466,7 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let shims = crate::config::shims_root_from(&tool_root);
+        let shims = RuntimeLayout::from_root(&tool_root).shims;
         fs::create_dir_all(&shims).unwrap();
         fs::write(shims.join("python3.exe"), "fake").unwrap();
 
@@ -522,8 +524,8 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let shims = crate::config::shims_root_from(&tool_root);
-        let state_root = crate::config::scoop_state_root_from(&tool_root).join("packages");
+        let shims = RuntimeLayout::from_root(&tool_root).shims;
+        let state_root = RuntimeLayout::from_root(&tool_root).scoop.package_state_root;
         fs::create_dir_all(&shims).unwrap();
         fs::create_dir_all(&state_root).unwrap();
         fs::write(
@@ -561,7 +563,7 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let shims = crate::config::shims_root_from(&tool_root);
+        let shims = RuntimeLayout::from_root(&tool_root).shims;
         fs::create_dir_all(&shims).unwrap();
         fs::write(
             shims.join("gh.cmd"),
