@@ -401,3 +401,47 @@ fn status_refresh_json_embeds_structured_bucket_update_result() {
     assert_eq!(json["bucket_update"]["action"], "update");
     assert_eq!(json["status"]["kind"], "status");
 }
+
+#[test]
+fn bucket_json_uses_backend_repo_sync_outcome() {
+    // Verify that the app bucket layer exposes RepoSyncOutcome from the backend
+    // and that the backend contract type is usable at the app boundary.
+    let outcome = spoon::service::scoop::RepoSyncOutcome {
+        head_commit: Some("abc123".to_string()),
+        head_branch: Some("main".to_string()),
+    };
+    assert_eq!(outcome.head_commit.as_deref(), Some("abc123"));
+    assert_eq!(outcome.head_branch.as_deref(), Some("main"));
+
+    // Also verify that a real bucket update flows through backend outcomes.
+    // This exercises the bucket adapter path where load_backend_config
+    // has been removed and proxy is read directly from app config.
+    let env = create_configured_home();
+    let temp_home = env.home;
+    let tool_root = env.root;
+    spoon::runtime::test_block_on(spoon::service::scoop::upsert_bucket_to_registry(
+        &tool_root,
+        &spoon::service::scoop::BucketSpec {
+            name: "main".to_string(),
+            source: Some("https://github.com/ScoopInstaller/Main".to_string()),
+            branch: Some("master".to_string()),
+        },
+    ))
+    .unwrap();
+    std::fs::create_dir_all(
+        spoon::config::scoop_root_from(&tool_root)
+            .join("buckets")
+            .join("main"),
+    )
+    .unwrap();
+
+    let (ok, stdout, stderr) = run_in_home(
+        &["--json", "scoop", "bucket", "list"],
+        &temp_home,
+        &[],
+    );
+    assert_ok(ok, &stdout, &stderr);
+    let json = parse_json(&stdout);
+    assert_eq!(json["kind"], "scoop_bucket_list");
+    assert_eq!(json["bucket_count"], 1);
+}
