@@ -17,7 +17,6 @@ crossterm = "0.29"
 dirs = "6"
 fs-err = "3"
 fs_extra = "1.3"
-gix = { version = "0.80", default-features = false, features = ["blocking-network-client", "blocking-http-transport-reqwest-rust-tls", "worktree-mutation", "max-performance-safe"] }
 humantime = "2"
 indicatif = "0.18"
 msi = "0.10"
