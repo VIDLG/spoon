@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. A developer can run bucket clone and sync flows from Spoon without `spoon` depending on `gix`; backend-owned Git interfaces emit the progress and results the app displays.
   3. Changing Spoon's configured `root` changes Scoop, MSVC, and shared shim/state behavior consistently because backend layout derivation owns the runtime path model and the app only passes configuration/context.
   4. The app can render tool and runtime status from backend query/result models without rereading backend state files or reconstructing backend behavior locally.
-**Plans**: 7 plans
+**Plans**: 8 plans
 
 Plans:
 - [x] 01-01-PLAN.md - Define backend context, runtime layout, and split-port ownership contracts.
@@ -38,6 +38,7 @@ Plans:
 - [x] 01-05-PLAN.md - Thin Spoon Scoop runtime, package, and bucket adapters to backend request/response mapping.
 - [x] 01-06-PLAN.md - Finish detail, prefix, and config surface cleanup around backend read and layout models.
 - [x] 01-07-PLAN.md - Remove dead backend-path re-exports and drop the app-side `gix` dependency.
+- [ ] 01-08-PLAN.md - Migrate remaining app modules from config path helpers to RuntimeLayout (gap closure for BNDR-04/LAY-01).
 
 ### Phase 2: Canonical Scoop State
 **Goal**: `spoon-backend` owns one canonical Scoop installed-state model and one persisted source of truth for installed package facts.
@@ -79,7 +80,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Backend Seams and Ownership | 0/7 | Not started | - |
+| 1. Backend Seams and Ownership | 7/8 | Gap closure | - |
 | 2. Canonical Scoop State | 0/TBD | Not started | - |
 | 3. Scoop Lifecycle Split and App Thinning | 0/TBD | Not started | - |
 | 4. Refactor Safety Net | 0/TBD | Not started | - |
