@@ -593,7 +593,7 @@ fn status_tool_entry_with_snapshot(
 }
 
 fn status_path_mismatches(root: &Path, statuses: &[ToolStatus]) -> Vec<PathMismatch> {
-    let shims_root = config::shims_root_from(root);
+    let shims_root = spoon_backend::layout::RuntimeLayout::from_root(root).shims;
     statuses
         .iter()
         .filter_map(|status| {
