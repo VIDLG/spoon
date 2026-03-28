@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03
-last_updated: "2026-03-28T13:55:44.499Z"
+stopped_at: Completed 01-05
+last_updated: "2026-03-28T14:07:25.046Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 01 (backend-seams-and-ownership) — EXECUTING
-Plan: 4 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -52,6 +52,8 @@ Progress: [----------] 0%
 - Trend: Stable
 
 | Phase 01 P03 | 4min | 2 tasks | 8 files |
+| Phase 01 P04 | 10min | 2 tasks | 8 files |
+| Phase 01 P05 | 587 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -66,6 +68,10 @@ Recent decisions affecting current work:
 - Phase 4: Refactor hardening focuses on backend risk coverage and app-shell orchestration coverage.
 - [Phase 01]: MSVC operations consume MsvcRequest built from BackendContext instead of a mutable global singleton (BNDR-03, LAY-03)
 - [Phase 01]: App MSVC adapter constructs BackendContext at boundary and delegates to _with_context variants
+- [Phase 01]: BackendStatusSnapshot aggregates scoop and MSVC queries into one serializable struct for app consumption (BNDR-05, LAY-02)
+- [Phase 01]: App-side BackendContext builder with AppSystemPort singleton passed by static reference into BackendContext
+- [Phase 01]: Package action result delegates to backend package_operation_outcome instead of reconstructing state locally
+- [Phase 01]: Bucket adapter re-exports RepoSyncOutcome from backend, no app-owned Git types in spoon/src
 
 ### Pending Todos
 
@@ -79,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T13:55:44.496Z
-Stopped at: Completed 01-03
+Last session: 2026-03-28T14:07:25.044Z
+Stopped at: Completed 01-05
 Resume file: None
