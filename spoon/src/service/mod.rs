@@ -212,25 +212,6 @@ pub fn native_msvc_arch() -> &'static str {
     crate::config::native_msvc_arch()
 }
 
-pub fn shims_root_from(tool_root: &Path) -> PathBuf {
-    crate::config::shims_root_from(tool_root)
-}
-
-#[cfg(test)]
-pub fn msvc_state_root_from(tool_root: &Path) -> PathBuf {
-    crate::config::msvc_state_root_from(tool_root)
-}
-
-#[cfg(test)]
-pub fn msvc_cache_root_from(tool_root: &Path) -> PathBuf {
-    crate::config::msvc_cache_root_from(tool_root)
-}
-
-#[cfg(test)]
-pub fn msvc_toolchain_root_from(tool_root: &Path) -> PathBuf {
-    crate::config::msvc_toolchain_root_from(tool_root)
-}
-
 pub fn ensure_process_path_entry(path: &Path) {
     crate::config::ensure_process_path_entry(path)
 }
