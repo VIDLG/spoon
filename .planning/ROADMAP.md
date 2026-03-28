@@ -31,9 +31,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 7 plans
 
 Plans:
-- [ ] 01-01-PLAN.md - Define backend context, runtime layout, and split-port ownership contracts.
-- [ ] 01-02-PLAN.md - Move backend Scoop runtime and bucket contracts behind explicit backend context.
-- [ ] 01-03-PLAN.md - Replace MSVC global runtime config with explicit backend context requests.
+- [x] 01-01-PLAN.md - Define backend context, runtime layout, and split-port ownership contracts.
+- [x] 01-02-PLAN.md - Move backend Scoop runtime and bucket contracts behind explicit backend context.
+- [x] 01-03-PLAN.md - Replace MSVC global runtime config with explicit backend context requests.
 - [ ] 01-04-PLAN.md - Switch status, JSON, and TUI refresh surfaces to backend read models.
 - [ ] 01-05-PLAN.md - Thin Spoon Scoop runtime, package, and bucket adapters to backend request/response mapping.
 - [ ] 01-06-PLAN.md - Finish detail, prefix, and config surface cleanup around backend read and layout models.
