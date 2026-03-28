@@ -36,7 +36,7 @@ Plans:
 - [x] 01-03-PLAN.md - Replace MSVC global runtime config with explicit backend context requests.
 - [x] 01-04-PLAN.md - Switch status, JSON, and TUI refresh surfaces to backend read models.
 - [x] 01-05-PLAN.md - Thin Spoon Scoop runtime, package, and bucket adapters to backend request/response mapping.
-- [ ] 01-06-PLAN.md - Finish detail, prefix, and config surface cleanup around backend read and layout models.
+- [x] 01-06-PLAN.md - Finish detail, prefix, and config surface cleanup around backend read and layout models.
 - [ ] 01-07-PLAN.md - Remove dead backend-path re-exports and drop the app-side `gix` dependency.
 
 ### Phase 2: Canonical Scoop State
