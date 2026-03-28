@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 01-07
-last_updated: "2026-03-28T14:26:51.363Z"
+stopped_at: Completed 01-08
+last_updated: "2026-03-28T14:55:47.133Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
   percent: 0
 ---
 
@@ -56,6 +56,7 @@ Progress: [----------] 0%
 | Phase 01 P05 | 587 | 2 tasks | 5 files |
 | Phase 01 P06 | 743 | 2 tasks | 6 files |
 | Phase 01 P7 | 3min | 2 tasks | 3 files |
+| Phase 01 P08 | 3 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 01]: App-side BackendContext builder with AppSystemPort singleton passed by static reference into BackendContext
 - [Phase 01]: Package action result delegates to backend package_operation_outcome instead of reconstructing state locally
 - [Phase 01]: Bucket adapter re-exports RepoSyncOutcome from backend, no app-owned Git types in spoon/src
+- [Phase 01]: 14 app-side path helper functions marked #[deprecated] with RuntimeLayout replacement guidance rather than deleted
+- [Phase 01]: Test code migrated to RuntimeLayout for consistency; deprecated warnings in tests are acceptable
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T14:26:51.361Z
-Stopped at: Completed 01-07
+Last session: 2026-03-28T14:55:47.130Z
+Stopped at: Completed 01-08
 Resume file: None

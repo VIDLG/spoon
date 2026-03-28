@@ -38,7 +38,7 @@ Plans:
 - [x] 01-05-PLAN.md - Thin Spoon Scoop runtime, package, and bucket adapters to backend request/response mapping.
 - [x] 01-06-PLAN.md - Finish detail, prefix, and config surface cleanup around backend read and layout models.
 - [x] 01-07-PLAN.md - Remove dead backend-path re-exports and drop the app-side `gix` dependency.
-- [ ] 01-08-PLAN.md - Migrate remaining app modules from config path helpers to RuntimeLayout (gap closure for BNDR-04/LAY-01).
+- [x] 01-08-PLAN.md - Migrate remaining app modules from config path helpers to RuntimeLayout (gap closure for BNDR-04/LAY-01).
 
 ### Phase 2: Canonical Scoop State
 **Goal**: `spoon-backend` owns one canonical Scoop installed-state model and one persisted source of truth for installed package facts.

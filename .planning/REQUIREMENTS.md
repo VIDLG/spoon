@@ -10,7 +10,7 @@
 - [x] **BNDR-01**: `spoon` 中的 Scoop 安装、更新、卸载与 bucket 操作只能通过 `spoon-backend` 暴露的后端接口触发
 - [x] **BNDR-02**: `spoon` 中的 Git / bucket 仓库相关操作只能通过 `spoon-backend` 暴露的后端接口触发
 - [x] **BNDR-03**: `spoon` 中的 MSVC 检测与安装动作只能通过 `spoon-backend` 暴露的后端接口触发
-- [ ] **BNDR-04**: `spoon` 不再直接推导 Scoop/MSVC 后台运行布局路径，只负责把配置好的 `root` 传给 backend
+- [x] **BNDR-04**: `spoon` 不再直接推导 Scoop/MSVC 后台运行布局路径，只负责把配置好的 `root` 传给 backend
 - [x] **BNDR-05**: `spoon` 消费 backend 返回的结果模型与查询模型，而不是重新读取 backend 状态文件或重建后台行为
 
 ### Scoop State
@@ -36,7 +36,7 @@
 
 ### Layout and Context
 
-- [ ] **LAY-01**: `spoon-backend` 拥有根路径派生布局的单一实现，覆盖 Scoop、MSVC 与共享 shim/state 布局
+- [x] **LAY-01**: `spoon-backend` 拥有根路径派生布局的单一实现，覆盖 Scoop、MSVC 与共享 shim/state 布局
 - [x] **LAY-02**: `spoon` 只拥有应用配置文件路径与应用层配置语义，不再拥有后台运行布局语义
 - [x] **LAY-03**: backend 操作在显式上下文中运行，不依赖隐式全局环境或分散路径推导
 
@@ -75,7 +75,7 @@
 | BNDR-01 | Phase 1 | Complete |
 | BNDR-02 | Phase 1 | Complete |
 | BNDR-03 | Phase 1 | Complete |
-| BNDR-04 | Phase 1 | Pending |
+| BNDR-04 | Phase 1 | Complete |
 | BNDR-05 | Phase 1 | Complete |
 | SCST-01 | Phase 2 | Pending |
 | SCST-02 | Phase 2 | Pending |
@@ -89,7 +89,7 @@
 | GIT-01 | Phase 1 | Complete |
 | GIT-02 | Phase 1 | Complete |
 | GIT-03 | Phase 1 | Complete |
-| LAY-01 | Phase 1 | Pending |
+| LAY-01 | Phase 1 | Complete |
 | LAY-02 | Phase 1 | Complete |
 | LAY-03 | Phase 1 | Complete |
 | TEST-01 | Phase 4 | Pending |
