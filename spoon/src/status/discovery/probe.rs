@@ -310,6 +310,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::tool;
+    use spoon_backend::status::BackendStatusSnapshot;
 
     use super::{
         configured_probe_path, extract_version_token, is_windowsapps_alias_path,
@@ -476,34 +477,38 @@ mod tests {
 
     #[test]
     fn managed_scoop_state_version_reads_installed_package_version() {
-        let base = std::env::temp_dir().join(format!(
-            "spoon-managed-scoop-state-version-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let root = base.join("root");
-        let state_root = crate::config::scoop_state_root_from(&root).join("packages");
-        fs::create_dir_all(&state_root).unwrap();
-        fs::write(
-            state_root.join("git.json"),
-            serde_json::json!({
-                "package": "git",
-                "version": "2.53.0.2"
-            })
-            .to_string(),
-        )
-        .unwrap();
+        let snap = BackendStatusSnapshot {
+            kind: "test",
+            scoop: spoon_backend::status::BackendScoopStatus {
+                installed: true,
+                root: String::new(),
+                shims: String::new(),
+                bucket_count: 0,
+                installed_package_count: 1,
+                buckets: vec![],
+                installed_packages: vec![
+                    spoon_backend::status::BackendInstalledPackageEntry {
+                        name: "git".into(),
+                        version: "2.53.0.2".into(),
+                    },
+                ],
+            },
+            msvc: spoon_backend::status::BackendMsvcSummary {
+                managed_status: String::new(),
+                managed_version: None,
+                managed_root: String::new(),
+                official_status: String::new(),
+                official_version: None,
+                official_root: String::new(),
+            },
+            runtime_roots: spoon_backend::status::BackendRuntimeRoots::default(),
+        };
 
         let git = tool::find_tool("git").expect("git tool");
         assert_eq!(
-            managed_scoop_state_version(git, Some(&root), None).as_deref(),
+            managed_scoop_state_version(git, None, Some(&snap)).as_deref(),
             Some("2.53.0.2")
         );
-
-        let _ = fs::remove_dir_all(base);
     }
 
     #[test]
@@ -557,9 +562,7 @@ mod tests {
         ));
         let tool_root = base.join("root");
         let shims = crate::config::shims_root_from(&tool_root);
-        let state_root = crate::config::scoop_state_root_from(&tool_root).join("packages");
         fs::create_dir_all(&shims).unwrap();
-        fs::create_dir_all(&state_root).unwrap();
         fs::write(
             shims.join("gh.cmd"),
             "@echo off\r\necho gh version 2.88.1\r\nexit /b 0\r\n",
@@ -570,32 +573,45 @@ mod tests {
             "@echo off\r\nif \"%~1\"==\"i\" (\r\n  echo 7-Zip 26.00 ^(x64^)\r\n  exit /b 0\r\n)\r\nexit /b 2\r\n",
         )
         .unwrap();
-        fs::write(
-            state_root.join("gh.json"),
-            serde_json::json!({
-                "package": "gh",
-                "version": "2.88.1"
-            })
-            .to_string(),
-        )
-        .unwrap();
-        fs::write(
-            state_root.join("7zip.json"),
-            serde_json::json!({
-                "package": "7zip",
-                "version": "26.00"
-            })
-            .to_string(),
-        )
-        .unwrap();
+
+        let snap = BackendStatusSnapshot {
+            kind: "test",
+            scoop: spoon_backend::status::BackendScoopStatus {
+                installed: true,
+                root: String::new(),
+                shims: String::new(),
+                bucket_count: 0,
+                installed_package_count: 2,
+                buckets: vec![],
+                installed_packages: vec![
+                    spoon_backend::status::BackendInstalledPackageEntry {
+                        name: "gh".into(),
+                        version: "2.88.1".into(),
+                    },
+                    spoon_backend::status::BackendInstalledPackageEntry {
+                        name: "7zip".into(),
+                        version: "26.00".into(),
+                    },
+                ],
+            },
+            msvc: spoon_backend::status::BackendMsvcSummary {
+                managed_status: String::new(),
+                managed_version: None,
+                managed_root: String::new(),
+                official_status: String::new(),
+                official_version: None,
+                official_root: String::new(),
+            },
+            runtime_roots: spoon_backend::status::BackendRuntimeRoots::default(),
+        };
 
         for key in ["gh", "7zip"] {
             let tool = tool::find_tool(key).expect("tool");
-            let fast = super::collect_statuses_fast(Some(&tool_root))
+            let fast = super::collect_statuses_fast_with_snapshot(Some(&tool_root), Some(&snap))
                 .into_iter()
                 .find(|status| status.tool.key == key)
                 .expect("fast status");
-            let full = super::collect_statuses(Some(&tool_root))
+            let full = super::collect_statuses_with_snapshot(Some(&tool_root), Some(&snap))
                 .into_iter()
                 .find(|status| status.tool.key == key)
                 .expect("full status");

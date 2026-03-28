@@ -66,6 +66,21 @@ pub struct BackendRuntimeRoots {
     pub scoop_cache: String,
 }
 
+impl Default for BackendRuntimeRoots {
+    fn default() -> Self {
+        Self {
+            root: String::new(),
+            scoop: String::new(),
+            shims: String::new(),
+            managed_msvc: String::new(),
+            managed_toolchain: String::new(),
+            official_msvc: String::new(),
+            scoop_state: String::new(),
+            scoop_cache: String::new(),
+        }
+    }
+}
+
 impl BackendStatusSnapshot {
     /// Build a status snapshot from the backend query surface.
     ///

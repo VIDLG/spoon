@@ -284,7 +284,7 @@ pub fn package_action_result(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{PackageRef, StreamChunk};
+    use crate::service::{PackageRef, StreamChunk};
     use crate::config;
 
     use super::{run_package_action_streaming, run_scoop_streaming};
