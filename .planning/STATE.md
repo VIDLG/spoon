@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-29T00:40:32.770Z"
+status: verifying
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-03-29T00:43:38.356Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 Phase: 02 (canonical-scoop-state) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-29
 
 Progress: [----------] 0%
@@ -61,6 +61,7 @@ Progress: [----------] 0%
 | Phase 02 P02 | 5m | 2 tasks | 7 files |
 | Phase 02 P03 | 4min | 2 tasks | 6 files |
 | Phase 02 P04 | 307 | 2 tasks | 2 files |
+| Phase 02 P5 | 136 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Recent decisions affecting current work:
 - [Phase 02]: runtime_status uses list_installed_summaries projection layer for lightweight DTOs
 - [Phase 02]: info.rs reads canonical InstalledPackageState via state::read_installed_state instead of raw serde_json::Value
 - [Phase 02]: ShortcutEntry/PersistEntry display strings computed from typed canonical fields, not parsed from JSON values
+- [Phase 02]: Legacy ScoopPackageState API removed from backend surface; package_state.rs moved to _deprecated/ backup
+- [Phase 02]: Stale legacy flat state files detected and reported explicitly in doctor instead of silently supported
 
 ### Pending Todos
 
@@ -107,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T00:40:32.766Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-03-29T00:43:38.352Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None

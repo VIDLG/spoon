@@ -56,7 +56,7 @@ Plans:
 - [x] 02-02-PLAN.md - Update runtime writes and reapply/uninstall inputs to use canonical state with `bucket` and `architecture`.
 - [x] 02-03-PLAN.md - Move query and runtime-status surfaces onto canonical store enumeration and typed projections.
 - [x] 02-04-PLAN.md - Rebuild package info and operation outcomes from typed canonical state projections.
-- [ ] 02-05-PLAN.md - Remove legacy `ScoopPackageState` APIs and report stale flat state explicitly.
+- [x] 02-05-PLAN.md - Remove legacy `ScoopPackageState` APIs and report stale flat state explicitly.
 
 ### Phase 3: Scoop Lifecycle Split and App Thinning
 **Goal**: `spoon-backend` owns a single explicit Scoop lifecycle for install, update, uninstall, reapply, persist, and hooks, while `spoon` only triggers operations and shows progress.
