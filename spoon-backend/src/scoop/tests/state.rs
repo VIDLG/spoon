@@ -5,6 +5,7 @@ use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
 use crate::scoop::state::{
     InstalledPackageState, read_installed_state, write_installed_state,
 };
+use crate::scoop::runtime_status;
 use crate::tests::{block_on, temp_dir};
 
 fn sample_state() -> InstalledPackageState {
@@ -120,5 +121,69 @@ fn canonical_state_persists_only_nonderivable_facts() {
                 "JSON must not contain derivable key '{key}'"
             );
         }
+    });
+}
+
+#[test]
+fn runtime_status_uses_canonical_installed_state() {
+    let tmp = temp_dir("status-canonical");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+
+    block_on(async {
+        let layout = RuntimeLayout::from_root(&tmp);
+
+        // Seed two canonical installed-state records
+        let pkg_a = InstalledPackageState {
+            package: "alpha-tool".to_string(),
+            version: "3.1.0".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: BTreeMap::new(),
+            persist: vec![],
+            integrations: BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        };
+        let pkg_b = InstalledPackageState {
+            package: "beta-lib".to_string(),
+            version: "0.5.2".to_string(),
+            bucket: "extras".to_string(),
+            architecture: None,
+            cache_size_bytes: Some(2048),
+            bins: vec!["bin/beta.exe".to_string()],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: BTreeMap::new(),
+            persist: vec![],
+            integrations: BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        };
+
+        write_installed_state(&layout, &pkg_a)
+            .await
+            .expect("write alpha-tool state");
+        write_installed_state(&layout, &pkg_b)
+            .await
+            .expect("write beta-lib state");
+
+        // Assert runtime_status reports both packages through canonical store
+        let status = runtime_status(&tmp).await;
+        assert_eq!(status.kind, "scoop_status");
+        assert!(status.success);
+        assert_eq!(status.runtime.installed_package_count, 2);
+
+        // Packages should be sorted by name
+        assert_eq!(status.installed_packages.len(), 2);
+        assert_eq!(status.installed_packages[0].name, "alpha-tool");
+        assert_eq!(status.installed_packages[0].version, "3.1.0");
+        assert_eq!(status.installed_packages[1].name, "beta-lib");
+        assert_eq!(status.installed_packages[1].version, "0.5.2");
     });
 }

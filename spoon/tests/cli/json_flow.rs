@@ -124,7 +124,7 @@ fn scoop_status_json_prints_structured_runtime_view() {
     std::fs::create_dir_all(&package_state_root).unwrap();
     std::fs::write(
         package_state_root.join("jq.json"),
-        serde_json::json!({ "package": "jq", "version": "1.8.1" }).to_string(),
+        serde_json::json!({ "package": "jq", "version": "1.8.1", "bucket": "main" }).to_string(),
     )
     .unwrap();
 
@@ -134,7 +134,9 @@ fn scoop_status_json_prints_structured_runtime_view() {
     assert_eq!(json["kind"], "scoop_status");
     assert_eq!(json["runtime"]["bucket_count"], 1);
     assert!(json["buckets"].is_array());
-    assert!(json["installed_packages"].is_array());
+    assert_eq!(json["runtime"]["installed_package_count"], 1);
+    assert_eq!(json["installed_packages"][0]["name"], "jq");
+    assert_eq!(json["installed_packages"][0]["version"], "1.8.1");
 }
 
 #[test]
@@ -299,7 +301,8 @@ fn scoop_prefix_json_prints_structured_prefix_view() {
         state_root.join(format!("{package_name}.json")),
         serde_json::json!({
             "package": package_name,
-            "version": "2.53.0.2"
+            "version": "2.53.0.2",
+            "bucket": "main"
         })
         .to_string(),
     )
