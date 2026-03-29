@@ -1,0 +1,124 @@
+use std::collections::BTreeMap;
+
+use crate::layout::RuntimeLayout;
+use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
+use crate::scoop::state::{
+    InstalledPackageState, read_installed_state, write_installed_state,
+};
+use crate::tests::{block_on, temp_dir};
+
+fn sample_state() -> InstalledPackageState {
+    InstalledPackageState {
+        package: "test-pkg".to_string(),
+        version: "1.2.3".to_string(),
+        bucket: "main".to_string(),
+        architecture: Some("x64".to_string()),
+        cache_size_bytes: Some(1024),
+        bins: vec!["bin/app.exe".to_string()],
+        shortcuts: vec![ShortcutEntry {
+            target_path: "bin/app.exe".to_string(),
+            name: "Test App".to_string(),
+            args: None,
+            icon_path: None,
+        }],
+        env_add_path: vec!["bin".to_string()],
+        env_set: BTreeMap::from([("FOO".to_string(), "bar".to_string())]),
+        persist: vec![PersistEntry {
+            relative_path: "data".to_string(),
+            store_name: "data".to_string(),
+        }],
+        integrations: BTreeMap::new(),
+        pre_uninstall: vec![],
+        uninstaller_script: vec![],
+        post_uninstall: vec![],
+    }
+}
+
+#[test]
+fn canonical_installed_state_roundtrips_bucket_and_architecture() {
+    let tmp = temp_dir("state-roundtrip");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+    let layout = RuntimeLayout::from_root(&tmp);
+
+    let state = InstalledPackageState {
+        package: "roundtrip-pkg".to_string(),
+        version: "2.0.0".to_string(),
+        bucket: "main".to_string(),
+        architecture: Some("x64".to_string()),
+        cache_size_bytes: None,
+        bins: vec![],
+        shortcuts: vec![],
+        env_add_path: vec![],
+        env_set: BTreeMap::new(),
+        persist: vec![],
+        integrations: BTreeMap::new(),
+        pre_uninstall: vec![],
+        uninstaller_script: vec![],
+        post_uninstall: vec![],
+    };
+
+    block_on(async {
+        write_installed_state(&layout, &state)
+            .await
+            .expect("write should succeed");
+
+        let loaded = read_installed_state(&layout, "roundtrip-pkg")
+            .await
+            .expect("state should exist after write");
+
+        assert_eq!(loaded.package, "roundtrip-pkg");
+        assert_eq!(loaded.version, "2.0.0");
+        assert_eq!(loaded.bucket, "main");
+        assert_eq!(loaded.architecture, Some("x64".to_string()));
+    });
+}
+
+#[test]
+fn canonical_state_persists_only_nonderivable_facts() {
+    let tmp = temp_dir("state-keys");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+    let layout = RuntimeLayout::from_root(&tmp);
+
+    let state = sample_state();
+
+    block_on(async {
+        write_installed_state(&layout, &state)
+            .await
+            .expect("write should succeed");
+
+        // Read the raw JSON to inspect persisted keys
+        let path = layout.scoop.package_state_root.join("test-pkg.json");
+        let raw = tokio::fs::read_to_string(&path)
+            .await
+            .expect("file should exist");
+        let json: serde_json::Value = serde_json::from_str(&raw)
+            .expect("json should parse");
+
+        // Keys that MUST be present
+        assert!(
+            json.get("package").is_some(),
+            "JSON must contain 'package'"
+        );
+        assert!(
+            json.get("version").is_some(),
+            "JSON must contain 'version'"
+        );
+        assert!(
+            json.get("bucket").is_some(),
+            "JSON must contain 'bucket'"
+        );
+        assert!(
+            json.get("architecture").is_some(),
+            "JSON must contain 'architecture'"
+        );
+
+        // Keys that must NOT be present (derivable from layout)
+        let forbidden_keys = ["current", "current_root", "shims_root", "apps_root", "tool_root"];
+        for key in &forbidden_keys {
+            assert!(
+                json.get(key).is_none(),
+                "JSON must not contain derivable key '{key}'"
+            );
+        }
+    });
+}
