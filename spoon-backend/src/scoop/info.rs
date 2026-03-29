@@ -16,6 +16,7 @@ use super::projection::{
     string_map_items, value_to_display,
 };
 use super::query::installed_package_states_filtered;
+use super::state::InstalledPackageState;
 
 #[derive(Debug, Serialize)]
 pub struct ScoopPackageActionOutcome {
@@ -73,8 +74,7 @@ pub async fn package_operation_outcome(
     let prefix = package_current_root(tool_root, package_name);
     let installed_version = installed_package_states_filtered(
         tool_root,
-        #[allow(deprecated)]
-        Some(|state: &super::runtime::InstalledPackageState| state.package == package_name),
+        Some(|state: &InstalledPackageState| state.package == package_name),
     )
     .await
     .into_iter()
@@ -280,8 +280,7 @@ where
     let resolved = manifest::resolve_package_manifest(package_name, tool_root).await;
     let installed_version = installed_package_states_filtered(
         tool_root,
-        #[allow(deprecated)]
-        Some(|state: &super::runtime::InstalledPackageState| state.package == package_name),
+        Some(|state: &InstalledPackageState| state.package == package_name),
     )
     .await
     .into_iter()

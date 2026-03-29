@@ -3,8 +3,8 @@ use std::path::Path;
 use super::buckets;
 use super::manifest::{self, ScoopManifest};
 use super::paths;
-#[allow(deprecated)]
-use super::runtime::InstalledPackageState;
+use super::state::InstalledPackageState;
+use crate::layout::RuntimeLayout;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -64,40 +64,24 @@ pub struct ScoopSearchResults {
     pub matches: Vec<ScoopSearchMatch>,
 }
 
+/// Enumerate all canonical installed states through the store, sorted by
+/// package name.
 pub async fn installed_package_states(tool_root: &Path) -> Vec<InstalledPackageState> {
-    installed_package_states_filtered(tool_root, None::<fn(&InstalledPackageState) -> bool>).await
+    let layout = RuntimeLayout::from_root(tool_root);
+    super::state::list_all_installed_states(&layout).await
 }
 
+/// Enumerate all canonical installed states through the store, applying an
+/// optional filter, sorted by package name.
 pub async fn installed_package_states_filtered<F>(
     tool_root: &Path,
-    mut filter: Option<F>,
+    filter: Option<F>,
 ) -> Vec<InstalledPackageState>
 where
     F: FnMut(&InstalledPackageState) -> bool,
 {
-    let root = paths::scoop_package_state_root(tool_root);
-    let Ok(mut entries) = tokio::fs::read_dir(root).await else {
-        return Vec::new();
-    };
-    let mut states = Vec::new();
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("json") {
-            continue;
-        }
-        let Ok(content) = tokio::fs::read_to_string(&path).await else {
-            continue;
-        };
-        let Ok(state) = serde_json::from_str::<InstalledPackageState>(&content) else {
-            continue;
-        };
-        if filter.as_mut().is_some_and(|filter| !filter(&state)) {
-            continue;
-        }
-        states.push(state);
-    }
-    states.sort_by(|a, b| a.package.cmp(&b.package));
-    states
+    let layout = RuntimeLayout::from_root(tool_root);
+    super::state::list_installed_states_filtered(&layout, filter).await
 }
 
 async fn search_manifests_local_async(
@@ -142,9 +126,10 @@ async fn search_manifests_local_async(
 }
 
 pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
+    let layout = RuntimeLayout::from_root(tool_root);
     let scoop_root = paths::scoop_root(tool_root);
     let buckets = buckets::load_buckets_from_registry(tool_root).await;
-    let installed = installed_package_states(tool_root).await;
+    let summaries = super::state::list_installed_summaries(&layout).await;
     ScoopStatus {
         kind: "scoop_status",
         success: true,
@@ -152,7 +137,7 @@ pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
             root: scoop_root.display().to_string(),
             shims: paths::shims_root(tool_root).display().to_string(),
             bucket_count: buckets.len(),
-            installed_package_count: installed.len(),
+            installed_package_count: summaries.len(),
         },
         buckets: buckets
             .into_iter()
@@ -162,13 +147,7 @@ pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
                 source: bucket.source,
             })
             .collect(),
-        installed_packages: installed
-            .into_iter()
-            .map(|state| ScoopInstalledPackageEntry {
-                name: state.package,
-                version: state.version.trim().to_string(),
-            })
-            .collect(),
+        installed_packages: summaries,
         paths: ScoopPaths {
             apps: scoop_root.join("apps").display().to_string(),
             cache: scoop_root.join("cache").display().to_string(),
