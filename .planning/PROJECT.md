@@ -22,7 +22,14 @@ Spoon 是一个面向 Windows 开发环境管理的工具，`spoon/` 负责 CLI/
 ### Active / 当前进行中
 
 - [ ] 深度重构 `spoon-backend/src/scoop/`，清理屎山式实现与跨层混杂
-- [ ] 优先消除 `scoop` 里的重复状态模型，并减少其他重复逻辑
+- [ ] 将 Scoop 生命周期行为拆分为明确的后端阶段，并进一步收敛 `spoon` 前端层
+
+### Completed in Phase 02: Canonical Scoop State
+
+- [x] 引入 `scoop/state/` 模块，建立 `InstalledPackageState` 为唯一规范持久化记录
+- [x] 运行时写操作（安装/更新/卸载）产出规范状态而非旧版平面状态
+- [x] 查询、状态与详情视图全部从规范状态的类型化投影派生
+- [x] 移除 `ScoopPackageState` 旧版公共 API，doctor 检测并报告遗留平面状态
 
 ### Completed in Phase 01: Backend Seams and Ownership
 
@@ -86,4 +93,4 @@ Spoon 是一个面向 Windows 开发环境管理的工具，`spoon/` 负责 CLI/
 4. 按当前状态更新 Context
 
 ---
-*Last updated: 2026-03-28 after initialization*
+*Last updated: 2026-03-29 after Phase 02 completion*
