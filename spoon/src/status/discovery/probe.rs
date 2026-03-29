@@ -312,6 +312,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::tool;
+    use spoon_backend::RuntimeLayout;
     use spoon_backend::status::BackendStatusSnapshot;
 
     use super::{
