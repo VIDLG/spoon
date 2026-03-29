@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 pub mod context;
+pub mod control_plane;
 mod error;
 mod event;
 mod fsx;
@@ -26,8 +27,9 @@ pub use event::{
 pub use fsx::directory_size;
 pub use gitx::{RepoSyncOutcome, clone_repo};
 pub use layout::{ManagedMsvcLayout, MsvcLayout, OfficialMsvcLayout, RuntimeLayout, ScoopLayout};
-pub use ports::{PackageIntegrationPort, SupplementalShimSpec, SystemPort};
+pub use ports::SystemPort;
 pub use proxy::{ReqwestClientBuilder, normalize_proxy_url};
+pub use scoop::{ScoopIntegrationPort, SupplementalShimSpec};
 pub use task::{
     CancellationToken, TaskCancellation, await_task_with_events, check_token_cancel,
     is_token_cancelled, spawn_interrupt_on_cancel,
