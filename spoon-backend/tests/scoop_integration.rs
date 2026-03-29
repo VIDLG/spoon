@@ -6,13 +6,161 @@ use common::{block_on, temp_dir};
 use spoon_backend::layout::RuntimeLayout;
 use spoon_backend::scoop::{
     InstalledPackageState, PersistEntry, ScoopPackageDetailsOutcome, ShortcutEntry, package_info,
-    sync_main_bucket_registry, write_installed_state,
+    package_operation_outcome, sync_main_bucket_registry, write_installed_state,
 };
+
+use spoon_backend::CommandStatus;
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct DesiredPolicy {
     key: &'static str,
     value: &'static str,
+}
+
+/// Regression: package_info reads from typed canonical state (bucket + architecture)
+/// and not from raw JSON probing. Validates that detail and outcome surfaces
+/// derive their installed-version, bins, shortcuts, env_add_path, env_set, persist,
+/// and integrations from the canonical InstalledPackageState record.
+#[test]
+fn scoop_package_info_reads_canonical_state() {
+    let root = temp_dir("scoop-canonical-info");
+    let manifest_path = root
+        .join("scoop")
+        .join("buckets")
+        .join("main")
+        .join("bucket")
+        .join("ripgrep.json");
+    std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &manifest_path,
+        serde_json::json!({
+            "version": "14.1.0",
+            "description": "Fast search tool",
+            "homepage": "https://example.invalid/ripgrep",
+            "license": "MIT",
+            "url": "https://example.invalid/ripgrep.zip",
+            "hash": "sha256:cafebabe",
+            "bin": ["rg.exe"],
+            "shortcuts": [
+                { "name": "ripgrep", "target": "rg.exe" }
+            ],
+            "env_add_path": ".",
+            "env_set": { "RIPGREP_CONFIG_PATH": "$dir\\config" },
+            "persist": ["config"]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    block_on(sync_main_bucket_registry(&root)).unwrap();
+
+    let current_root = root
+        .join("scoop")
+        .join("apps")
+        .join("ripgrep")
+        .join("current");
+    std::fs::create_dir_all(&current_root).unwrap();
+    std::fs::write(current_root.join("rg.exe"), b"rg").unwrap();
+
+    let layout = RuntimeLayout::from_root(&root);
+    block_on(write_installed_state(
+        &layout,
+        &InstalledPackageState {
+            package: "ripgrep".to_string(),
+            version: "14.1.0".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            bins: vec!["rg".to_string()],
+            cache_size_bytes: Some(2048),
+            shortcuts: vec![ShortcutEntry {
+                target_path: "rg.exe".to_string(),
+                name: "ripgrep".to_string(),
+                args: None,
+                icon_path: None,
+            }],
+            env_add_path: vec![".".to_string()],
+            env_set: BTreeMap::from([(
+                "RIPGREP_CONFIG_PATH".to_string(),
+                "$dir\\config".to_string(),
+            )]),
+            persist: vec![PersistEntry {
+                relative_path: "config".to_string(),
+                store_name: "config".to_string(),
+            }],
+            integrations: BTreeMap::from([(
+                "ripgrep.shell_completions".to_string(),
+                root.join("completions").display().to_string(),
+            )]),
+            pre_uninstall: Vec::new(),
+            uninstaller_script: Vec::new(),
+            post_uninstall: Vec::new(),
+        },
+    ))
+    .unwrap();
+
+    // Test package_info reads from canonical state
+    let desired = vec![DesiredPolicy {
+        key: "ripgrep.command_profile",
+        value: "fast",
+    }];
+    let data = block_on(package_info(&root, "ripgrep", desired.clone(), |entry| {
+        entry.key
+    }));
+
+    match data {
+        ScoopPackageDetailsOutcome::Details(details) => {
+            // Metadata bucket comes from manifest resolution, not state
+            assert_eq!(details.package.name, "ripgrep");
+            assert_eq!(details.package.bucket, "main");
+            assert_eq!(details.package.latest_version.as_deref(), Some("14.1.0"));
+
+            // Install fields derived from canonical state
+            assert!(details.install.installed);
+            assert_eq!(details.install.installed_version.as_deref(), Some("14.1.0"));
+            assert_eq!(details.install.cache_size_bytes, Some(2048));
+
+            // Bins from canonical state (runtime bins take priority over manifest bins)
+            assert_eq!(details.install.bins, vec!["rg"]);
+
+            // Shortcut display from canonical state's typed ShortcutEntry
+            assert_eq!(details.integration.system.shortcuts.len(), 1);
+            assert!(details.integration.system.shortcuts[0].contains("ripgrep"));
+            assert!(details.integration.system.shortcuts[0].contains("rg.exe"));
+
+            // Shims from canonical state bins
+            assert!(details.integration.commands.shims.is_some());
+            let shims = details.integration.commands.shims.as_ref().unwrap();
+            assert!(shims.iter().any(|s| s == "rg"));
+
+            // Environment from canonical state
+            assert!(!details.integration.environment.add_path.is_empty());
+            assert!(!details.integration.environment.set.is_empty());
+
+            // Persist from canonical state
+            assert!(details.integration.environment.persist.is_some());
+
+            // Integrations from canonical state
+            assert_eq!(details.integration.policy.applied_values.len(), 1);
+            assert_eq!(details.integration.policy.applied_values[0].key, "shell_completions");
+        }
+        ScoopPackageDetailsOutcome::Error(error) => panic!("unexpected error: {:?}", error),
+    }
+
+    // Test package_operation_outcome also reads canonical state
+    let outcome = block_on(package_operation_outcome(
+        &root,
+        "update",
+        "ripgrep",
+        "ripgrep",
+        CommandStatus::Success,
+        "update ripgrep",
+        vec!["updated".to_string()],
+        false,
+    ));
+    assert!(outcome.is_success());
+    assert_eq!(outcome.state.installed_version.as_deref(), Some("14.1.0"));
+    assert!(outcome.state.installed);
+
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
