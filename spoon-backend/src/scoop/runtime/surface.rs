@@ -7,13 +7,14 @@ use tokio::fs;
 
 use crate::Result;
 use crate::{BackendError, BackendEvent};
+use crate::layout::RuntimeLayout;
+use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::manifest;
 use super::super::paths;
 use super::super::paths::{package_current_root, package_persist_root};
 use super::source::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
 use super::{NoopScoopRuntimeHost, ScoopRuntimeHost};
-use super::installed_state::{read_installed_state, write_installed_state};
 
 fn start_menu_shortcuts_root(host: &dyn ScoopRuntimeHost) -> Result<PathBuf> {
     if host.test_mode_enabled() || std::env::var_os("SPOON_TEST_HOME").is_some() {
@@ -263,7 +264,8 @@ pub async fn reapply_package_command_surface_streaming_with_host(
     host: &dyn ScoopRuntimeHost,
     emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<Vec<String>> {
-    let Some(mut state) = read_installed_state(tool_root, package_name).await else {
+    let layout = RuntimeLayout::from_root(tool_root);
+    let Some(mut state) = read_installed_state(&layout, package_name).await else {
         return Ok(vec![format!(
             "Skipped command-surface reapply for '{}': installed state was not found.",
             package_name
@@ -297,7 +299,7 @@ pub async fn reapply_package_command_surface_streaming_with_host(
     state.bins = aliases.clone();
     state.env_add_path = source.env_add_path.clone();
     state.env_set = source.env_set.clone();
-    write_installed_state(tool_root, &state).await?;
+    write_installed_state(&layout, &state).await?;
     let mut output = vec![format!("Reapplied command surface for '{}'.", package_name)];
     output.push(format!("Managed shims: {}", aliases.join(", ")));
     Ok(output)
