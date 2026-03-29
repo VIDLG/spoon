@@ -107,7 +107,9 @@ async fn configure_connection(
         Ok(())
     })
     .await
-    .map_err(|e| crate::BackendError::external(error_context, e))
+    .map_err(|e: tokio_rusqlite::Error<rusqlite::Error>| {
+        crate::BackendError::external(error_context, e)
+    })
 }
 
 #[cfg(test)]

@@ -44,5 +44,7 @@ pub async fn run_migrations(conn: &tokio_rusqlite::Connection) -> crate::Result<
         Ok(())
     })
     .await
-    .map_err(|e| crate::BackendError::external("control-plane migration failed", e))
+    .map_err(|e: tokio_rusqlite::Error<rusqlite::Error>| {
+        crate::BackendError::external("control-plane migration failed", e)
+    })
 }
