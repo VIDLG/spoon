@@ -3,20 +3,20 @@ use std::fs;
 use std::path::Path;
 
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::CommandStatus;
 
 use super::manifest;
-use super::paths::{package_current_root, package_persist_root, package_state_path};
+use super::paths::{package_current_root, package_persist_root};
 use super::projection::{
     collect_bin_items, collect_shortcut_items, collect_urls_vec, directory_size,
     integration_display_key, json_value_or_display, license_display_value, manifest_value,
     manifest_value_owned, policy_config_kind, resolve_env_map, resolve_env_paths, string_items,
-    string_map_items, value_to_display,
+    string_map_items,
 };
-use super::query::installed_package_states_filtered;
+use super::state::read_installed_state;
 use super::state::InstalledPackageState;
+use crate::layout::RuntimeLayout;
 
 #[derive(Debug, Serialize)]
 pub struct ScoopPackageActionOutcome {
@@ -71,15 +71,11 @@ pub async fn package_operation_outcome(
     output: Vec<String>,
     streamed: bool,
 ) -> ScoopPackageOperationOutcome {
+    let layout = RuntimeLayout::from_root(tool_root);
     let prefix = package_current_root(tool_root, package_name);
-    let installed_version = installed_package_states_filtered(
-        tool_root,
-        Some(|state: &InstalledPackageState| state.package == package_name),
-    )
-    .await
-    .into_iter()
-    .next()
-    .map(|state| state.version.trim().to_string());
+    let installed_version = read_installed_state(&layout, package_name)
+        .await
+        .map(|state| state.version.trim().to_string());
     let installed = installed_version.is_some() && prefix.exists();
     ScoopPackageOperationOutcome {
         kind: "scoop_package_operation",
@@ -261,12 +257,6 @@ pub async fn package_manifest(tool_root: &Path, package_name: &str) -> ScoopPack
     }
 }
 
-fn read_installed_package_state(tool_root: &Path, package_name: &str) -> Option<Value> {
-    let path = package_state_path(tool_root, package_name);
-    let content = fs::read_to_string(path).ok()?;
-    serde_json::from_str::<Value>(&content).ok()
-}
-
 pub async fn package_info<D, F>(
     tool_root: &Path,
     package_name: &str,
@@ -277,16 +267,13 @@ where
     D: Serialize,
     F: Fn(&D) -> &str,
 {
+    let layout = RuntimeLayout::from_root(tool_root);
     let resolved = manifest::resolve_package_manifest(package_name, tool_root).await;
-    let installed_version = installed_package_states_filtered(
-        tool_root,
-        Some(|state: &InstalledPackageState| state.package == package_name),
-    )
-    .await
-    .into_iter()
-    .next()
-    .map(|state| state.version.trim().to_string());
-    let installed_state = read_installed_package_state(tool_root, package_name);
+    let installed_state: Option<InstalledPackageState> =
+        read_installed_state(&layout, package_name).await;
+    let installed_version = installed_state
+        .as_ref()
+        .map(|state| state.version.trim().to_string());
     let current_root = package_current_root(tool_root, package_name);
 
     let Some(resolved) = resolved else {
@@ -324,11 +311,8 @@ where
     } else {
         None
     };
-    let cache_size = installed_state
-        .as_ref()
-        .and_then(|state| state.get("cache_size_bytes"))
-        .and_then(Value::as_u64);
-    let state_path = package_state_path(tool_root, package_name);
+    let cache_size = installed_state.as_ref().and_then(|state| state.cache_size_bytes);
+    let state_path = layout.scoop.package_state_root.join(format!("{package_name}.json"));
 
     let manifest_license = manifest
         .as_ref()
@@ -395,42 +379,82 @@ where
         .map(|doc| string_map_items(manifest_value(doc, "env_set")))
         .unwrap_or_default();
 
+    // Read runtime fields from typed canonical state
     let runtime_bins = installed_state
         .as_ref()
-        .and_then(|state| state.get("bins"))
-        .cloned()
-        .map(|value| string_items(Some(value)))
+        .map(|state| state.bins.clone())
         .unwrap_or_default();
-    let runtime_shortcuts = installed_state
+    let runtime_shortcuts: Vec<String> = installed_state
         .as_ref()
-        .and_then(|state| state.get("shortcuts"))
-        .map(collect_shortcut_items)
+        .map(|state| {
+            state
+                .shortcuts
+                .iter()
+                .filter_map(|sc| {
+                    let name = sc.name.trim();
+                    let target = sc.target_path.trim();
+                    let args = sc.args.as_deref().map(str::trim).filter(|v| !v.is_empty());
+                    match (name, target, args) {
+                        ("", _, _) | (_, "", _) => None,
+                        (n, t, Some(a)) => Some(format!("{n} -> {t} {a}")),
+                        (n, t, None) => Some(format!("{n} -> {t}")),
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default();
-    let runtime_persist = installed_state
+    let runtime_persist: Option<serde_json::Value> = installed_state
         .as_ref()
-        .and_then(|state| state.get("persist"))
-        .and_then(json_value_or_display);
-    let runtime_integrations = installed_state
+        .filter(|state| !state.persist.is_empty())
+        .and_then(|state| {
+            let paths: Vec<&str> = state
+                .persist
+                .iter()
+                .map(|entry| entry.relative_path.as_str())
+                .collect();
+            serde_json::to_value(&paths).ok()
+        })
+        .and_then(|value| json_value_or_display(&value));
+    let runtime_integrations: Vec<(String, String)> = installed_state
         .as_ref()
-        .and_then(|state| state.get("integrations"))
-        .and_then(Value::as_object)
-        .map(|items| {
-            items
+        .map(|state| {
+            state
+                .integrations
                 .iter()
                 .filter_map(|(key, value)| {
-                    value_to_display(value)
-                        .map(|value| (integration_display_key(package_name, key), value))
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some((
+                            integration_display_key(package_name, key),
+                            trimmed.to_string(),
+                        ))
+                    }
                 })
-                .collect::<Vec<_>>()
+                .collect()
         })
         .unwrap_or_default();
     let runtime_env_add_paths = installed_state
         .as_ref()
-        .map(|state| string_items(state.get("env_add_path").cloned()))
+        .map(|state| state.env_add_path.clone())
         .unwrap_or_default();
-    let runtime_env_set_items = installed_state
+    let runtime_env_set_items: Vec<(String, String)> = installed_state
         .as_ref()
-        .map(|state| string_map_items(state.get("env_set").cloned()))
+        .map(|state| {
+            state
+                .env_set
+                .iter()
+                .filter_map(|(k, v)| {
+                    let v_trimmed = v.trim();
+                    if v_trimmed.is_empty() {
+                        None
+                    } else {
+                        Some((k.clone(), v_trimmed.to_string()))
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     let persist_root = package_persist_root(tool_root, package_name);
