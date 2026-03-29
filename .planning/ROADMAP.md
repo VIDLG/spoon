@@ -12,7 +12,7 @@ This roadmap turns `spoon` into a thin app shell over `spoon-backend` by fixing 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Backend Seams and Ownership** - Move runtime ownership, layout/context derivation, and Git responsibilities behind backend contracts.
+- [x] **Phase 1: Backend Seams and Ownership** - Move runtime ownership, layout/context derivation, and Git responsibilities behind backend contracts.
 - [ ] **Phase 2: Canonical Scoop State** - Replace duplicated Scoop state with one backend-owned source of truth and shared read models.
 - [ ] **Phase 3: Scoop Lifecycle Split and App Thinning** - Rebuild install/update/uninstall around explicit backend lifecycle phases and thin the app layer.
 - [ ] **Phase 4: Refactor Safety Net** - Lock in the refactor with focused backend and app tests around the risky paths.
@@ -49,7 +49,14 @@ Plans:
   2. State written by the backend contains only non-derivable Scoop facts, so layout-derived absolute paths are reconstructed from backend context instead of being duplicated in persisted state.
   3. Package list, status, and detail views stay consistent because every backend read model projects from the same canonical installed-state source.
   4. `spoon-backend/src/scoop/` no longer carries parallel Scoop state model definitions for the same installed-package facts.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [x] 02-01-PLAN.md - Introduce `scoop/state/` and make `InstalledPackageState` the canonical persisted record.
+- [ ] 02-02-PLAN.md - Update runtime writes and reapply/uninstall inputs to use canonical state with `bucket` and `architecture`.
+- [ ] 02-03-PLAN.md - Move query and runtime-status surfaces onto canonical store enumeration and typed projections.
+- [ ] 02-04-PLAN.md - Rebuild package info and operation outcomes from typed canonical state projections.
+- [ ] 02-05-PLAN.md - Remove legacy `ScoopPackageState` APIs and report stale flat state explicitly.
 
 ### Phase 3: Scoop Lifecycle Split and App Thinning
 **Goal**: `spoon-backend` owns a single explicit Scoop lifecycle for install, update, uninstall, reapply, persist, and hooks, while `spoon` only triggers operations and shows progress.
@@ -80,7 +87,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Backend Seams and Ownership | 7/8 | Gap closure | - |
-| 2. Canonical Scoop State | 0/TBD | Not started | - |
+| 1. Backend Seams and Ownership | 8/8 | Complete | 2026-03-28 |
+| 2. Canonical Scoop State | 0/5 | Planned | - |
 | 3. Scoop Lifecycle Split and App Thinning | 0/TBD | Not started | - |
 | 4. Refactor Safety Net | 0/TBD | Not started | - |

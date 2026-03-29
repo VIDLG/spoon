@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 01-08
-last_updated: "2026-03-28T15:00:20.343Z"
-last_activity: 2026-03-28
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-29T00:23:16.420Z"
+last_activity: 2026-03-29
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 13
+  completed_plans: 9
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.
-**Current focus:** Phase 01 — backend-seams-and-ownership
+**Current focus:** Phase 02 — canonical-scoop-state
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-28
+Phase: 02 (canonical-scoop-state) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-03-29
 
 Progress: [----------] 0%
 
@@ -57,6 +57,7 @@ Progress: [----------] 0%
 | Phase 01 P06 | 743 | 2 tasks | 6 files |
 | Phase 01 P7 | 3min | 2 tasks | 3 files |
 | Phase 01 P08 | 3 | 2 tasks | 7 files |
+| Phase 02 P1 | 53min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,12 @@ Recent decisions affecting current work:
 - [Phase 01]: Bucket adapter re-exports RepoSyncOutcome from backend, no app-owned Git types in spoon/src
 - [Phase 01]: 14 app-side path helper functions marked #[deprecated] with RuntimeLayout replacement guidance rather than deleted
 - [Phase 01]: Test code migrated to RuntimeLayout for consistency; deprecated warnings in tests are acceptable
+- [Phase 02]: Canonical Scoop state will collapse duplicate installed-package models into one backend-owned persisted record
+- [Phase 02]: Legacy Scoop state is intentionally not compatibility-preserved; stale old state should surface a repair or rebuild path
+- [Phase 02]: Canonical InstalledPackageState with bucket/architecture lives in scoop/state/model.rs, not runtime
+- [Phase 02]: Store APIs accept RuntimeLayout instead of raw Path, aligning with Phase 1 layout ownership
+- [Phase 02]: Old runtime::installed_state kept for internal use; migrated in plan 02-02
+- [Phase 02]: scoop::InstalledPackageState re-export points to state module, not runtime
 
 ### Pending Todos
 
@@ -90,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T14:55:47.130Z
-Stopped at: Completed 01-08
+Last session: 2026-03-29T00:23:16.416Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
