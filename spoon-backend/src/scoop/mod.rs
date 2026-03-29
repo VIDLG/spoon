@@ -4,7 +4,6 @@ mod doctor;
 mod extract;
 mod info;
 pub mod manifest;
-mod package_state;
 pub mod paths;
 pub mod planner;
 mod projection;
@@ -42,10 +41,6 @@ pub use manifest::{
     ScoopManifest, ScoopStringField, Shortcut, StringOrArray, SuggestMap, latest_version,
     latest_version_async, load_manifest, load_manifest_sync, load_package_manifest,
     load_package_manifest_sync, parse_manifest, resolve_package_manifest, search_manifests_async,
-};
-pub use package_state::{
-    ScoopPackageState, package_manifest_state_path, read_package_state, remove_package_state,
-    write_package_state,
 };
 pub use paths::{
     package_app_root, package_current_root, package_persist_root, package_state_path,
