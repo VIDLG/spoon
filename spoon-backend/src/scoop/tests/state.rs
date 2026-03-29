@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::layout::RuntimeLayout;
+use crate::scoop::doctor::detect_legacy_flat_state_files;
 use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
 use crate::scoop::state::{
     InstalledPackageState, read_installed_state, write_installed_state,
@@ -185,5 +186,103 @@ fn runtime_status_uses_canonical_installed_state() {
         assert_eq!(status.installed_packages[0].version, "3.1.0");
         assert_eq!(status.installed_packages[1].name, "beta-lib");
         assert_eq!(status.installed_packages[1].version, "0.5.2");
+    });
+}
+
+#[test]
+fn legacy_flat_scoop_state_is_reported() {
+    let tmp = temp_dir("legacy-flat-state");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+    let layout = RuntimeLayout::from_root(&tmp);
+
+    block_on(async {
+        // Seed a legacy flat state file directly in scoop/state/ (old layout)
+        std::fs::create_dir_all(&layout.scoop.state_root).expect("create state root");
+        let legacy_path = layout.scoop.state_root.join("old-tool.json");
+        let legacy_content = serde_json::json!({
+            "name": "old-tool",
+            "version": "1.0.0",
+            "bucket": "main",
+            "architecture": "x64"
+        });
+        tokio::fs::write(&legacy_path, serde_json::to_string_pretty(&legacy_content).unwrap())
+            .await
+            .expect("write legacy state file");
+
+        // Also seed a canonical state in packages/ to confirm it is NOT reported
+        let canonical_state = InstalledPackageState {
+            package: "canonical-tool".to_string(),
+            version: "2.0.0".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: BTreeMap::new(),
+            persist: vec![],
+            integrations: BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        };
+        write_installed_state(&layout, &canonical_state)
+            .await
+            .expect("write canonical state");
+
+        // Detect legacy files
+        let issues = detect_legacy_flat_state_files(&layout).await;
+
+        // Should find exactly the one legacy flat file
+        assert_eq!(issues.len(), 1, "expected exactly 1 legacy state issue");
+        assert_eq!(issues[0].kind, "legacy scoop state");
+        assert!(
+            issues[0].path.contains("old-tool.json"),
+            "issue path should reference old-tool.json, got: {}",
+            issues[0].path
+        );
+        assert!(
+            issues[0].message.contains("legacy scoop state"),
+            "issue message should contain 'legacy scoop state', got: {}",
+            issues[0].message
+        );
+        assert!(
+            issues[0].message.contains("rebuild state"),
+            "issue message should instruct to rebuild state, got: {}",
+            issues[0].message
+        );
+    });
+}
+
+#[test]
+fn no_legacy_issues_when_state_is_clean() {
+    let tmp = temp_dir("clean-state-no-legacy");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+    let layout = RuntimeLayout::from_root(&tmp);
+
+    block_on(async {
+        // Only canonical state exists
+        let state = InstalledPackageState {
+            package: "clean-tool".to_string(),
+            version: "1.0.0".to_string(),
+            bucket: "main".to_string(),
+            architecture: None,
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: BTreeMap::new(),
+            persist: vec![],
+            integrations: BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        };
+        write_installed_state(&layout, &state)
+            .await
+            .expect("write canonical state");
+
+        let issues = detect_legacy_flat_state_files(&layout).await;
+        assert!(issues.is_empty(), "clean state should produce no legacy issues");
     });
 }
