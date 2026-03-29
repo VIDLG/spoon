@@ -482,7 +482,7 @@ mod tests {
     fn managed_scoop_state_version_reads_installed_package_version() {
         let snap = BackendStatusSnapshot {
             kind: "test",
-            scoop: spoon_backend::status::BackendScoopStatus {
+            scoop: spoon_backend::status::BackendScoopSummary {
                 installed: true,
                 root: String::new(),
                 shims: String::new(),
@@ -579,7 +579,7 @@ mod tests {
 
         let snap = BackendStatusSnapshot {
             kind: "test",
-            scoop: spoon_backend::status::BackendScoopStatus {
+            scoop: spoon_backend::status::BackendScoopSummary {
                 installed: true,
                 root: String::new(),
                 shims: String::new(),

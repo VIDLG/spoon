@@ -12,14 +12,14 @@ use crate::layout::RuntimeLayout;
 #[derive(Debug, Clone, Serialize)]
 pub struct BackendStatusSnapshot {
     pub kind: &'static str,
-    pub scoop: BackendScoopStatus,
+    pub scoop: BackendScoopSummary,
     pub msvc: BackendMsvcSummary,
     pub runtime_roots: BackendRuntimeRoots,
 }
 
-/// Derives Scoop runtime status from the backend query surface.
+/// Derives Scoop runtime summary from the backend query surface.
 #[derive(Debug, Clone, Serialize)]
-pub struct BackendScoopStatus {
+pub struct BackendScoopSummary {
     pub installed: bool,
     pub root: String,
     pub shims: String,
@@ -94,7 +94,7 @@ impl BackendStatusSnapshot {
 
         Self {
             kind: "backend_status_snapshot",
-            scoop: BackendScoopStatus {
+            scoop: BackendScoopSummary {
                 installed: scoop_status.success,
                 root: layout.scoop.root.display().to_string(),
                 shims: layout.shims.display().to_string(),
