@@ -53,7 +53,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md - Introduce `scoop/state/` and make `InstalledPackageState` the canonical persisted record.
-- [ ] 02-02-PLAN.md - Update runtime writes and reapply/uninstall inputs to use canonical state with `bucket` and `architecture`.
+- [x] 02-02-PLAN.md - Update runtime writes and reapply/uninstall inputs to use canonical state with `bucket` and `architecture`.
 - [ ] 02-03-PLAN.md - Move query and runtime-status surfaces onto canonical store enumeration and typed projections.
 - [ ] 02-04-PLAN.md - Rebuild package info and operation outcomes from typed canonical state projections.
 - [ ] 02-05-PLAN.md - Remove legacy `ScoopPackageState` APIs and report stale flat state explicitly.

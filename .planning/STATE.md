@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-29T00:23:16.420Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-29T00:29:23.522Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 02 (canonical-scoop-state) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-03-29
 
@@ -58,6 +58,7 @@ Progress: [----------] 0%
 | Phase 01 P7 | 3min | 2 tasks | 3 files |
 | Phase 01 P08 | 3 | 2 tasks | 7 files |
 | Phase 02 P1 | 53min | 2 tasks | 9 files |
+| Phase 02 P02 | 5m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Store APIs accept RuntimeLayout instead of raw Path, aligning with Phase 1 layout ownership
 - [Phase 02]: Old runtime::installed_state kept for internal use; migrated in plan 02-02
 - [Phase 02]: scoop::InstalledPackageState re-export points to state module, not runtime
+- [Phase 02]: Deprecated old runtime::InstalledPackageState re-export to maintain compile compat until 02-03/02-04 read-side migration
+- [Phase 02]: Runtime actions construct RuntimeLayout locally from tool_root rather than changing public API signatures
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T00:23:16.416Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-29T00:29:23.518Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

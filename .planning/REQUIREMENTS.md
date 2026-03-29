@@ -16,7 +16,7 @@
 ### Scoop State
 
 - [x] **SCST-01**: `spoon-backend` 为 Scoop 安装状态保留一套唯一、规范、可持久化的状态模型
-- [ ] **SCST-02**: 包信息、已安装状态、卸载输入与 reapply 输入都可以从这套规范状态模型导出
+- [x] **SCST-02**: 包信息、已安装状态、卸载输入与 reapply 输入都可以从这套规范状态模型导出
 - [ ] **SCST-03**: `spoon-backend/src/scoop/` 中重复的 Scoop 状态模型被删除，而不是继续通过适配层并存
 - [x] **SCST-04**: Scoop 状态持久化只保存真正必要且不可推导的事实，不把可由布局推导出的绝对路径硬写进状态
 
@@ -78,7 +78,7 @@
 | BNDR-04 | Phase 1 | Complete |
 | BNDR-05 | Phase 1 | Complete |
 | SCST-01 | Phase 2 | Complete |
-| SCST-02 | Phase 2 | Pending |
+| SCST-02 | Phase 2 | Complete |
 | SCST-03 | Phase 2 | Pending |
 | SCST-04 | Phase 2 | Complete |
 | SCLF-01 | Phase 3 | Pending |
