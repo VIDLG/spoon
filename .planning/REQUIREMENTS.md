@@ -30,6 +30,16 @@
 
 ### Git Ownership
 
+### SQLite Control Plane
+
+- [x] **SQLCP-01**: `spoon-backend` 引入 SQLite 作为控制平面，承载 canonical installed state 与恢复元数据，而不是继续依赖分散的 JSON 控制文件
+- [ ] **SQLCP-02**: 文件系统继续作为运行时数据平面；安装目录、`current`、persist、cache、shims、shortcuts、bucket 仓库与 manifest 本体不迁入数据库
+- [x] **SQLCP-03**: SQLite 访问通过 `tokio-rusqlite` 封装在 store / repository 边界内，不把驱动细节泄漏到生命周期业务逻辑
+- [x] **SQLCP-04**: `spoon-backend` 保持 sync-core / async-edge 架构边界；核心状态规则与计划逻辑不直接执行数据库/文件/网络/进程 IO
+- [ ] **SQLCP-05**: 对旧 JSON 控制平面状态执行直接切换，不保留长期兼容层；残留旧状态通过显式 repair / manual cleanup 处理
+
+### Git Ownership
+
 - [x] **GIT-01**: `spoon` 不再直接依赖 `gix`
 - [x] **GIT-02**: Git / bucket repo 的 clone、sync、progress 事件桥接由 `spoon-backend` 独占
 - [x] **GIT-03**: backend 暴露给 app 的 Git 相关接口不泄漏 `gix` 细节，而是返回 backend 级别的结果与事件
@@ -81,6 +91,11 @@
 | SCST-02 | Phase 2 | Complete |
 | SCST-03 | Phase 2 | Complete |
 | SCST-04 | Phase 2 | Complete |
+| SQLCP-01 | Phase 02.1 | Complete |
+| SQLCP-02 | Phase 02.1 | Pending |
+| SQLCP-03 | Phase 02.1 | Complete |
+| SQLCP-04 | Phase 02.1 | Complete |
+| SQLCP-05 | Phase 02.1 | Pending |
 | SCLF-01 | Phase 3 | Pending |
 | SCLF-02 | Phase 3 | Pending |
 | SCLF-03 | Phase 3 | Pending |
@@ -97,8 +112,8 @@
 | TEST-03 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 23 total
-- Mapped to phases: 23
+- v1 requirements: 28 total
+- Mapped to phases: 28
 - Unmapped: 0
 
 ---

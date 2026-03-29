@@ -58,6 +58,24 @@ Plans:
 - [x] 02-04-PLAN.md - Rebuild package info and operation outcomes from typed canonical state projections.
 - [x] 02-05-PLAN.md - Remove legacy `ScoopPackageState` APIs and report stale flat state explicitly.
 
+### Phase 02.1: SQLite Control Plane and Sync-Async Boundary (INSERTED)
+
+**Goal:** `spoon-backend` moves its control-plane metadata from JSON files to SQLite while keeping the filesystem as the runtime data plane and preserving a sync-core / async-edge architecture boundary.
+**Requirements**: SQLCP-01, SQLCP-02, SQLCP-03, SQLCP-04, SQLCP-05
+**Depends on:** Phase 2
+**Success Criteria** (what must be TRUE):
+  1. A developer can inspect installed package state, operation journal state, doctor/repair state, and bucket registry metadata from one SQLite-backed control plane instead of scattered JSON control files.
+  2. Runtime paths, install roots, `current`, persist contents, shims, shortcuts, cache, and bucket repositories remain filesystem/layout-derived rather than being re-homed into the database.
+  3. Backend business-rule modules remain sync-core and driver-free, while `tokio-rusqlite` is contained inside store/repository edges.
+  4. The project cuts over directly to SQLite control-plane state without long-lived JSON compatibility layers; stale old JSON state is surfaced explicitly for manual repair or cleanup.
+**Plans:** 1/4 plans executed
+
+Plans:
+- [x] 02.1-01-PLAN.md - Add SQLite control-plane infrastructure, migrations, and async store façades.
+- [ ] 02.1-02-PLAN.md - Move installed state and bucket registry metadata into SQLite while keeping filesystem runtime artifacts.
+- [ ] 02.1-03-PLAN.md - Add operation journal, lock state, and doctor/repair metadata stores with sync-core / async-edge boundaries.
+- [ ] 02.1-04-PLAN.md - Cut Scoop read/write paths directly to SQLite control-plane state and report legacy JSON for manual repair.
+
 ### Phase 3: Scoop Lifecycle Split and App Thinning
 **Goal**: `spoon-backend` owns a single explicit Scoop lifecycle for install, update, uninstall, reapply, persist, and hooks, while `spoon` only triggers operations and shows progress.
 **Depends on**: Phase 2
@@ -89,5 +107,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Backend Seams and Ownership | 8/8 | Complete | 2026-03-28 |
 | 2. Canonical Scoop State | 0/5 | Planned | - |
+| 2.1. SQLite Control Plane and Sync-Async Boundary | 0/4 | Planned | - |
 | 3. Scoop Lifecycle Split and App Thinning | 0/TBD | Not started | - |
 | 4. Refactor Safety Net | 0/TBD | Not started | - |

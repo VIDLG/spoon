@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-03-29T00:47:20.649Z"
+status: executing
+stopped_at: Completed 02.1-01-PLAN.md
+last_updated: "2026-03-29T01:56:43.287Z"
 last_activity: 2026-03-29
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 2
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 17
+  completed_plans: 14
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.
-**Current focus:** Phase 02 — canonical-scoop-state
+**Current focus:** Phase 02.1 — sqlite-control-plane-and-sync-async-boundary
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 02.1 (sqlite-control-plane-and-sync-async-boundary) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-03-29
 
 Progress: [----------] 0%
@@ -62,6 +62,7 @@ Progress: [----------] 0%
 | Phase 02 P03 | 4min | 2 tasks | 6 files |
 | Phase 02 P04 | 307 | 2 tasks | 2 files |
 | Phase 02 P5 | 136 | 2 tasks | 4 files |
+| Phase 02.1 P1 | 5 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Test code migrated to RuntimeLayout for consistency; deprecated warnings in tests are acceptable
 - [Phase 02]: Canonical Scoop state will collapse duplicate installed-package models into one backend-owned persisted record
 - [Phase 02]: Legacy Scoop state is intentionally not compatibility-preserved; stale old state should surface a repair or rebuild path
+- [Post-Phase 01]: Backend root ports were narrowed so `SystemPort` stays backend-wide while Scoop-specific integration callbacks moved under `spoon-backend/src/scoop/ports.rs` as `ScoopIntegrationPort`
+- [Post-Phase 01]: Display-only pip mirror formatting was removed from backend lifecycle ports and kept in app/package presentation helpers
 - [Phase 02]: Canonical InstalledPackageState with bucket/architecture lives in scoop/state/model.rs, not runtime
 - [Phase 02]: Store APIs accept RuntimeLayout instead of raw Path, aligning with Phase 1 layout ownership
 - [Phase 02]: Old runtime::installed_state kept for internal use; migrated in plan 02-02
@@ -97,6 +100,17 @@ Recent decisions affecting current work:
 - [Phase 02]: ShortcutEntry/PersistEntry display strings computed from typed canonical fields, not parsed from JSON values
 - [Phase 02]: Legacy ScoopPackageState API removed from backend surface; package_state.rs moved to _deprecated/ backup
 - [Phase 02]: Stale legacy flat state files detected and reported explicitly in doctor instead of silently supported
+- [Phase 03]: Lifecycle should split into reusable modules (`planner -> acquire -> materialize -> persist -> surface -> integrate -> state`) with install/update/uninstall/reapply as orchestration entry points
+- [Phase 03]: `hooks.rs` stays centralized as a shared helper module, but hook invocation order remains owned by lifecycle entry points
+- [Phase 03]: App can translate lifecycle progress and results, but must not direct lifecycle ordering or invent competing stage semantics
+- [Phase 02.1]: SQLite should become the backend control-plane database while the filesystem remains the runtime data plane
+- [Phase 02.1]: `spoon-backend` should stay lifecycle-first and state-transition-first, with async-compatible edges rather than an async-first core
+- [Phase 02.1]: Control-plane module encapsulates tokio-rusqlite and rusqlite; call() bridges rusqlite::Error to crate::BackendError
+- [Phase 02.1]: Bundled SQLite feature for Windows portability; WAL journal mode enabled by default
+
+### Roadmap Evolution
+
+- Phase 02.1 inserted after Phase 2: SQLite Control Plane and Sync-Async Boundary (URGENT)
 
 ### Pending Todos
 
@@ -110,6 +124,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T00:43:38.352Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-03-29T01:56:43.284Z
+Stopped at: Completed 02.1-01-PLAN.md
 Resume file: None
