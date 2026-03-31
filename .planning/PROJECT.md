@@ -5,11 +5,15 @@
 - Archived requirements: [`v0.5.0-REQUIREMENTS.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-REQUIREMENTS.md)
 - Final audit: [`v0.5.0-MILESTONE-AUDIT.md`](/d:/projects/spoon/.planning/v0.5.0-MILESTONE-AUDIT.md)
 
-## Next Milestone Goals
+## Current Milestone: v0.6.0 Backend Architecture Completion
 
-- Decide whether the next milestone should focus on MSVC, event-contract hardening, or another backend/app contract cleanup.
-- Re-open planning with `$gsd-new-milestone` instead of extending the archived backend-refactor milestone.
-- Carry forward the recorded follow-ups from seeds, todos, and backlog items.
+**Goal:** Systematically clean the remaining `spoon-backend` architecture by making `msvc` the primary refactor target and closing the most important shared backend contract gaps.
+
+**Target features:**
+- Systematically restructure `spoon-backend/src/msvc/` around explicit backend seams, canonical state, and lifecycle ownership.
+- Harden shared backend contracts that now affect both Scoop and MSVC: events, errors, filesystem helpers, and runtime path handling.
+- Keep `scoop` in maintenance mode for spillover cleanup only, instead of reopening a second large Scoop-led refactor.
+- Add focused backend/app safety coverage for MSVC and shared-contract regressions.
 
 # Spoon Backend Refactoring
 
