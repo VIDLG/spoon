@@ -67,8 +67,9 @@ pub(super) fn command_result(
 }
 
 pub(super) fn command_result_from_scoop_package_outcome(
-    outcome: ScoopPackageOperationOutcome,
+    mut outcome: ScoopPackageOperationOutcome,
 ) -> CommandResult {
+    outcome.streamed = false;
     command_result(
         outcome.title,
         outcome.status,

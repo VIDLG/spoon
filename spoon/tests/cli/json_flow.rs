@@ -4,6 +4,8 @@ mod common;
 use common::assertions::assert_ok;
 use common::cli::run_in_home;
 use common::setup::create_configured_home;
+use spoon_backend::layout::RuntimeLayout;
+use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
 use serde_json::Value;
 
 fn parse_json(stdout: &str) -> Value {
@@ -120,12 +122,26 @@ fn scoop_status_json_prints_structured_runtime_view() {
         },
     ))
     .unwrap();
-    let package_state_root = spoon::config::scoop_state_root_from(&tool_root).join("packages");
-    std::fs::create_dir_all(&package_state_root).unwrap();
-    std::fs::write(
-        package_state_root.join("jq.json"),
-        serde_json::json!({ "package": "jq", "version": "1.8.1", "bucket": "main" }).to_string(),
-    )
+    let layout = RuntimeLayout::from_root(&tool_root);
+    spoon::runtime::test_block_on(write_installed_state(
+        &layout,
+        &InstalledPackageState {
+            package: "jq".to_string(),
+            version: "1.8.1".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: std::collections::BTreeMap::new(),
+            persist: vec![],
+            integrations: std::collections::BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        },
+    ))
     .unwrap();
 
     let (ok, stdout, stderr) = run_in_home(&["--json", "scoop", "status"], &temp_home, &[]);
@@ -295,17 +311,26 @@ fn scoop_prefix_json_prints_structured_prefix_view() {
     let temp_home = env.home;
     let tool_root = env.root;
     let package_name = "git";
-    let state_root = spoon::config::scoop_state_root_from(&tool_root).join("packages");
-    std::fs::create_dir_all(&state_root).unwrap();
-    std::fs::write(
-        state_root.join(format!("{package_name}.json")),
-        serde_json::json!({
-            "package": package_name,
-            "version": "2.53.0.2",
-            "bucket": "main"
-        })
-        .to_string(),
-    )
+    let layout = RuntimeLayout::from_root(&tool_root);
+    spoon::runtime::test_block_on(write_installed_state(
+        &layout,
+        &InstalledPackageState {
+            package: package_name.to_string(),
+            version: "2.53.0.2".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: std::collections::BTreeMap::new(),
+            persist: vec![],
+            integrations: std::collections::BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        },
+    ))
     .unwrap();
     std::fs::create_dir_all(
         spoon::config::scoop_root_from(&tool_root)

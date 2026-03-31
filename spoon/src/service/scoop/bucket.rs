@@ -78,7 +78,7 @@ pub async fn doctor_summary(tool_root: &Path) -> AnyResult<CommandResult> {
 }
 
 pub async fn doctor_report(tool_root: &Path) -> AnyResult<ScoopDoctorDetails> {
-    runtime::doctor_details(tool_root, &configured_proxy()).await
+    runtime::doctor_details(tool_root).await
 }
 
 pub fn bucket_action_result(

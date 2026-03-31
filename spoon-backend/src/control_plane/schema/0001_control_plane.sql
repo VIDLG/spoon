@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS bucket_registry (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT    NOT NULL UNIQUE,
     remote_url      TEXT    NOT NULL,
-    local_path      TEXT,
+    branch          TEXT    NOT NULL DEFAULT 'master',
     added_at        TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 

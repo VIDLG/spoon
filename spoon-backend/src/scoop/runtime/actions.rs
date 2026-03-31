@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use async_recursion::async_recursion;
 use tokio::fs;
@@ -7,41 +7,86 @@ use tokio::fs;
 use crate::Result;
 use crate::{
     BackendContext, BackendError, BackendEvent, CancellationToken, CommandStatus,
-    PackageIntegrationPort, SystemPort,
+    SystemPort,
 };
+use crate::control_plane::{acquire_lock, begin_operation, complete_operation, release_lock, set_operation_stage};
+use crate::control_plane::sqlite::db_path_for_layout;
+use crate::event::{LifecycleStage, ProgressEvent, ProgressState, progress_kind};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{
-    InstalledPackageState, read_installed_state, remove_installed_state, write_installed_state,
+    InstalledPackageState, read_installed_state,
 };
 
 use super::super::buckets;
+use super::super::ports::ScoopIntegrationPort;
 use super::super::cache::package_cache_size;
 use super::super::extract::{
-    extract_archive_to_root, materialize_installer_payloads_to_root, refresh_current_entry,
+    refresh_current_entry,
 };
+use super::super::lifecycle::acquire::acquire_payloads;
+use super::super::lifecycle::integrate::run_integrations;
+use super::super::lifecycle::materialize::materialize_payloads;
+use super::super::lifecycle::persist::{restore_persist_entries, sync_persist_entries};
+use super::super::lifecycle::planner::plan_package_lifecycle;
+use super::super::lifecycle::reapply::reapply as reapply_lifecycle;
+use super::super::lifecycle::state::{commit_installed_state, remove_installed_state as remove_lifecycle_state};
+use super::super::lifecycle::surface::{apply_install_surface, remove_surface};
+use super::super::lifecycle::uninstall::uninstall as uninstall_lifecycle;
 use super::super::paths;
 use super::super::paths::{
-    package_app_root, package_current_root, package_persist_root, package_state_path,
-    package_version_root,
+    package_app_root, package_current_root, package_persist_root, package_version_root,
 };
 use super::super::planner::{ScoopPackageAction, ScoopPackagePlan};
-use super::download::ensure_downloaded_archive;
 use super::execution::ContextRuntimeHost;
 use super::hooks::{HookContext, execute_hook_scripts};
-use super::integration::{apply_package_integrations, helper_executable_path};
-use super::persist::{restore_persist_entries_into_root, sync_persist_entries_from_root};
-use super::source::{dependency_lookup_key, parse_selected_source, selected_architecture_key};
+use super::integration::helper_executable_path;
+use super::source::{dependency_lookup_key, selected_architecture_key};
 use super::surface::{
-    installed_targets_exist, installer_layout_error, load_manifest_value, remove_shims,
-    remove_shortcuts, write_shims, write_shortcuts,
+    installed_targets_exist, installer_layout_error,
 };
 use super::{
     NoopScoopRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated_with_context,
     ensure_scoop_shims_activated_with_host,
 };
 
+fn emit_stage(emit: &mut dyn FnMut(BackendEvent), stage: LifecycleStage) {
+    let mut event =
+        ProgressEvent::activity(progress_kind::LIFECYCLE, stage.as_str()).with_stage(stage);
+    if matches!(stage, LifecycleStage::Completed) {
+        event = event.with_state(ProgressState::Completed);
+    }
+    emit(BackendEvent::Progress(event));
+}
+
+async fn effective_runtime_plan(
+    tool_root: &Path,
+    proxy: &str,
+    plan: &ScoopPackagePlan,
+) -> Result<ScoopPackagePlan> {
+    if !matches!(
+        plan.action,
+        ScoopPackageAction::Install | ScoopPackageAction::Update
+    ) {
+        return Ok(plan.clone());
+    }
+    if buckets::load_buckets_from_registry(tool_root).await.is_empty() {
+        buckets::ensure_main_bucket_ready(tool_root, proxy).await?;
+    }
+    if plan.resolved_manifest.is_some() {
+        return Ok(plan.clone());
+    }
+    Ok(super::super::planner::plan_package_action(
+        plan.action.as_str(),
+        &plan.display_name,
+        &plan.package_name,
+        Some(tool_root),
+    ))
+}
+
 async fn install_package(
     tool_root: &Path,
+    layout: &RuntimeLayout,
+    operation_id: i64,
     plan: &ScoopPackagePlan,
     proxy: &str,
     cancel: Option<&CancellationToken>,
@@ -49,13 +94,27 @@ async fn install_package(
     emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<Vec<String>> {
     let mut visited = BTreeSet::new();
-    install_package_with_dependencies(tool_root, plan, proxy, cancel, host, emit, &mut visited)
+    set_operation_stage(layout, operation_id, LifecycleStage::Acquiring).await?;
+    emit_stage(emit, LifecycleStage::Acquiring);
+    install_package_with_dependencies(
+        tool_root,
+        layout,
+        operation_id,
+        plan,
+        proxy,
+        cancel,
+        host,
+        emit,
+        &mut visited,
+    )
         .await
 }
 
 #[async_recursion(?Send)]
 async fn install_package_with_dependencies(
     tool_root: &Path,
+    layout: &RuntimeLayout,
+    operation_id: i64,
     plan: &ScoopPackagePlan,
     proxy: &str,
     cancel: Option<&CancellationToken>,
@@ -63,13 +122,9 @@ async fn install_package_with_dependencies(
     emit: &mut dyn FnMut(BackendEvent),
     visited: &mut BTreeSet<String>,
 ) -> Result<Vec<String>> {
-    let resolved = plan
-        .resolved_manifest
-        .as_ref()
-        .ok_or_else(|| BackendError::Other("package manifest could not be resolved".to_string()))?;
-    let manifest = load_manifest_value(&resolved.manifest_path).await?;
-    let source = parse_selected_source(&manifest)?;
-    let layout = RuntimeLayout::from_root(tool_root);
+    let planned = plan_package_lifecycle(tool_root, plan).await?;
+    let resolved = &planned.resolved;
+    let source = &planned.source;
     let existing_state = read_installed_state(&layout, &plan.package_name).await;
     let current_root = package_current_root(tool_root, &plan.package_name);
     if let Some(existing) = &existing_state
@@ -88,10 +143,7 @@ async fn install_package_with_dependencies(
     }
     let hook_context = HookContext {
         app: plan.package_name.clone(),
-        bucket: plan
-            .resolved_manifest
-            .as_ref()
-            .map(|resolved| resolved.bucket.name.clone()),
+        bucket: Some(resolved.bucket.name.clone()),
         buckets_dir: paths::scoop_root(tool_root).join("buckets"),
     };
     for dependency in &source.depends {
@@ -118,14 +170,10 @@ async fn install_package_with_dependencies(
             &dependency_name,
             Some(tool_root),
         );
-        if dependency_plan.resolved_manifest.is_none() {
-            return Err(BackendError::Other(format!(
-                "dependency '{}' required by '{}' could not be resolved",
-                dependency, plan.package_name
-            )));
-        }
         install_package_with_dependencies(
             tool_root,
+            layout,
+            operation_id,
             &dependency_plan,
             proxy,
             cancel,
@@ -136,40 +184,35 @@ async fn install_package_with_dependencies(
         .await?;
     }
     if let Some(previous) = existing_state {
-        sync_persist_entries_from_root(
+        sync_persist_entries(
             &package_current_root(tool_root, &plan.package_name),
             &package_persist_root(tool_root, &plan.package_name),
             &previous.persist,
             emit,
         )
         .await?;
-        remove_shortcuts(&previous.shortcuts, host).await?;
+        remove_surface(tool_root, &previous.bins, &previous.shortcuts, host).await?;
     }
     let version_root = package_version_root(tool_root, &plan.package_name, &source.version);
     let persist_root = package_persist_root(tool_root, &plan.package_name);
     let shims_root = paths::shims_root(tool_root);
-    let mut archive_paths = Vec::new();
-    for payload in &source.payloads {
-        archive_paths.push(
-            ensure_downloaded_archive(
-                tool_root,
-                &plan.package_name,
-                &source,
-                payload,
-                proxy,
-                cancel,
-                emit,
-            )
-            .await?,
-        );
-    }
-    let primary_archive = archive_paths.first().map(PathBuf::as_path);
-    if source.installer_script.is_empty() {
-        extract_archive_to_root(tool_root, &archive_paths, &source, &version_root, emit).await?;
-    } else {
-        materialize_installer_payloads_to_root(&archive_paths, &source, &version_root, emit)
-            .await?;
-    }
+    let archive_paths = acquire_payloads(
+        tool_root,
+        &plan.package_name,
+        source,
+        &source.payloads,
+        proxy,
+        cancel,
+        emit,
+    )
+    .await?;
+    set_operation_stage(layout, operation_id, LifecycleStage::Materializing).await?;
+    emit_stage(emit, LifecycleStage::Materializing);
+    let primary_archive =
+        materialize_payloads(tool_root, &archive_paths, source, &version_root, emit).await?;
+    let primary_archive = primary_archive.as_deref();
+    set_operation_stage(layout, operation_id, LifecycleStage::PreparingHooks).await?;
+    emit_stage(emit, LifecycleStage::PreparingHooks);
     execute_hook_scripts(
         &source.pre_install,
         "pre_install",
@@ -198,12 +241,16 @@ async fn install_package_with_dependencies(
             emit,
         )?;
     }
-    restore_persist_entries_into_root(&version_root, &persist_root, &source.persist, emit).await?;
+    set_operation_stage(layout, operation_id, LifecycleStage::PersistRestoring).await?;
+    emit_stage(emit, LifecycleStage::PersistRestoring);
+    restore_persist_entries(&version_root, &persist_root, &source.persist, emit).await?;
+    set_operation_stage(layout, operation_id, LifecycleStage::SurfaceApplying).await?;
+    emit_stage(emit, LifecycleStage::SurfaceApplying);
     refresh_current_entry(&version_root, &current_root, emit).await?;
     if !installed_targets_exist(&plan.package_name, &current_root, &source, host) {
         return Err(installer_layout_error(&current_root, &source));
     }
-    let aliases = write_shims(
+    let (aliases, shortcuts) = apply_install_surface(
         &plan.package_name,
         &shims_root,
         &current_root,
@@ -213,7 +260,8 @@ async fn install_package_with_dependencies(
         emit,
     )
     .await?;
-    let shortcuts = write_shortcuts(&current_root, &persist_root, &source, host, emit).await?;
+    set_operation_stage(layout, operation_id, LifecycleStage::PostInstallHooks).await?;
+    emit_stage(emit, LifecycleStage::PostInstallHooks);
     execute_hook_scripts(
         &source.post_install,
         "post_install",
@@ -226,9 +274,11 @@ async fn install_package_with_dependencies(
         None,
         emit,
     )?;
+    set_operation_stage(layout, operation_id, LifecycleStage::PostInstallHooks).await?;
+    emit_stage(emit, LifecycleStage::Integrating);
+    set_operation_stage(layout, operation_id, LifecycleStage::Integrating).await?;
     let integrations =
-        apply_package_integrations(host, &plan.package_name, &current_root, &persist_root, emit)
-            .await?;
+        run_integrations(host, &plan.package_name, &current_root, &persist_root, emit).await?;
     let cache_size_bytes = match package_cache_size(tool_root, &plan.package_name).await {
         Ok(size) => Some(size),
         Err(err) => {
@@ -240,13 +290,11 @@ async fn install_package_with_dependencies(
             None
         }
     };
-    let bucket = plan
-        .resolved_manifest
-        .as_ref()
-        .map(|resolved| resolved.bucket.name.clone())
-        .unwrap_or_default();
+    let bucket = resolved.bucket.name.clone();
     let architecture = selected_architecture_key();
-    write_installed_state(
+    set_operation_stage(layout, operation_id, LifecycleStage::StateCommitting).await?;
+    emit_stage(emit, LifecycleStage::StateCommitting);
+    commit_installed_state(
         &layout,
         &InstalledPackageState {
             package: plan.package_name.clone(),
@@ -275,7 +323,7 @@ async fn install_package_with_dependencies(
         format!("Updated current entry: {}", current_root.display()),
         format!(
             "Installed state written to {}",
-            package_state_path(tool_root, &plan.package_name).display()
+            db_path_for_layout(layout).display()
         ),
     ];
     if !source.env_add_path.is_empty() {
@@ -338,12 +386,15 @@ async fn install_package_with_dependencies(
     Ok(output)
 }
 
-async fn uninstall_package(
+pub(crate) async fn uninstall_package(
     tool_root: &Path,
+    layout: &RuntimeLayout,
+    operation_id: i64,
     package_name: &str,
     host: &dyn ScoopRuntimeHost,
+    emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<Vec<String>> {
-    let state = read_installed_state(&RuntimeLayout::from_root(tool_root), package_name).await;
+    let state = read_installed_state(layout, package_name).await;
     if let Some(state) = &state {
         let current_root = package_current_root(tool_root, package_name);
         let persist_root = package_persist_root(tool_root, package_name);
@@ -352,9 +403,8 @@ async fn uninstall_package(
             bucket: Some(state.bucket.clone()),
             buckets_dir: paths::scoop_root(tool_root).join("buckets"),
         };
-        let mut sink = |chunk: BackendEvent| {
-            let _ = chunk;
-        };
+        set_operation_stage(layout, operation_id, LifecycleStage::PreUninstallHooks).await?;
+        emit_stage(emit, LifecycleStage::PreUninstallHooks);
         execute_hook_scripts(
             &state.pre_uninstall,
             "pre_uninstall",
@@ -365,8 +415,10 @@ async fn uninstall_package(
             &state.version,
             None,
             None,
-            &mut sink,
+            emit,
         )?;
+        set_operation_stage(layout, operation_id, LifecycleStage::Uninstalling).await?;
+        emit_stage(emit, LifecycleStage::Uninstalling);
         execute_hook_scripts(
             &state.uninstaller_script,
             "uninstaller",
@@ -377,25 +429,15 @@ async fn uninstall_package(
             &state.version,
             None,
             None,
-            &mut sink,
+            emit,
         )?;
-        let mut sink = |_chunk: BackendEvent| {};
-        sync_persist_entries_from_root(&current_root, &persist_root, &state.persist, &mut sink)
+        set_operation_stage(layout, operation_id, LifecycleStage::PersistSyncing).await?;
+        emit_stage(emit, LifecycleStage::PersistSyncing);
+        sync_persist_entries(&current_root, &persist_root, &state.persist, emit)
             .await?;
-        remove_shims(tool_root, &state.bins).await?;
-        remove_shortcuts(&state.shortcuts, host).await?;
-        execute_hook_scripts(
-            &state.post_uninstall,
-            "post_uninstall",
-            &current_root,
-            &persist_root,
-            None,
-            Some(&hook_context),
-            &state.version,
-            None,
-            None,
-            &mut sink,
-        )?;
+        set_operation_stage(layout, operation_id, LifecycleStage::SurfaceRemoving).await?;
+        emit_stage(emit, LifecycleStage::SurfaceRemoving);
+        remove_surface(tool_root, &state.bins, &state.shortcuts, host).await?;
     }
     let package_root = package_app_root(tool_root, package_name);
     if package_root.exists() {
@@ -406,7 +448,38 @@ async fn uninstall_package(
             ))
         })?;
     }
-    remove_installed_state(&RuntimeLayout::from_root(tool_root), package_name).await?;
+    set_operation_stage(layout, operation_id, LifecycleStage::StateRemoving).await?;
+    emit_stage(emit, LifecycleStage::StateRemoving);
+    remove_lifecycle_state(layout, package_name).await?;
+    if let Some(state) = &state {
+        let current_root = package_current_root(tool_root, package_name);
+        let persist_root = package_persist_root(tool_root, package_name);
+        let hook_context = HookContext {
+            app: package_name.to_string(),
+            bucket: Some(state.bucket.clone()),
+            buckets_dir: paths::scoop_root(tool_root).join("buckets"),
+        };
+        set_operation_stage(layout, operation_id, LifecycleStage::PostUninstallHooks).await?;
+        emit_stage(emit, LifecycleStage::PostUninstallHooks);
+        if let Err(err) = execute_hook_scripts(
+            &state.post_uninstall,
+            "post_uninstall",
+            &current_root,
+            &persist_root,
+            None,
+            Some(&hook_context),
+            &state.version,
+            None,
+            None,
+            emit,
+        ) {
+            tracing::warn!(
+                package = %package_name,
+                error = %err,
+                "post_uninstall hook failed; continuing because it is warning-only"
+            );
+        }
+    }
     Ok(vec![format!("Removed Scoop package '{}'.", package_name)])
 }
 
@@ -418,15 +491,35 @@ pub async fn execute_package_action_streaming_with_host(
     host: &dyn ScoopRuntimeHost,
     emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<Vec<String>> {
-    match plan.action {
+    let effective_plan = effective_runtime_plan(tool_root, proxy, plan).await?;
+    match effective_plan.action {
         ScoopPackageAction::Install | ScoopPackageAction::Update => {
+            let mut output = Vec::new();
             for line in ensure_scoop_shims_activated_with_host(tool_root, host).await? {
                 tracing::info!("{line}");
+                output.push(line);
             }
-            install_package(tool_root, plan, proxy, cancel, host, emit).await
+            let layout = RuntimeLayout::from_root(tool_root);
+            output.extend(
+                install_package(
+                    tool_root,
+                    &layout,
+                    0,
+                    &effective_plan,
+                    proxy,
+                    cancel,
+                    host,
+                    emit,
+                )
+                .await?,
+            );
+            Ok(output)
         }
         ScoopPackageAction::Uninstall => {
-            uninstall_package(tool_root, &plan.package_name, host).await
+            uninstall_lifecycle(tool_root, 0, &effective_plan.package_name, host, emit).await
+        }
+        ScoopPackageAction::Reapply => {
+            reapply_lifecycle(tool_root, &effective_plan.package_name, host, emit).await
         }
         ScoopPackageAction::Other => Err(BackendError::Other(
             "unsupported Scoop package action".to_string(),
@@ -452,26 +545,38 @@ pub async fn execute_package_action_streaming_with_context<P>(
     emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<Vec<String>>
 where
-    P: SystemPort + PackageIntegrationPort,
+    P: SystemPort + ScoopIntegrationPort,
 {
     let host = ContextRuntimeHost::new(context);
-    match plan.action {
+    let effective_plan =
+        effective_runtime_plan(&context.root, context.proxy.as_deref().unwrap_or(""), plan).await?;
+    match effective_plan.action {
         ScoopPackageAction::Install | ScoopPackageAction::Update => {
+            let mut output = Vec::new();
             for line in ensure_scoop_shims_activated_with_context(context).await? {
                 tracing::info!("{line}");
+                output.push(line);
             }
-            install_package(
-                &context.root,
-                plan,
-                context.proxy.as_deref().unwrap_or(""),
-                cancel,
-                &host,
-                emit,
-            )
-            .await
+            output.extend(
+                install_package(
+                    &context.root,
+                    &RuntimeLayout::from_root(&context.root),
+                    0,
+                    &effective_plan,
+                    context.proxy.as_deref().unwrap_or(""),
+                    cancel,
+                    &host,
+                    emit,
+                )
+                .await?,
+            );
+            Ok(output)
         }
         ScoopPackageAction::Uninstall => {
-            uninstall_package(&context.root, &plan.package_name, &host).await
+            uninstall_lifecycle(&context.root, 0, &effective_plan.package_name, &host, emit).await
+        }
+        ScoopPackageAction::Reapply => {
+            reapply_lifecycle(&context.root, &effective_plan.package_name, &host, emit).await
         }
         ScoopPackageAction::Other => Err(BackendError::Other(
             "unsupported Scoop package action".to_string(),
@@ -503,48 +608,82 @@ pub async fn execute_package_action_outcome_streaming_with_host(
     mut emit: Option<&mut dyn FnMut(BackendEvent)>,
 ) -> Result<super::super::ScoopPackageOperationOutcome> {
     let mut output = Vec::new();
-    if matches!(
-        plan.action,
-        super::super::planner::ScoopPackageAction::Install
-            | super::super::planner::ScoopPackageAction::Update
-    ) && buckets::load_buckets_from_registry(tool_root)
-        .await
-        .is_empty()
-    {
-        buckets::ensure_main_bucket_ready(tool_root, proxy).await?;
+    let layout = RuntimeLayout::from_root(tool_root);
+    let effective_plan = effective_runtime_plan(tool_root, proxy, plan).await?;
+    let lock_key = format!(
+        "scoop:{}:{}",
+        effective_plan.action.as_str(),
+        effective_plan.package_name
+    );
+    if !acquire_lock(&layout, &lock_key, plan.action.as_str()).await? {
+        return Err(BackendError::Other(format!(
+            "operation lock is already held for {}",
+            lock_key
+        )));
     }
-    if let Some(line) = plan.resolution_line() {
-        tracing::info!("{line}");
-        output.push(line);
-    }
-    let command_line = plan.command_line();
-    tracing::info!("{command_line}");
-    output.push(command_line);
-    let mut runtime_emit = |chunk| apply_stream_chunk(&mut output, chunk, &mut emit);
-    let runtime_lines = execute_package_action_streaming_with_host(
-        tool_root,
-        plan,
-        proxy,
-        cancel,
-        host,
-        &mut runtime_emit,
+    let bucket_name = effective_plan
+        .resolved_manifest
+        .as_ref()
+        .map(|resolved| resolved.bucket.name.as_str());
+    let operation_id = begin_operation(
+        &layout,
+        effective_plan.action.as_str(),
+        Some(&effective_plan.package_name),
+        bucket_name,
     )
     .await?;
-    for line in runtime_lines {
+    set_operation_stage(&layout, operation_id, LifecycleStage::Planned).await?;
+    if let Some(line) = effective_plan.resolution_line() {
         tracing::info!("{line}");
         output.push(line);
     }
-    Ok(super::super::package_operation_outcome(
-        tool_root,
-        plan.action.as_str(),
-        &plan.package_name,
-        &plan.display_name,
-        CommandStatus::Success,
-        plan.title(),
-        output,
-        emit.is_some(),
-    )
-    .await)
+    let command_line = effective_plan.command_line();
+    tracing::info!("{command_line}");
+    output.push(command_line);
+    let runtime_result = {
+        let mut runtime_emit = |chunk| apply_stream_chunk(&mut output, chunk, &mut emit);
+        emit_stage(&mut runtime_emit, LifecycleStage::Planned);
+        execute_package_action_streaming_with_host(
+            tool_root,
+            &effective_plan,
+            proxy,
+            cancel,
+            host,
+            &mut runtime_emit,
+        )
+        .await
+    };
+
+    let final_result = match runtime_result {
+        Ok(runtime_lines) => {
+            for line in runtime_lines {
+                tracing::info!("{line}");
+                output.push(line);
+            }
+            if let Some(emit_fn) = emit.as_deref_mut() {
+                emit_stage(emit_fn, LifecycleStage::Completed);
+            }
+            set_operation_stage(&layout, operation_id, LifecycleStage::Completed).await?;
+            complete_operation(&layout, operation_id, "completed", None).await?;
+            Ok(super::super::package_operation_outcome(
+                tool_root,
+                effective_plan.action.as_str(),
+                &effective_plan.package_name,
+                &effective_plan.display_name,
+                CommandStatus::Success,
+                effective_plan.title(),
+                output,
+                emit.is_some(),
+            )
+            .await)
+        }
+        Err(err) => {
+            complete_operation(&layout, operation_id, "failed", Some(&err.to_string())).await?;
+            Err(err)
+        }
+    };
+    release_lock(&layout, &lock_key).await?;
+    final_result
 }
 
 pub async fn execute_package_action_outcome_streaming(
@@ -566,43 +705,82 @@ pub async fn execute_package_action_outcome_streaming_with_context<P>(
     mut emit: Option<&mut dyn FnMut(BackendEvent)>,
 ) -> Result<super::super::ScoopPackageOperationOutcome>
 where
-    P: SystemPort + PackageIntegrationPort,
+    P: SystemPort + ScoopIntegrationPort,
 {
     let mut output = Vec::new();
-    if matches!(
-        plan.action,
-        super::super::planner::ScoopPackageAction::Install
-            | super::super::planner::ScoopPackageAction::Update
-    ) && buckets::load_buckets_from_registry(&context.root)
-        .await
-        .is_empty()
-    {
-        buckets::ensure_main_bucket_ready_with_context(context).await?;
+    let layout = RuntimeLayout::from_root(&context.root);
+    let effective_plan =
+        effective_runtime_plan(&context.root, context.proxy.as_deref().unwrap_or(""), plan).await?;
+    let lock_key = format!(
+        "scoop:{}:{}",
+        effective_plan.action.as_str(),
+        effective_plan.package_name
+    );
+    if !acquire_lock(&layout, &lock_key, plan.action.as_str()).await? {
+        return Err(BackendError::Other(format!(
+            "operation lock is already held for {}",
+            lock_key
+        )));
     }
-    if let Some(line) = plan.resolution_line() {
+    let bucket_name = effective_plan
+        .resolved_manifest
+        .as_ref()
+        .map(|resolved| resolved.bucket.name.as_str());
+    let operation_id = begin_operation(
+        &layout,
+        effective_plan.action.as_str(),
+        Some(&effective_plan.package_name),
+        bucket_name,
+    )
+    .await?;
+    set_operation_stage(&layout, operation_id, LifecycleStage::Planned).await?;
+    if let Some(line) = effective_plan.resolution_line() {
         tracing::info!("{line}");
         output.push(line);
     }
-    let command_line = plan.command_line();
+    let command_line = effective_plan.command_line();
     tracing::info!("{command_line}");
     output.push(command_line);
-    let mut runtime_emit = |chunk| apply_stream_chunk(&mut output, chunk, &mut emit);
-    let runtime_lines =
-        execute_package_action_streaming_with_context(context, plan, cancel, &mut runtime_emit)
-            .await?;
-    for line in runtime_lines {
-        tracing::info!("{line}");
-        output.push(line);
-    }
-    Ok(super::super::package_operation_outcome(
-        &context.root,
-        plan.action.as_str(),
-        &plan.package_name,
-        &plan.display_name,
-        CommandStatus::Success,
-        plan.title(),
-        output,
-        emit.is_some(),
-    )
-    .await)
+    let runtime_result = {
+        let mut runtime_emit = |chunk| apply_stream_chunk(&mut output, chunk, &mut emit);
+        emit_stage(&mut runtime_emit, LifecycleStage::Planned);
+        execute_package_action_streaming_with_context(
+            context,
+            &effective_plan,
+            cancel,
+            &mut runtime_emit,
+        )
+            .await
+    };
+
+    let final_result = match runtime_result {
+        Ok(runtime_lines) => {
+            for line in runtime_lines {
+                tracing::info!("{line}");
+                output.push(line);
+            }
+            if let Some(emit_fn) = emit.as_deref_mut() {
+                emit_stage(emit_fn, LifecycleStage::Completed);
+            }
+            set_operation_stage(&layout, operation_id, LifecycleStage::Completed).await?;
+            complete_operation(&layout, operation_id, "completed", None).await?;
+            Ok(super::super::package_operation_outcome(
+                &context.root,
+                effective_plan.action.as_str(),
+                &effective_plan.package_name,
+                &effective_plan.display_name,
+                CommandStatus::Success,
+                effective_plan.title(),
+                output,
+                emit.is_some(),
+            )
+            .await)
+        }
+        Err(err) => {
+            complete_operation(&layout, operation_id, "failed", Some(&err.to_string())).await?;
+            Err(err)
+        }
+    };
+    release_lock(&layout, &lock_key).await?;
+    final_result
 }

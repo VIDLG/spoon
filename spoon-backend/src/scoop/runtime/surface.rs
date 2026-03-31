@@ -6,15 +6,16 @@ use serde_json::Value;
 use tokio::fs;
 
 use crate::Result;
-use crate::{BackendError, BackendEvent};
+use crate::{BackendContext, BackendError, BackendEvent, SystemPort};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::manifest;
 use super::super::paths;
 use super::super::paths::{package_current_root, package_persist_root};
+use super::super::ports::ScoopIntegrationPort;
 use super::source::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
-use super::{NoopScoopRuntimeHost, ScoopRuntimeHost};
+use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost};
 
 fn start_menu_shortcuts_root(host: &dyn ScoopRuntimeHost) -> Result<PathBuf> {
     if host.test_mode_enabled() || std::env::var_os("SPOON_TEST_HOME").is_some() {
@@ -312,6 +313,19 @@ pub async fn reapply_package_command_surface_streaming(
 ) -> Result<Vec<String>> {
     let host = NoopScoopRuntimeHost;
     reapply_package_command_surface_streaming_with_host(tool_root, package_name, &host, emit).await
+}
+
+pub async fn reapply_package_command_surface_streaming_with_context<P>(
+    context: &BackendContext<P>,
+    package_name: &str,
+    emit: &mut dyn FnMut(BackendEvent),
+) -> Result<Vec<String>>
+where
+    P: SystemPort + ScoopIntegrationPort,
+{
+    let host = ContextRuntimeHost::new(context);
+    reapply_package_command_surface_streaming_with_host(&context.root, package_name, &host, emit)
+        .await
 }
 
 fn substitute_shortcut_text(value: &str, current_root: &Path, persist_root: &Path) -> String {

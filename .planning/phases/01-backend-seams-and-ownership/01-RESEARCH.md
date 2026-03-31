@@ -110,7 +110,7 @@ The repo is already close enough that this can be landed in slices. Scoop and bu
 | Explicit `BackendContext` | Keep `load_backend_config()` and `tool_root` helpers | Lower short-term churn, but it preserves hidden dependencies and fails LAY-03. |
 | Backend-owned `RuntimeLayout` | Keep app-side `config::paths` helpers as shared runtime API | Easier migration, but it locks in duplicated layout ownership and fails D-10/D-11. |
 | Forward design | Compatibility-heavy bridge layer | Fewer immediate call-site edits, but it preserves the same seam leaks under new names. |
-| Narrow ports for system and package integration behavior | One mixed host trait | Smaller API surface, but it keeps generic OS effects and Spoon-owned package writes entangled. |
+| Narrow ports for system and package integration behavior | One mixed host trait | Smaller API surface, but it keeps generic OS effects and Spoon-owned package writes entangled. Post-phase refinement may scope package integration ports under Scoop-specific modules rather than the backend crate root. |
 
 **Installation:**
 ```bash
@@ -140,9 +140,10 @@ The repo is already close enough that this can be landed in slices. Scoop and bu
 spoon-backend/src/
 ├── context.rs        # BackendContext and request-scoped runtime inputs
 ├── layout.rs         # RuntimeLayout, ScoopLayout, MsvcLayout
-├── ports.rs          # Narrow system/package ports implemented by spoon
+├── ports.rs          # Backend-wide system ports
 ├── gitx.rs           # internal Git implementation only
 ├── scoop/
+│   ├── ports.rs      # Scoop-specific integration callbacks implemented by spoon
 │   ├── query.rs      # backend read models for runtime/package surfaces
 │   ├── buckets.rs    # bucket ops using internal gitx
 │   └── runtime/      # action orchestration using BackendContext + ports
@@ -201,7 +202,7 @@ pub trait SystemPort {
     fn remove_process_path_entry(&self, path: &Path);
 }
 
-pub trait PackageIntegrationPort {
+pub trait ScoopIntegrationPort {
     fn supplemental_shims(&self, package: &str, current_root: &Path) -> Vec<SupplementalShimSpec>;
     async fn apply_integrations(
         &self,
@@ -213,7 +214,7 @@ pub trait PackageIntegrationPort {
 }
 ```
 
-**Planning note:** PATH and shim activation are generic runtime effects, so backend decides when they happen. Package-specific config writes stay app-owned behind `PackageIntegrationPort`.
+**Planning note:** PATH and shim activation are generic runtime effects, so backend decides when they happen. Package-specific config writes stay app-owned behind a Scoop-scoped integration port. The later `ScoopIntegrationPort` naming is a cleaner realization of the same idea.
 
 ### Pattern 3: Backend read models are the single source for status and detail
 **What:** Replace app file reads and path calculations with backend query models.
@@ -306,7 +307,7 @@ pub async fn clone_repo(
 **What goes wrong:** Generic PATH and home-directory behavior stays coupled to Spoon-owned package integrations.
 **Why it happens:** The current `ScoopRuntimeHost` already mixes both concerns.
 **How to avoid:** Separate system effects from package integration ports, or nest them clearly under `BackendContext`.
-**Warning signs:** One trait still exposes both user PATH mutation and package-specific config writes.
+**Warning signs:** One trait still exposes both user PATH mutation and package-specific config writes, or a backend-wide port carries Scoop-only integration callbacks that should live under the Scoop domain.
 
 ### Pitfall 3: Read-Model Split Brain
 **What goes wrong:** Actions use backend contracts, but status and detail screens still parse state files and derive paths locally.

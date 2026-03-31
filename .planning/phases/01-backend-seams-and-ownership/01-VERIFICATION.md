@@ -39,19 +39,19 @@ gaps: []
 |----------|----------|--------|---------|
 | `spoon-backend/src/context.rs` | BackendContext struct | VERIFIED | `pub struct BackendContext<P>` at line 6. Contains root, layout, proxy, test_mode, msvc_target_arch, msvc_command_profile, ports. |
 | `spoon-backend/src/layout.rs` | RuntimeLayout struct | VERIFIED | `pub struct RuntimeLayout` at line 4. Contains Scoop, MSVC managed/official, shims, state, cache sub-layouts. `from_root` derives all paths. |
-| `spoon-backend/src/ports.rs` | SystemPort + PackageIntegrationPort | VERIFIED | `pub trait SystemPort` at line 14, `pub trait PackageIntegrationPort` at line 22. Split port contracts. |
+| `spoon-backend/src/ports.rs` | SystemPort root port | VERIFIED | `SystemPort` remains the backend-wide host boundary. Post-phase refinement later narrowed Scoop-specific integration callbacks into `spoon-backend/src/scoop/ports.rs` as `ScoopIntegrationPort`, preserving the Phase 1 split-port intent while improving scope. |
 | `spoon-backend/src/tests/context.rs` | Context contract tests | VERIFIED | `runtime_layout_derives_from_root` and `explicit_context_required_for_runtime_ops`. Both pass (71 backend tests total). |
 | `spoon-backend/src/scoop/runtime/actions.rs` | Context-driven Scoop actions | VERIFIED | `BackendContext` consumed at entry points. `_with_context` entry points are substantive. |
 | `spoon-backend/src/scoop/buckets.rs` | Backend-owned bucket contracts | VERIFIED | `BackendContext` used in context variants. `clone_repo` called internally. No `gix::` types in file. |
 | `spoon-backend/src/scoop/tests/contracts.rs` | Scoop contract tests | VERIFIED | `scoop_action_contract_uses_context` and `bucket_sync_uses_backend_git_contract`. Both pass. |
-| `spoon-backend/src/scoop/runtime/execution.rs` | Split-port runtime host | VERIFIED | `SystemPort` + `PackageIntegrationPort` imported. `ContextRuntimeHost` bridges `BackendContext` to `ScoopRuntimeHost` trait. |
+| `spoon-backend/src/scoop/runtime/execution.rs` | Split-port runtime host | VERIFIED | `ContextRuntimeHost` bridges `BackendContext` to `ScoopRuntimeHost`. Post-phase refinement kept `SystemPort` backend-wide and moved Scoop-specific integration callbacks to `scoop::ScoopIntegrationPort`, which is a narrower realization of the same boundary. |
 | `spoon-backend/src/msvc/mod.rs` | Context-driven MSVC | VERIFIED | `BackendContext` used throughout. No `static RUNTIME_CONFIG`. `MsvcRequestConfig::from_context`. |
 | `spoon-backend/src/msvc/tests/context.rs` | MSVC context tests | VERIFIED | Tests pass. |
 | `spoon/src/service/msvc/mod.rs` | Thin MSVC adapter | VERIFIED | No `apply_runtime_config`, `set_runtime_config`, `load_backend_config`. Uses backend context builders. |
 | `spoon-backend/src/status.rs` | Backend status snapshot | VERIFIED | `pub struct BackendStatusSnapshot` at line 13. Calls `scoop::runtime_status` and `msvc::status` internally. |
 | `spoon/src/status/mod.rs` | App status from backend snapshot | VERIFIED | `BackendStatusSnapshot` imported (line 8). `status_path_mismatches` now uses `RuntimeLayout::from_root(root).shims` (line 596). |
 | `spoon/tests/cli/status_backend_flow.rs` | Status regression test | VERIFIED | `json_status_uses_backend_read_models` passes. |
-| `spoon/src/service/mod.rs` | Shared BackendContext builder | VERIFIED | `build_scoop_backend_context` (line 181) and `build_msvc_backend_context` (line 195). `AppSystemPort` (line 112) implements both port traits. |
+| `spoon/src/service/mod.rs` | Shared BackendContext builder | VERIFIED | `build_scoop_backend_context` and `build_msvc_backend_context` construct `BackendContext`. `AppSystemPort` implements the app-owned host callbacks; after a later cleanup this became `SystemPort + scoop::ScoopIntegrationPort` instead of the broader crate-root port naming. |
 | `spoon/src/service/scoop/actions.rs` | Thin Scoop package adapter | VERIFIED | Routes through backend runtime. No direct Scoop runtime calls. |
 | `spoon/src/service/scoop/bucket.rs` | Thin bucket adapter | VERIFIED | No `load_backend_config`, no `gix::`. Re-exports `RepoSyncOutcome` from backend. |
 | `spoon/src/view/tools/detail.rs` | Backend-driven detail view | VERIFIED | `ToolDetailModel` consumes `ToolStatus` from backend queries. |
@@ -74,7 +74,7 @@ gaps: []
 | `msvc/paths.rs` | `layout.rs` | MSVC paths delegate to RuntimeLayout | WIRED | `RuntimeLayout::from_root` in paths.rs. No manual path joins. |
 | `scoop/runtime/actions.rs` | `context.rs` | Actions take BackendContext | WIRED | `_with_context` entry points accept `&BackendContext<P>` |
 | `scoop/buckets.rs` | `gitx.rs` | Bucket sync uses clone_repo | WIRED | `clone_repo` called internally. Outcome fields destructured. No `gix::` leakage. |
-| `scoop/runtime/execution.rs` | `ports.rs` | Runtime effects via split ports | WIRED | `ContextRuntimeHost` delegates to `SystemPort` and `PackageIntegrationPort` |
+| `scoop/runtime/execution.rs` | host ports | Runtime effects via split ports | WIRED | `ContextRuntimeHost` delegates to `SystemPort` plus Scoop-scoped integration callbacks. The original `PackageIntegrationPort` naming was later narrowed to `scoop::ScoopIntegrationPort` without changing the architectural intent. |
 | `spoon/src/service/mod.rs` | `context.rs` | App builds BackendContext | WIRED | `build_scoop_backend_context` and `build_msvc_backend_context` construct `BackendContext` |
 | `spoon/src/status/mod.rs` | `status.rs` | Status consumes BackendStatusSnapshot | WIRED | `use spoon_backend::status::BackendStatusSnapshot` at line 8 |
 | `spoon/src/cli/json.rs` | `status/mod.rs` | JSON status via build_status_details | WIRED | JSON status path calls `build_status_details_with_snapshot` |
@@ -139,6 +139,16 @@ gaps: []
 No TODO/FIXME/PLACEHOLDER/HACK comments found in any modified files.
 No empty implementations or console.log-only patterns found.
 No production code uses deprecated path helpers (only 1 test fixture use at update.rs:187).
+
+### Post-Phase Refinement Note
+
+After Phase 1 verification, the split-port seam was tightened further:
+
+- `SystemPort` stayed at `spoon-backend/src/ports.rs` as the backend-wide OS/runtime boundary.
+- Scoop-only integration callbacks were moved under `spoon-backend/src/scoop/ports.rs` and renamed `ScoopIntegrationPort`.
+- Display-only pip mirror formatting was removed from backend lifecycle ports and left in app/package presentation helpers.
+
+This is treated as a refinement of the verified Phase 1 boundary, not a change in direction.
 
 ### Human Verification Required
 

@@ -3,7 +3,9 @@ mod cache;
 mod doctor;
 mod extract;
 mod info;
+pub(crate) mod lifecycle;
 pub mod manifest;
+pub mod ports;
 pub mod paths;
 pub mod planner;
 mod projection;
@@ -22,7 +24,7 @@ pub use buckets::{
     update_buckets_with_context, upsert_bucket_to_registry,
 };
 pub use cache::{clear as clear_cache, prune as prune_cache};
-pub use doctor::{ScoopDoctorDetails, ScoopRuntimeDetails, doctor_with_host};
+pub use doctor::{ScoopDoctorDetails, ScoopRuntimeDetails, doctor_with_context, doctor_with_host};
 pub use extract::{
     copy_path_recursive, detect_archive_kind, extract_archive_sync, extract_archive_to_root,
     helper_7z_candidates, materialize_installer_payloads_to_root, refresh_current_entry,
@@ -49,6 +51,7 @@ pub use paths::{
     shims_root,
 };
 pub use planner::{ScoopPackageAction, ScoopPackagePlan, infer_tool_root, plan_package_action};
+pub use ports::{ScoopIntegrationPort, SupplementalShimSpec};
 pub use projection::{
     bin_lines, collect_bin_items, collect_shortcut_items, collect_urls_vec, directory_size,
     integration_display_key, json_value_or_display, license_display_value, license_field,
@@ -72,14 +75,13 @@ pub use state::{
     list_installed_states, read_installed_state, remove_installed_state, write_installed_state,
 };
 pub use runtime::{
-    NoopScoopRuntimeHost, ScoopRuntimeHost, SupplementalShimSpec, ensure_scoop_shims_activated,
+    NoopScoopRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated,
     ensure_scoop_shims_activated_with_context, ensure_scoop_shims_activated_with_host,
     execute_package_action_outcome_streaming_with_context, execute_package_action_streaming,
     execute_package_action_streaming_with_context, execute_package_action_streaming_with_host,
     expanded_shim_targets, reapply_package_command_surface_streaming,
     reapply_package_command_surface_streaming_with_host, reapply_package_integrations_streaming,
-    reapply_package_integrations_streaming_with_host, resolved_pip_mirror_url_for_display,
-    resolved_pip_mirror_url_for_display_with_host,
+    reapply_package_integrations_streaming_with_host,
 };
 
 #[cfg(test)]

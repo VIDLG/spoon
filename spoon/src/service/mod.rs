@@ -17,8 +17,9 @@ pub use cache::{
 };
 pub use spoon_backend::{
     BackendContext, BackendError, BackendEvent, CancellationToken, CommandStatus, FinishEvent,
-    PackageIntegrationPort, ProgressEvent, ProgressState, ProgressUnit, Result, SystemPort,
+    ProgressEvent, ProgressState, ProgressUnit, Result, SystemPort,
 };
+use spoon_backend::scoop::ScoopIntegrationPort;
 
 pub(crate) type GlobalConfig = crate::config::GlobalConfig;
 pub(crate) type PolicyConfig = crate::config::PolicyConfig;
@@ -107,7 +108,7 @@ pub(crate) fn load_backend_config() -> BackendConfig {
     }
 }
 
-/// App-owned port that implements both `SystemPort` and `PackageIntegrationPort`
+/// App-owned port that implements both `SystemPort` and `ScoopIntegrationPort`
 /// for use with `BackendContext<AppSystemPort>`.
 pub(crate) struct AppSystemPort;
 
@@ -135,7 +136,29 @@ impl SystemPort for AppSystemPort {
     }
 }
 
-impl PackageIntegrationPort for AppSystemPort {
+impl SystemPort for &'static AppSystemPort {
+    fn home_dir(&self) -> PathBuf {
+        (*self).home_dir()
+    }
+
+    fn ensure_user_path_entry(&self, path: &Path) -> spoon_backend::Result<()> {
+        (*self).ensure_user_path_entry(path)
+    }
+
+    fn ensure_process_path_entry(&self, path: &Path) {
+        (*self).ensure_process_path_entry(path);
+    }
+
+    fn remove_user_path_entry(&self, path: &Path) -> spoon_backend::Result<()> {
+        (*self).remove_user_path_entry(path)
+    }
+
+    fn remove_process_path_entry(&self, path: &Path) {
+        (*self).remove_process_path_entry(path);
+    }
+}
+
+impl ScoopIntegrationPort for AppSystemPort {
     fn supplemental_shims(
         &self,
         package_name: &str,
@@ -148,10 +171,6 @@ impl PackageIntegrationPort for AppSystemPort {
                 relative_path: spec.relative_path,
             })
             .collect()
-    }
-
-    fn resolved_pip_mirror_url_for_display(&self, policy_value: &str) -> String {
-        resolved_pip_mirror_url_for_display(policy_value)
     }
 
     fn apply_integrations<'a>(
@@ -169,6 +188,26 @@ impl PackageIntegrationPort for AppSystemPort {
             };
             apply_integrations_backend(package_name, &mut mapped).await
         })
+    }
+}
+
+impl ScoopIntegrationPort for &'static AppSystemPort {
+    fn supplemental_shims(
+        &self,
+        package_name: &str,
+        current_root: &Path,
+    ) -> Vec<spoon_backend::SupplementalShimSpec> {
+        (*self).supplemental_shims(package_name, current_root)
+    }
+
+    fn apply_integrations<'a>(
+        &'a self,
+        package_name: &'a str,
+        current_root: &'a Path,
+        persist_root: &'a Path,
+        emit: &'a mut dyn FnMut(BackendEvent),
+    ) -> Pin<Box<dyn Future<Output = spoon_backend::Result<BTreeMap<String, String>>> + 'a>> {
+        (*self).apply_integrations(package_name, current_root, persist_root, emit)
     }
 }
 
@@ -285,6 +324,12 @@ pub(crate) fn resolved_pip_mirror_url_for_display(policy_value: &str) -> String 
 }
 
 fn format_backend_progress(progress: &ProgressEvent) -> String {
+    if let Some(stage) = progress.stage {
+        return match progress.state {
+            ProgressState::Completed => format!("Stage complete: {}", stage.as_str()),
+            ProgressState::Running => format!("Stage: {}", stage.as_str()),
+        };
+    }
     match progress.unit {
         ProgressUnit::Bytes => match (progress.current, progress.total) {
             (Some(current), Some(total)) => {
@@ -319,7 +364,7 @@ fn format_backend_progress(progress: &ProgressEvent) -> String {
     }
 }
 
-pub(crate) fn stream_chunk_from_backend_event(event: BackendEvent) -> Option<StreamChunk> {
+pub fn stream_chunk_from_backend_event(event: BackendEvent) -> Option<StreamChunk> {
     match event {
         BackendEvent::Progress(progress) => {
             Some(StreamChunk::ReplaceLast(format_backend_progress(&progress)))

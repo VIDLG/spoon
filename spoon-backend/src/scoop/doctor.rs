@@ -3,12 +3,19 @@ use std::path::Path;
 use serde::Serialize;
 use tokio::fs;
 
+use crate::control_plane::{
+    DoctorIssueRecord, list_doctor_issues, replace_legacy_state_issues,
+    sync_failed_lifecycle_issues,
+};
 use crate::layout::RuntimeLayout;
-use crate::{BackendError, Result};
+use crate::{BackendContext, BackendError, Result, SystemPort};
 
 use super::buckets::load_buckets_from_registry;
+use super::ports::ScoopIntegrationPort;
 use super::paths::{scoop_root, scoop_state_root, shims_root};
-use super::runtime::{ScoopRuntimeHost, ensure_scoop_shims_activated_with_host};
+use super::runtime::{
+    ContextRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated_with_host,
+};
 
 #[derive(Debug, Serialize)]
 pub struct ScoopRuntimeDetails {
@@ -33,6 +40,7 @@ pub struct ScoopDoctorDetails {
     pub shim_activation_output: Vec<String>,
     pub registered_buckets: Vec<super::buckets::Bucket>,
     pub legacy_state_issues: Vec<LegacyScoopStateIssue>,
+    pub control_plane_issues: Vec<DoctorIssueRecord>,
 }
 
 /// Detect old flat Scoop state files that are not part of the canonical state layout.
@@ -59,13 +67,31 @@ pub async fn detect_legacy_flat_state_files(
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
 
-        // Skip directories (including the canonical "packages/" subdirectory)
         if path.is_dir() {
+            if path.file_name().and_then(|n| n.to_str()) == Some("packages") {
+                let mut package_entries = match fs::read_dir(&path).await {
+                    Ok(entries) => entries,
+                    Err(_) => continue,
+                };
+                while let Ok(Some(package_entry)) = package_entries.next_entry().await {
+                    let package_path = package_entry.path();
+                    if package_path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                        continue;
+                    }
+                    issues.push(LegacyScoopStateIssue {
+                        kind: "legacy scoop state",
+                        path: package_path.display().to_string(),
+                        message: format!(
+                            "legacy JSON control-plane file '{}' is not supported after SQLite cutover; SQLite is authoritative, so repair manually or delete the old JSON state",
+                            package_path.display()
+                        ),
+                    });
+                }
+            }
             continue;
         }
 
-        // Skip the bucket registry file which legitimately lives in state_root
-        if path.file_name().and_then(|n| n.to_str()) == Some("buckets.json") {
+        if path.file_name().and_then(|n| n.to_str()) == Some("control-plane.sqlite3") {
             continue;
         }
 
@@ -78,7 +104,7 @@ pub async fn detect_legacy_flat_state_files(
             kind: "legacy scoop state",
             path: path.display().to_string(),
             message: format!(
-                "legacy scoop state file '{}' is not supported; remove it and rebuild state from canonical packages/",
+                "legacy JSON control-plane file '{}' is not supported after SQLite cutover; SQLite is authoritative, so repair manually or delete the old JSON state",
                 path.display()
             ),
         });
@@ -114,10 +140,21 @@ pub async fn doctor_with_host(
 
     let layout = RuntimeLayout::from_root(tool_root);
     let legacy_state_issues = detect_legacy_flat_state_files(&layout).await;
+    replace_legacy_state_issues(
+        &layout,
+        &legacy_state_issues
+            .iter()
+            .map(|issue| issue.message.clone())
+            .collect::<Vec<_>>(),
+    )
+    .await?;
+    sync_failed_lifecycle_issues(&layout).await?;
+    let persisted_issues = list_doctor_issues(&layout).await?;
+    let has_unresolved_persisted = persisted_issues.iter().any(|issue| !issue.resolved);
 
     Ok(ScoopDoctorDetails {
         kind: "scoop_doctor",
-        success: legacy_state_issues.is_empty(),
+        success: legacy_state_issues.is_empty() && !has_unresolved_persisted,
         runtime: ScoopRuntimeDetails {
             root: scoop_root.display().to_string(),
             state_root: scoop_state_root(tool_root).display().to_string(),
@@ -130,5 +167,14 @@ pub async fn doctor_with_host(
         shim_activation_output,
         registered_buckets: load_buckets_from_registry(tool_root).await,
         legacy_state_issues,
+        control_plane_issues: persisted_issues,
     })
+}
+
+pub async fn doctor_with_context<P>(context: &BackendContext<P>) -> Result<ScoopDoctorDetails>
+where
+    P: SystemPort + ScoopIntegrationPort,
+{
+    let host = ContextRuntimeHost::new(context);
+    doctor_with_host(&context.root, context.proxy.as_deref().unwrap_or(""), &host).await
 }

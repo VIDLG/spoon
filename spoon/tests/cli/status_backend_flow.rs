@@ -4,6 +4,13 @@ mod common;
 use common::assertions::assert_ok;
 use common::cli::run_in_home;
 use common::setup::create_configured_home;
+use spoon::service::{
+    BackendEvent, CommandStatus, FinishEvent, ProgressEvent, ProgressState, StreamChunk,
+    stream_chunk_from_backend_event,
+};
+use spoon_backend::layout::RuntimeLayout;
+use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
+use spoon_backend::LifecycleStage;
 use serde_json::Value;
 
 fn parse_json(stdout: &str) -> Value {
@@ -18,13 +25,27 @@ fn json_status_uses_backend_read_models() {
     let temp_home = env.home;
     let tool_root = env.root;
 
-    // Set up a Scoop package state so the backend snapshot has content
-    let state_root = spoon::config::scoop_state_root_from(&tool_root).join("packages");
-    std::fs::create_dir_all(&state_root).unwrap();
-    std::fs::write(
-        state_root.join("git.json"),
-        serde_json::json!({ "package": "git", "version": "2.53.0.2" }).to_string(),
-    )
+    // Seed canonical state through the backend store so the backend snapshot has content.
+    let layout = RuntimeLayout::from_root(&tool_root);
+    spoon::runtime::test_block_on(write_installed_state(
+        &layout,
+        &InstalledPackageState {
+            package: "git".to_string(),
+            version: "2.53.0.2".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec![],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: std::collections::BTreeMap::new(),
+            persist: vec![],
+            integrations: std::collections::BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        },
+    ))
     .unwrap();
 
     // Register a bucket so the backend snapshot includes bucket data
@@ -60,5 +81,66 @@ fn json_status_uses_backend_read_models() {
         assert!(roots["managed_msvc"].is_string());
         assert!(roots["managed_toolchain"].is_string());
         assert!(roots["official_msvc"].is_string());
+    }
+}
+
+#[test]
+fn backend_stage_events_drive_app_stream_translation() {
+    let running = BackendEvent::Progress(
+        ProgressEvent::activity("lifecycle", "planned")
+            .with_stage(LifecycleStage::Planned),
+    );
+    let completed = BackendEvent::Progress(
+        ProgressEvent::activity("lifecycle", "completed")
+            .with_stage(LifecycleStage::Completed)
+            .with_state(ProgressState::Completed),
+    );
+
+    let running_chunk = stream_chunk_from_backend_event(running);
+    let completed_chunk = stream_chunk_from_backend_event(completed);
+
+    match running_chunk {
+        Some(StreamChunk::ReplaceLast(line)) => assert_eq!(line, "Stage: planned"),
+        other => panic!("unexpected running chunk: {:?}", other),
+    }
+    match completed_chunk {
+        Some(StreamChunk::ReplaceLast(line)) => assert_eq!(line, "Stage complete: completed"),
+        other => panic!("unexpected completed chunk: {:?}", other),
+    }
+}
+
+#[test]
+fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementation() {
+    let cancelled = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+        CommandStatus::Cancelled,
+        None,
+    )));
+    let failed = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+        CommandStatus::Failed,
+        None,
+    )));
+    let blocked = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+        CommandStatus::Blocked,
+        None,
+    )));
+    let explicit = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::failed(
+        "hook failed before commit",
+    )));
+
+    match cancelled {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "Cancelled by user."),
+        other => panic!("unexpected cancelled chunk: {:?}", other),
+    }
+    match failed {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "Operation failed."),
+        other => panic!("unexpected failed chunk: {:?}", other),
+    }
+    match blocked {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "Operation blocked."),
+        other => panic!("unexpected blocked chunk: {:?}", other),
+    }
+    match explicit {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "hook failed before commit"),
+        other => panic!("unexpected explicit failure chunk: {:?}", other),
     }
 }

@@ -1,95 +1,224 @@
-use tokio::fs;
-
 use super::model::InstalledPackageState;
+use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
 use crate::{BackendError, Result};
+use rusqlite::{OptionalExtension, params};
 
-/// Canonical state persistence directory for a given tool root.
-fn state_root(layout: &RuntimeLayout) -> &std::path::Path {
-    &layout.scoop.package_state_root
+#[derive(Debug)]
+struct StoredInstalledPackageRow {
+    package: String,
+    version: String,
+    bucket: String,
+    architecture: Option<String>,
+    cache_size_bytes: Option<i64>,
+    bins: String,
+    shortcuts: String,
+    env_add_path: String,
+    env_set: String,
+    persist: String,
+    integrations: String,
+    pre_uninstall: String,
+    uninstaller_script: String,
+    post_uninstall: String,
 }
 
-/// Canonical state file path for a specific package.
-fn state_file(layout: &RuntimeLayout, package_name: &str) -> std::path::PathBuf {
-    state_root(layout).join(format!("{package_name}.json"))
+impl StoredInstalledPackageRow {
+    fn into_state(self) -> Option<InstalledPackageState> {
+        Some(InstalledPackageState {
+            package: self.package,
+            version: self.version,
+            bucket: self.bucket,
+            architecture: self.architecture,
+            cache_size_bytes: self.cache_size_bytes.and_then(|value| u64::try_from(value).ok()),
+            bins: serde_json::from_str(&self.bins).ok()?,
+            shortcuts: serde_json::from_str(&self.shortcuts).ok()?,
+            env_add_path: serde_json::from_str(&self.env_add_path).ok()?,
+            env_set: serde_json::from_str(&self.env_set).ok()?,
+            persist: serde_json::from_str(&self.persist).ok()?,
+            integrations: serde_json::from_str(&self.integrations).ok()?,
+            pre_uninstall: serde_json::from_str(&self.pre_uninstall).ok()?,
+            uninstaller_script: serde_json::from_str(&self.uninstaller_script).ok()?,
+            post_uninstall: serde_json::from_str(&self.post_uninstall).ok()?,
+        })
+    }
 }
 
 /// Read a single canonical installed-package state.
 ///
-/// Returns `None` if the state file does not exist or cannot be parsed.
+/// Returns `None` if the state row does not exist or cannot be parsed.
 pub async fn read_installed_state(
     layout: &RuntimeLayout,
     package_name: &str,
 ) -> Option<InstalledPackageState> {
-    let path = state_file(layout, package_name);
-    let content = fs::read_to_string(path).await.ok()?;
-    serde_json::from_str(&content).ok()
+    let db = ControlPlaneDb::open_for_layout(layout).await.ok()?;
+    let package_name = package_name.to_string();
+    let row = db
+        .call(move |conn| {
+            conn.query_row(
+                "SELECT package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall
+                 FROM installed_packages WHERE package = ?1",
+                params![package_name],
+                |row| {
+                    Ok(StoredInstalledPackageRow {
+                        package: row.get(0)?,
+                        version: row.get(1)?,
+                        bucket: row.get(2)?,
+                        architecture: row.get(3)?,
+                        cache_size_bytes: row.get(4)?,
+                        bins: row.get(5)?,
+                        shortcuts: row.get(6)?,
+                        env_add_path: row.get(7)?,
+                        env_set: row.get(8)?,
+                        persist: row.get(9)?,
+                        integrations: row.get(10)?,
+                        pre_uninstall: row.get(11)?,
+                        uninstaller_script: row.get(12)?,
+                        post_uninstall: row.get(13)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
+        .ok()?;
+    row.and_then(StoredInstalledPackageRow::into_state)
 }
 
-/// Write (create or update) a canonical installed-package state.
+/// Write (create or update) a canonical installed-package state row.
 pub async fn write_installed_state(
     layout: &RuntimeLayout,
     state: &InstalledPackageState,
 ) -> Result<()> {
-    let root = state_root(layout);
-    fs::create_dir_all(root)
-        .await
-        .map_err(|err| BackendError::fs("create", root, err))?;
-    let path = state_file(layout, &state.package);
-    let content = serde_json::to_string_pretty(state)
-        .map_err(|err| BackendError::external("failed to serialize installed state", err))?;
-    fs::write(&path, content)
-        .await
-        .map_err(|err| BackendError::fs("write", &path, err))?;
-    Ok(())
+    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let package = state.package.clone();
+    let version = state.version.clone();
+    let bucket = state.bucket.clone();
+    let architecture = state.architecture.clone();
+    let cache_size_bytes = state.cache_size_bytes.and_then(|value| i64::try_from(value).ok());
+    let bins = serde_json::to_string(&state.bins)
+        .map_err(|err| BackendError::external("failed to serialize installed state bins", err))?;
+    let shortcuts = serde_json::to_string(&state.shortcuts).map_err(|err| {
+        BackendError::external("failed to serialize installed state shortcuts", err)
+    })?;
+    let env_add_path = serde_json::to_string(&state.env_add_path).map_err(|err| {
+        BackendError::external("failed to serialize installed state env_add_path", err)
+    })?;
+    let env_set = serde_json::to_string(&state.env_set)
+        .map_err(|err| BackendError::external("failed to serialize installed state env_set", err))?;
+    let persist = serde_json::to_string(&state.persist)
+        .map_err(|err| BackendError::external("failed to serialize installed state persist", err))?;
+    let integrations = serde_json::to_string(&state.integrations).map_err(|err| {
+        BackendError::external("failed to serialize installed state integrations", err)
+    })?;
+    let pre_uninstall = serde_json::to_string(&state.pre_uninstall).map_err(|err| {
+        BackendError::external("failed to serialize installed state pre_uninstall", err)
+    })?;
+    let uninstaller_script = serde_json::to_string(&state.uninstaller_script).map_err(|err| {
+        BackendError::external("failed to serialize installed state uninstaller_script", err)
+    })?;
+    let post_uninstall = serde_json::to_string(&state.post_uninstall).map_err(|err| {
+        BackendError::external("failed to serialize installed state post_uninstall", err)
+    })?;
+
+    db.call_write(move |conn| {
+        conn.execute(
+            "INSERT INTO installed_packages
+                (package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             ON CONFLICT(package) DO UPDATE SET
+                version = excluded.version,
+                bucket = excluded.bucket,
+                architecture = excluded.architecture,
+                cache_size_bytes = excluded.cache_size_bytes,
+                bins = excluded.bins,
+                shortcuts = excluded.shortcuts,
+                env_add_path = excluded.env_add_path,
+                env_set = excluded.env_set,
+                persist = excluded.persist,
+                integrations = excluded.integrations,
+                pre_uninstall = excluded.pre_uninstall,
+                uninstaller_script = excluded.uninstaller_script,
+                post_uninstall = excluded.post_uninstall,
+                updated_at = datetime('now')",
+            params![
+                package,
+                version,
+                bucket,
+                architecture,
+                cache_size_bytes,
+                bins,
+                shortcuts,
+                env_add_path,
+                env_set,
+                persist,
+                integrations,
+                pre_uninstall,
+                uninstaller_script,
+                post_uninstall,
+            ],
+        )?;
+        Ok(())
+    })
+    .await
 }
 
-/// Remove a canonical installed-package state file.
+/// Remove a canonical installed-package state row.
 ///
-/// Silently succeeds if the file does not exist.
+/// Silently succeeds if the row does not exist.
 pub async fn remove_installed_state(
     layout: &RuntimeLayout,
     package_name: &str,
 ) -> Result<()> {
-    let path = state_file(layout, package_name);
-    if path.exists() {
-        fs::remove_file(&path)
-            .await
-            .map_err(|err| BackendError::fs("remove", &path, err))?;
-    }
-    Ok(())
+    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let package_name = package_name.to_string();
+    db.call_write(move |conn| {
+        conn.execute(
+            "DELETE FROM installed_packages WHERE package = ?1",
+            params![package_name],
+        )?;
+        Ok(())
+    })
+    .await
 }
 
-/// Enumerate all canonical installed-package states.
+/// Enumerate all canonical installed-package states from SQLite.
 ///
-/// Reads every `*.json` file under the package state root and returns those
-/// that successfully deserialize as [`InstalledPackageState`].
+/// Returns all rows that successfully deserialize as [`InstalledPackageState`].
 pub async fn list_installed_states(layout: &RuntimeLayout) -> Vec<InstalledPackageState> {
-    let root = state_root(layout);
-    let mut states = Vec::new();
-
-    if !root.exists() {
-        return states;
-    }
-
-    let mut entries = match fs::read_dir(root).await {
-        Ok(entries) => entries,
-        Err(_) => return states,
+    let Ok(db) = ControlPlaneDb::open_for_layout(layout).await else {
+        return Vec::new();
     };
 
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-        let content = match fs::read_to_string(&path).await {
-            Ok(content) => content,
-            Err(_) => continue,
-        };
-        if let Ok(state) = serde_json::from_str::<InstalledPackageState>(&content) {
-            states.push(state);
-        }
-    }
+    let rows = db
+        .call(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall
+                 FROM installed_packages",
+            )?;
+            let mapped = stmt.query_map([], |row| {
+                Ok(StoredInstalledPackageRow {
+                    package: row.get(0)?,
+                    version: row.get(1)?,
+                    bucket: row.get(2)?,
+                    architecture: row.get(3)?,
+                    cache_size_bytes: row.get(4)?,
+                    bins: row.get(5)?,
+                    shortcuts: row.get(6)?,
+                    env_add_path: row.get(7)?,
+                    env_set: row.get(8)?,
+                    persist: row.get(9)?,
+                    integrations: row.get(10)?,
+                    pre_uninstall: row.get(11)?,
+                    uninstaller_script: row.get(12)?,
+                    post_uninstall: row.get(13)?,
+                })
+            })?;
+            Ok(mapped.filter_map(|row| row.ok()).collect::<Vec<_>>())
+        })
+        .await
+        .unwrap_or_default();
 
-    states
+    rows.into_iter()
+        .filter_map(StoredInstalledPackageRow::into_state)
+        .collect()
 }

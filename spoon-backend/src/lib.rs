@@ -21,8 +21,8 @@ mod tests;
 pub use context::BackendContext;
 pub use error::{BackendError, Result};
 pub use event::{
-    BackendEvent, EventReceiver, EventSender, EventSink, FinishEvent, ProgressEvent, ProgressState,
-    ProgressUnit,
+    BackendEvent, EventReceiver, EventSender, EventSink, FinishEvent, LifecycleStage,
+    ProgressEvent, ProgressState, ProgressUnit,
 };
 pub use fsx::directory_size;
 pub use gitx::{RepoSyncOutcome, clone_repo};

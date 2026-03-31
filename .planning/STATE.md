@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v0.5.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02.1-01-PLAN.md
-last_updated: "2026-03-29T01:56:43.287Z"
-last_activity: 2026-03-29
+status: complete
+stopped_at: Phase 5 complete; ready to re-audit milestone
+last_updated: "2026-03-31T00:00:00.000Z"
+last_activity: 2026-03-31
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 17
-  completed_plans: 14
-  percent: 0
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 29
+  completed_plans: 29
+  percent: 100
 ---
 
 # Project State
@@ -21,92 +21,53 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.
-**Current focus:** Phase 02.1 — sqlite-control-plane-and-sync-async-boundary
+**Current focus:** Milestone re-audit
 
 ## Current Position
 
-Phase: 02.1 (sqlite-control-plane-and-sync-async-boundary) — EXECUTING
-Plan: 2 of 4
-Status: Ready to execute
-Last activity: 2026-03-29
+Phase: 05 (scoop-contract-alignment-and-context-completion) - COMPLETE
+Plan: 3 of 3
+Status: Ready to re-audit milestone
+Last activity: 2026-03-31
 
-Progress: [----------] 0%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0.0 hours
+- Total plans completed: 29
+- Average duration: n/a
+- Total execution time: tracked in phase artifacts
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 8 | done | 1.00x |
+| 02 | 5 | done | 1.00x |
+| 02.1 | 4 | done | 1.00x |
+| 03 | 5 | done | 1.00x |
+| 04 | 4 | done | 1.00x |
+| 05 | 3 | done | 1.00x |
 
 **Recent Trend:**
 
-- Last 5 plans: none
-- Trend: Stable
-
-| Phase 01 P03 | 4min | 2 tasks | 8 files |
-| Phase 01 P04 | 10min | 2 tasks | 8 files |
-| Phase 01 P05 | 587 | 2 tasks | 5 files |
-| Phase 01 P06 | 743 | 2 tasks | 6 files |
-| Phase 01 P7 | 3min | 2 tasks | 3 files |
-| Phase 01 P08 | 3 | 2 tasks | 7 files |
-| Phase 02 P1 | 53min | 2 tasks | 9 files |
-| Phase 02 P02 | 5m | 2 tasks | 7 files |
-| Phase 02 P03 | 4min | 2 tasks | 6 files |
-| Phase 02 P04 | 307 | 2 tasks | 2 files |
-| Phase 02 P5 | 136 | 2 tasks | 4 files |
-| Phase 02.1 P1 | 5 | 2 tasks | 9 files |
+- Last 5 plans: 05-01, 05-02, 05-03, re-audit pending, close-out pending
+- Trend: Gap closure complete
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Phase 1: Backend seams, runtime context/layout ownership, and Git ownership land before deeper Scoop refactors.
-- Phase 2: Canonical Scoop state replaces duplicate models instead of preserving compatibility shims.
-- Phase 3: Lifecycle thinning happens only after state and query surfaces share one backend source of truth.
-- Phase 4: Refactor hardening focuses on backend risk coverage and app-shell orchestration coverage.
-- [Phase 01]: MSVC operations consume MsvcRequest built from BackendContext instead of a mutable global singleton (BNDR-03, LAY-03)
-- [Phase 01]: App MSVC adapter constructs BackendContext at boundary and delegates to _with_context variants
-- [Phase 01]: BackendStatusSnapshot aggregates scoop and MSVC queries into one serializable struct for app consumption (BNDR-05, LAY-02)
-- [Phase 01]: App-side BackendContext builder with AppSystemPort singleton passed by static reference into BackendContext
-- [Phase 01]: Package action result delegates to backend package_operation_outcome instead of reconstructing state locally
-- [Phase 01]: Bucket adapter re-exports RepoSyncOutcome from backend, no app-owned Git types in spoon/src
-- [Phase 01]: 14 app-side path helper functions marked #[deprecated] with RuntimeLayout replacement guidance rather than deleted
-- [Phase 01]: Test code migrated to RuntimeLayout for consistency; deprecated warnings in tests are acceptable
-- [Phase 02]: Canonical Scoop state will collapse duplicate installed-package models into one backend-owned persisted record
-- [Phase 02]: Legacy Scoop state is intentionally not compatibility-preserved; stale old state should surface a repair or rebuild path
-- [Post-Phase 01]: Backend root ports were narrowed so `SystemPort` stays backend-wide while Scoop-specific integration callbacks moved under `spoon-backend/src/scoop/ports.rs` as `ScoopIntegrationPort`
-- [Post-Phase 01]: Display-only pip mirror formatting was removed from backend lifecycle ports and kept in app/package presentation helpers
-- [Phase 02]: Canonical InstalledPackageState with bucket/architecture lives in scoop/state/model.rs, not runtime
-- [Phase 02]: Store APIs accept RuntimeLayout instead of raw Path, aligning with Phase 1 layout ownership
-- [Phase 02]: Old runtime::installed_state kept for internal use; migrated in plan 02-02
-- [Phase 02]: scoop::InstalledPackageState re-export points to state module, not runtime
-- [Phase 02]: Deprecated old runtime::InstalledPackageState re-export to maintain compile compat until 02-03/02-04 read-side migration
-- [Phase 02]: Runtime actions construct RuntimeLayout locally from tool_root rather than changing public API signatures
-- [Phase 02]: Query functions keep tool_root signature but construct RuntimeLayout internally to bridge canonical store
-- [Phase 02]: info.rs closures updated to canonical state::InstalledPackageState alongside query.rs migration
-- [Phase 02]: runtime_status uses list_installed_summaries projection layer for lightweight DTOs
-- [Phase 02]: info.rs reads canonical InstalledPackageState via state::read_installed_state instead of raw serde_json::Value
-- [Phase 02]: ShortcutEntry/PersistEntry display strings computed from typed canonical fields, not parsed from JSON values
-- [Phase 02]: Legacy ScoopPackageState API removed from backend surface; package_state.rs moved to _deprecated/ backup
-- [Phase 02]: Stale legacy flat state files detected and reported explicitly in doctor instead of silently supported
-- [Phase 03]: Lifecycle should split into reusable modules (`planner -> acquire -> materialize -> persist -> surface -> integrate -> state`) with install/update/uninstall/reapply as orchestration entry points
-- [Phase 03]: `hooks.rs` stays centralized as a shared helper module, but hook invocation order remains owned by lifecycle entry points
-- [Phase 03]: App can translate lifecycle progress and results, but must not direct lifecycle ordering or invent competing stage semantics
-- [Phase 02.1]: SQLite should become the backend control-plane database while the filesystem remains the runtime data plane
-- [Phase 02.1]: `spoon-backend` should stay lifecycle-first and state-transition-first, with async-compatible edges rather than an async-first core
-- [Phase 02.1]: Control-plane module encapsulates tokio-rusqlite and rusqlite; call() bridges rusqlite::Error to crate::BackendError
-- [Phase 02.1]: Bundled SQLite feature for Windows portability; WAL journal mode enabled by default
+- Phase 1 established backend ownership for layout/context, Git, and app/backend seams.
+- Phase 2 made canonical installed state the single backend Scoop truth source.
+- Phase 02.1 moved the control plane to SQLite while keeping the filesystem as the runtime data plane.
+- Phase 3 split Scoop lifecycle into explicit backend modules and kept the app shell translation-only.
+- Ordinary logs stay in `tracing`; `BackendEvent` carries structured lifecycle semantics only.
+- `reapply` remains a distinct lifecycle entry point for replaying installed post-install effects rather than `uninstall + install`.
 
 ### Roadmap Evolution
 
@@ -114,16 +75,17 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Consolidate remaining reusable filesystem helpers into [`fsx.rs`](/d:/projects/spoon/spoon-backend/src/fsx.rs) instead of leaving shared filesystem operations scattered across backend modules. See [`2026-03-31-consolidate-remaining-fsx-helpers.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-consolidate-remaining-fsx-helpers.md).
+- Tighten the backend error contract so recurring domain failures stop collapsing into broad `Other(String)` / `External` cases. See [`2026-03-31-tighten-backend-error-contract.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-tighten-backend-error-contract.md).
+- Remove hardcoded production paths from backend runtime execution, especially Windows system tool paths like `msiexec.exe`. See [`2026-03-31-remove-hardcoded-production-paths.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-remove-hardcoded-production-paths.md).
 
 ### Blockers/Concerns
 
-- Phase 2 needs an explicit plan for any legacy Scoop state migration or repair behavior before schema cleanup starts.
-- Phase 3 needs behavior capture for hooks, persist restore/sync, and current-link refresh before the runtime monolith is split.
-- Phase 4 may need Windows locked-file validation for bucket/state replacement semantics if hardening work exposes rename or recovery edge cases.
+- Phase 05 closed the previously audited blocker gaps; the next step is to rerun milestone audit before archive.
+- `spoon` still has some pre-existing warnings around deprecated path helpers and unused imports/variables; they are not blocking but remain cleanup candidates.
 
 ## Session Continuity
 
-Last session: 2026-03-29T01:56:43.284Z
-Stopped at: Completed 02.1-01-PLAN.md
-Resume file: None
+Last session: 2026-03-31T00:00:00.000Z
+Stopped at: Phase 5 complete; ready to re-audit milestone
+Resume file: .planning/v0.5.0-MILESTONE-AUDIT.md

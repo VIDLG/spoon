@@ -116,12 +116,11 @@ pub async fn search_report(tool_root: &Path, query: Option<&str>) -> CommandResu
     let data = search_results(tool_root, query).await;
     let output = lines_or_default(data.matches, "No matching Scoop packages found.", |item| {
         format!(
-            "{} | {} | {} | {} | {}",
+            "{} | {} | {} | {}",
             item.package_name,
-            item.bucket,
             item.version.unwrap_or_else(|| "-".to_string()),
-            item.description.unwrap_or_default(),
-            item.homepage.unwrap_or_default()
+            item.bucket,
+            item.description.unwrap_or_default()
         )
     });
     let title = match data.query {

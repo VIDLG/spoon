@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::BackendEvent;
-use crate::Result;
+use crate::{BackendContext, BackendEvent, Result, SystemPort};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::buckets;
 use super::super::paths::{package_current_root, package_persist_root};
-use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, parse_selected_source};
+use super::super::ports::ScoopIntegrationPort;
+use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost, parse_selected_source};
 
 pub fn helper_executable_path(tool_root: &Path, package_name: &str) -> Option<PathBuf> {
     let current_root = package_current_root(tool_root, package_name);
@@ -28,18 +28,6 @@ pub fn helper_executable_path(tool_root: &Path, package_name: &str) -> Option<Pa
         .first()
         .map(|target| current_root.join(&target.relative_path))
         .filter(|path| path.exists())
-}
-
-pub fn resolved_pip_mirror_url_for_display_with_host(
-    host: &dyn ScoopRuntimeHost,
-    policy_value: &str,
-) -> String {
-    host.resolved_pip_mirror_url_for_display(policy_value)
-}
-
-pub fn resolved_pip_mirror_url_for_display(policy_value: &str) -> String {
-    let host = NoopScoopRuntimeHost;
-    resolved_pip_mirror_url_for_display_with_host(&host, policy_value)
 }
 
 pub async fn apply_package_integrations(
@@ -98,4 +86,17 @@ pub async fn reapply_package_integrations_streaming(
 ) -> Result<Vec<String>> {
     let host = NoopScoopRuntimeHost;
     reapply_package_integrations_streaming_with_host(tool_root, package_name, &host, emit).await
+}
+
+pub async fn reapply_package_integrations_streaming_with_context<P>(
+    context: &BackendContext<P>,
+    package_name: &str,
+    emit: &mut dyn FnMut(BackendEvent),
+) -> Result<Vec<String>>
+where
+    P: SystemPort + ScoopIntegrationPort,
+{
+    let host = ContextRuntimeHost::new(context);
+    reapply_package_integrations_streaming_with_host(&context.root, package_name, &host, emit)
+        .await
 }

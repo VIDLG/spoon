@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
 use crate::scoop::doctor::detect_legacy_flat_state_files;
 use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
@@ -88,13 +89,35 @@ fn canonical_state_persists_only_nonderivable_facts() {
             .await
             .expect("write should succeed");
 
-        // Read the raw JSON to inspect persisted keys
-        let path = layout.scoop.package_state_root.join("test-pkg.json");
-        let raw = tokio::fs::read_to_string(&path)
+        let db = ControlPlaneDb::open_for_layout(&layout)
             .await
-            .expect("file should exist");
-        let json: serde_json::Value = serde_json::from_str(&raw)
-            .expect("json should parse");
+            .expect("db should open");
+        let json: serde_json::Value = db
+            .call(|conn| {
+                Ok(conn.query_row(
+                    "SELECT json_object(
+                        'package', package,
+                        'version', version,
+                        'bucket', bucket,
+                        'architecture', architecture,
+                        'bins', bins,
+                        'shortcuts', shortcuts,
+                        'env_add_path', env_add_path,
+                        'env_set', env_set,
+                        'persist', persist,
+                        'integrations', integrations,
+                        'pre_uninstall', pre_uninstall,
+                        'uninstaller_script', uninstaller_script,
+                        'post_uninstall', post_uninstall
+                    ) FROM installed_packages WHERE package = ?1",
+                    rusqlite::params!["test-pkg"],
+                    |row| row.get::<_, String>(0),
+                )?)
+            })
+            .await
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .expect("row JSON should parse");
 
         // Keys that MUST be present
         assert!(
@@ -190,13 +213,13 @@ fn runtime_status_uses_canonical_installed_state() {
 }
 
 #[test]
-fn legacy_flat_scoop_state_is_reported() {
+fn sqlite_cutover_reports_legacy_json_state() {
     let tmp = temp_dir("legacy-flat-state");
     std::fs::create_dir_all(&tmp).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&tmp);
 
     block_on(async {
-        // Seed a legacy flat state file directly in scoop/state/ (old layout)
+        // Seed a legacy flat control-plane file directly in scoop/state/ (old layout)
         std::fs::create_dir_all(&layout.scoop.state_root).expect("create state root");
         let legacy_path = layout.scoop.state_root.join("old-tool.json");
         let legacy_content = serde_json::json!({
@@ -209,7 +232,23 @@ fn legacy_flat_scoop_state_is_reported() {
             .await
             .expect("write legacy state file");
 
-        // Also seed a canonical state in packages/ to confirm it is NOT reported
+        // Seed a legacy package-state JSON in packages/ too; this is also stale after cutover.
+        let legacy_package_dir = layout.scoop.state_root.join("packages");
+        std::fs::create_dir_all(&legacy_package_dir).expect("create legacy packages dir");
+        let legacy_package_path = legacy_package_dir.join("legacy-pkg.json");
+        tokio::fs::write(
+            &legacy_package_path,
+            serde_json::json!({
+                "package": "legacy-pkg",
+                "version": "9.9.9",
+                "bucket": "extras"
+            })
+            .to_string(),
+        )
+        .await
+        .expect("write legacy package state");
+
+        // Also seed a canonical SQLite-backed state to confirm the DB path is not reported as legacy.
         let canonical_state = InstalledPackageState {
             package: "canonical-tool".to_string(),
             version: "2.0.0".to_string(),
@@ -233,23 +272,24 @@ fn legacy_flat_scoop_state_is_reported() {
         // Detect legacy files
         let issues = detect_legacy_flat_state_files(&layout).await;
 
-        // Should find exactly the one legacy flat file
-        assert_eq!(issues.len(), 1, "expected exactly 1 legacy state issue");
+        // Should find both legacy JSON control-plane files
+        assert_eq!(issues.len(), 2, "expected exactly 2 legacy state issues");
         assert_eq!(issues[0].kind, "legacy scoop state");
         assert!(
-            issues[0].path.contains("old-tool.json"),
-            "issue path should reference old-tool.json, got: {}",
-            issues[0].path
+            issues.iter().any(|issue| issue.path.contains("old-tool.json")),
+            "issues should reference old-tool.json"
         );
         assert!(
-            issues[0].message.contains("legacy scoop state"),
-            "issue message should contain 'legacy scoop state', got: {}",
-            issues[0].message
+            issues
+                .iter()
+                .all(|issue| issue.message.contains("SQLite is authoritative")),
+            "issue messages should mention SQLite authority"
         );
         assert!(
-            issues[0].message.contains("rebuild state"),
-            "issue message should instruct to rebuild state, got: {}",
-            issues[0].message
+            issues
+                .iter()
+                .all(|issue| issue.message.contains("repair manually") || issue.message.contains("delete the old JSON state")),
+            "issue messages should instruct manual repair or cleanup"
         );
     });
 }
@@ -284,5 +324,46 @@ fn no_legacy_issues_when_state_is_clean() {
 
         let issues = detect_legacy_flat_state_files(&layout).await;
         assert!(issues.is_empty(), "clean state should produce no legacy issues");
+    });
+}
+
+#[test]
+fn sqlite_control_plane_preserves_runtime_layout_derivation() {
+    let tmp = temp_dir("sqlite-layout-derivation");
+    std::fs::create_dir_all(&tmp).expect("create temp dir");
+    let layout = RuntimeLayout::from_root(&tmp);
+
+    block_on(async {
+        let state = InstalledPackageState {
+            package: "layout-tool".to_string(),
+            version: "9.9.9".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+            bins: vec!["bin/layout.exe".to_string()],
+            shortcuts: vec![],
+            env_add_path: vec![],
+            env_set: BTreeMap::new(),
+            persist: vec![],
+            integrations: BTreeMap::new(),
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        };
+
+        write_installed_state(&layout, &state)
+            .await
+            .expect("write canonical state");
+
+        let db_path = crate::control_plane::sqlite::db_path_for_layout(&layout);
+        assert!(db_path.exists(), "control-plane db should exist");
+        assert_eq!(db_path.parent(), Some(layout.scoop.state_root.as_path()));
+
+        let loaded = read_installed_state(&layout, "layout-tool")
+            .await
+            .expect("state should load from sqlite");
+        assert_eq!(loaded.package, "layout-tool");
+        assert_eq!(loaded.bucket, "main");
+        assert_eq!(layout.scoop.apps_root.join("layout-tool").join("current").exists(), false);
     });
 }
