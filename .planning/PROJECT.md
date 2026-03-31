@@ -1,3 +1,16 @@
+## Current State
+
+- Shipped milestone: `v0.5.0`
+- Archived roadmap: [`v0.5.0-ROADMAP.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-ROADMAP.md)
+- Archived requirements: [`v0.5.0-REQUIREMENTS.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-REQUIREMENTS.md)
+- Final audit: [`v0.5.0-MILESTONE-AUDIT.md`](/d:/projects/spoon/.planning/v0.5.0-MILESTONE-AUDIT.md)
+
+## Next Milestone Goals
+
+- Decide whether the next milestone should focus on MSVC, event-contract hardening, or another backend/app contract cleanup.
+- Re-open planning with `$gsd-new-milestone` instead of extending the archived backend-refactor milestone.
+- Carry forward the recorded follow-ups from seeds, todos, and backlog items.
+
 # Spoon Backend Refactoring
 
 ## What This Is / 项目是什么
