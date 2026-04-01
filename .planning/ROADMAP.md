@@ -11,7 +11,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 
 ## Active Milestone: v0.7.0 Scoop Legacy Cleanup and Domain Refinement
 
-- [ ] **Phase 10: Scoop Legacy Path and State Cleanup** - Remove or isolate JSON-era and deprecated Scoop path/state concepts from active runtime paths.
+- [x] **Phase 10: Scoop Legacy Path and State Cleanup** - Remove or isolate JSON-era and deprecated Scoop path/state concepts from active runtime paths.
 - [ ] **Phase 11: Scoop Runtime Host and Helper Consolidation** - Simplify stale helper layers and runtime-host seams inside the Scoop backend domain.
 - [ ] **Phase 12: Scoop Read Model and Shared Cleanup Refinement** - Remove low-value redundancy and finish adjacent shared cleanup required by the Scoop pass.
 - [ ] **Phase 13: Scoop Cleanup Safety Net Refresh** - Refresh backend/app regressions so the Scoop legacy cleanup remains safe to evolve.
@@ -58,7 +58,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Scoop Legacy Path and State Cleanup | 0/4 | Planned | - |
+| 10. Scoop Legacy Path and State Cleanup | 4/4 | Complete | 2026-04-01 |
 | 11. Scoop Runtime Host and Helper Consolidation | 0/0 | Pending | - |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 0/0 | Pending | - |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |

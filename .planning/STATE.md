@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Scoop Legacy Cleanup and Domain Refinement
 status: active
-stopped_at: Phase 10 planned
-last_updated: "2026-04-01T00:45:00.000Z"
+stopped_at: Phase 10 complete
+last_updated: "2026-04-01T23:00:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 25
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Continue executing Phase 10 with layout-owned Scoop paths and no legacy JSON-state scaffolding.
+**Current focus:** Prepare Phase 11 after completing the Scoop legacy path/state cleanup.
 
 ## Current Position
 
-Phase: 10. Scoop Legacy Path and State Cleanup  
-Plan: 10-03 / 10-04 in progress  
-Status: Executing Phase 10  
-Last activity: 2026-04-01 - Completed the first two Scoop cleanup slices and continued test spillover alignment
+Phase: 11. Scoop Runtime Host and Helper Consolidation  
+Plan: Not started  
+Status: Phase 10 complete; ready to discuss and plan Phase 11  
+Last activity: 2026-04-01 - Completed Phase 10 and recorded verification
 
-Progress: [----------] 0%
+Progress: [###-------] 25%
 
 ## Carried Context
 
@@ -64,6 +64,6 @@ Progress: [----------] 0%
 
 ## Session Continuity
 
-Last session: 2026-04-01T00:45:00.000Z  
-Stopped at: Phase 10 planned; next step is execution  
-Resume file: .planning/phases/10-scoop-legacy-path-and-state-cleanup/10-01-PLAN.md
+Last session: 2026-04-01T23:00:00.000Z  
+Stopped at: Phase 10 complete; next step is Phase 11 discussion/planning  
+Resume file: .planning/ROADMAP.md
