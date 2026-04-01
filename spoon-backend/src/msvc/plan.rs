@@ -88,11 +88,89 @@ pub enum MsvcRuntimeKind {
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum MsvcRuntimePreference {
+    Auto,
+    Managed,
+    Official,
+}
+
+impl MsvcRuntimePreference {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Managed => "managed",
+            Self::Official => "official",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum MsvcOperationKind {
     Install,
     Update,
     Uninstall,
     Validate,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MsvcLifecycleStage {
+    Planned,
+    Detecting,
+    Resolving,
+    Executing,
+    Validating,
+    StateCommitting,
+    Completed,
+}
+
+impl MsvcLifecycleStage {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Planned => "planned",
+            Self::Detecting => "detecting",
+            Self::Resolving => "resolving",
+            Self::Executing => "executing",
+            Self::Validating => "validating",
+            Self::StateCommitting => "state_committing",
+            Self::Completed => "completed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct MsvcOperationRequest {
+    pub operation: MsvcOperationKind,
+    pub runtime_preference: MsvcRuntimePreference,
+}
+
+impl MsvcOperationRequest {
+    pub const fn new(
+        operation: MsvcOperationKind,
+        runtime_preference: MsvcRuntimePreference,
+    ) -> Self {
+        Self {
+            operation,
+            runtime_preference,
+        }
+    }
+
+    pub const fn install(runtime_preference: MsvcRuntimePreference) -> Self {
+        Self::new(MsvcOperationKind::Install, runtime_preference)
+    }
+
+    pub const fn update(runtime_preference: MsvcRuntimePreference) -> Self {
+        Self::new(MsvcOperationKind::Update, runtime_preference)
+    }
+
+    pub const fn uninstall(runtime_preference: MsvcRuntimePreference) -> Self {
+        Self::new(MsvcOperationKind::Uninstall, runtime_preference)
+    }
+
+    pub const fn validate(runtime_preference: MsvcRuntimePreference) -> Self {
+        Self::new(MsvcOperationKind::Validate, runtime_preference)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

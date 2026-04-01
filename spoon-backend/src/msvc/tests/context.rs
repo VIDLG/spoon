@@ -146,3 +146,27 @@ fn detect_runtimes_with_context_reports_managed_and_official_facts() {
         Some("14.44.35207 + 10.0.26100.0")
     );
 }
+
+#[test]
+fn msvc_operation_request_and_stage_contract_are_stable() {
+    let request =
+        crate::msvc::MsvcOperationRequest::install(crate::msvc::MsvcRuntimePreference::Managed);
+    assert_eq!(request.operation, crate::msvc::MsvcOperationKind::Install);
+    assert_eq!(
+        request.runtime_preference,
+        crate::msvc::MsvcRuntimePreference::Managed
+    );
+    assert_eq!(crate::msvc::MsvcRuntimePreference::Auto.as_str(), "auto");
+    assert_eq!(
+        crate::msvc::MsvcRuntimePreference::Official.as_str(),
+        "official"
+    );
+    assert_eq!(
+        crate::msvc::MsvcLifecycleStage::Detecting.as_str(),
+        "detecting"
+    );
+    assert_eq!(
+        crate::msvc::MsvcLifecycleStage::StateCommitting.as_str(),
+        "state_committing"
+    );
+}

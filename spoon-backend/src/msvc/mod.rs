@@ -75,7 +75,10 @@ pub use self::paths::{
     native_msvc_arch, official_msvc_cache_root, official_msvc_root, official_msvc_state_root,
 };
 pub(crate) use self::plan::MsvcRequest;
-pub use self::plan::{MsvcOperationKind, MsvcOperationOutcome, MsvcRuntimeKind, ToolchainFlags};
+pub use self::plan::{
+    MsvcLifecycleStage, MsvcOperationKind, MsvcOperationOutcome, MsvcOperationRequest,
+    MsvcRuntimeKind, MsvcRuntimePreference, ToolchainFlags,
+};
 pub use self::detect::{DetectedMsvcRuntime, MsvcRuntimeDetection, detect_runtimes, detect_runtimes_with_context};
 pub use self::rules::{
     ToolchainTarget, installed_state_path, package_token_after_prefix,
