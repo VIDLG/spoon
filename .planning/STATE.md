@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Backend Architecture Completion
 status: active
-stopped_at: Phase 7 complete; ready to discuss/plan Phase 8
+stopped_at: Phase 8 planned; ready to execute
 last_updated: "2026-04-01T00:00:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 8
+  total_plans: 12
   completed_plans: 8
   percent: 50
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Prepare Phase 8 (`Shared Backend Contract Hardening`).
+**Current focus:** Execute Phase 8 (`Shared Backend Contract Hardening`).
 
 ## Current Position
 
-Phase: 07 (canonical-msvc-state-and-lifecycle) - COMPLETE  
-Plan: 4 of 4  
-Status: Ready to discuss/plan Phase 8  
-Last activity: 2026-04-01 - Phase 7 complete
+Phase: 08 (shared-backend-contract-hardening)  
+Plan: 0 of 4  
+Status: Ready to execute  
+Last activity: 2026-04-01 - Phase 8 planned
 
 Progress: [#####-----] 50%
 
@@ -58,5 +58,5 @@ Progress: [#####-----] 50%
 ## Session Continuity
 
 Last session: 2026-04-01T00:00:00.000Z  
-Stopped at: Phase 7 complete; next step is Phase 8 discussion/planning  
-Resume file: .planning/phases/07-canonical-msvc-state-and-lifecycle/07-VERIFICATION.md
+Stopped at: Phase 8 planned; next step is execution  
+Resume file: .planning/phases/08-shared-backend-contract-hardening/08-01-PLAN.md

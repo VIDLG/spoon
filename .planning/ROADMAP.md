@@ -45,7 +45,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
   1. Event contracts no longer depend on fragile stringly conventions for core product semantics.
   2. Error handling expresses important backend failure classes without excessive fallback to generic buckets.
   3. Shared filesystem/path operations and production path resolution are centralized enough to reduce duplication and hardcoded runtime assumptions.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 9: MSVC and Shared Safety Net
 **Goal**: The MSVC cleanup and shared backend contract hardening are protected by focused backend and app regressions.
@@ -63,7 +63,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 |-------|----------------|--------|-----------|
 | 6. MSVC Seams and Ownership Completion | 4/4 | Complete | 2026-04-01 |
 | 7. Canonical MSVC State and Lifecycle | 4/4 | Complete | 2026-04-01 |
-| 8. Shared Backend Contract Hardening | 0/0 | Pending | - |
+| 8. Shared Backend Contract Hardening | 0/4 | Planned | - |
 | 9. MSVC and Shared Safety Net | 0/0 | Pending | - |
 
 ## Backlog
