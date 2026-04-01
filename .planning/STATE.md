@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Scoop Legacy Cleanup and Domain Refinement
 status: active
-stopped_at: Phase 10 complete
-last_updated: "2026-04-01T23:00:00.000Z"
+stopped_at: Phase 11 planned
+last_updated: "2026-04-01T23:30:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
+  total_plans: 8
   completed_plans: 4
-  percent: 25
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Prepare Phase 11 after completing the Scoop legacy path/state cleanup.
+**Current focus:** Execute Phase 11 and perform the structural Scoop runtime/host/helper refactor.
 
 ## Current Position
 
 Phase: 11. Scoop Runtime Host and Helper Consolidation  
-Plan: Not started  
-Status: Phase 10 complete; ready to discuss and plan Phase 11  
-Last activity: 2026-04-01 - Completed Phase 10 and recorded verification
+Plan: Phase 11 planned  
+Status: Ready to execute Phase 11  
+Last activity: 2026-04-01 - Captured and planned the Scoop structural refactor phase
 
 Progress: [###-------] 25%
 
@@ -64,6 +64,6 @@ Progress: [###-------] 25%
 
 ## Session Continuity
 
-Last session: 2026-04-01T23:00:00.000Z  
-Stopped at: Phase 10 complete; next step is Phase 11 discussion/planning  
-Resume file: .planning/ROADMAP.md
+Last session: 2026-04-01T23:30:00.000Z  
+Stopped at: Phase 11 planned; next step is execution  
+Resume file: .planning/phases/11-scoop-runtime-host-and-helper-consolidation/11-01-PLAN.md

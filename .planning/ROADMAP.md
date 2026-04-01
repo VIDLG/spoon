@@ -34,7 +34,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 **Success Criteria** (what must be TRUE):
   1. Scoop runtime helper layering is simpler and more explicit.
   2. Remaining host/runtime seam duplication inside the Scoop domain is materially reduced.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 12: Scoop Read Model and Shared Cleanup Refinement
 **Goal**: remove low-value read-model redundancy and finish the shared cleanup that the Scoop pass directly depends on.
@@ -59,7 +59,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 10. Scoop Legacy Path and State Cleanup | 4/4 | Complete | 2026-04-01 |
-| 11. Scoop Runtime Host and Helper Consolidation | 0/0 | Pending | - |
+| 11. Scoop Runtime Host and Helper Consolidation | 0/4 | Planned | - |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 0/0 | Pending | - |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
 
