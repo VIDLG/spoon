@@ -12,10 +12,8 @@ pub struct RuntimeLayout {
 pub struct ScoopLayout {
     pub root: PathBuf,
     pub state_root: PathBuf,
-    pub package_state_root: PathBuf,
     pub cache_root: PathBuf,
     pub buckets_root: PathBuf,
-    pub bucket_registry_path: PathBuf,
     pub apps_root: PathBuf,
     pub persist_root: PathBuf,
 }
@@ -54,10 +52,8 @@ impl RuntimeLayout {
         let scoop = ScoopLayout {
             root: scoop_root.clone(),
             state_root: scoop_state_root.clone(),
-            package_state_root: scoop_state_root.join("packages"),
             cache_root: scoop_root.join("cache"),
             buckets_root: scoop_root.join("buckets"),
-            bucket_registry_path: scoop_state_root.join("buckets.json"),
             apps_root: scoop_root.join("apps"),
             persist_root: scoop_root.join("persist"),
         };

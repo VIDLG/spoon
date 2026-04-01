@@ -526,7 +526,10 @@ mod tests {
         ));
         let tool_root = base.join("root");
         let shims = RuntimeLayout::from_root(&tool_root).shims;
-        let state_root = RuntimeLayout::from_root(&tool_root).scoop.package_state_root;
+        let state_root = RuntimeLayout::from_root(&tool_root)
+            .scoop
+            .state_root
+            .join("packages");
         fs::create_dir_all(&shims).unwrap();
         fs::create_dir_all(&state_root).unwrap();
         fs::write(

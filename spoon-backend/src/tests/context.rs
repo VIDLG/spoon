@@ -15,10 +15,6 @@ fn runtime_layout_derives_from_root() {
         PathBuf::from(r"D:\tools\scoop\state")
     );
     assert_eq!(
-        layout.scoop.package_state_root,
-        PathBuf::from(r"D:\tools\scoop\state\packages")
-    );
-    assert_eq!(
         layout.scoop.cache_root,
         PathBuf::from(r"D:\tools\scoop\cache")
     );

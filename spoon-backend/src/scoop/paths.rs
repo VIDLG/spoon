@@ -17,11 +17,15 @@ pub fn scoop_state_root(tool_root: &Path) -> PathBuf {
 pub fn scoop_bucket_registry_path(tool_root: &Path) -> PathBuf {
     RuntimeLayout::from_root(tool_root)
         .scoop
-        .bucket_registry_path
+        .state_root
+        .join("buckets.json")
 }
 
 pub fn scoop_package_state_root(tool_root: &Path) -> PathBuf {
-    RuntimeLayout::from_root(tool_root).scoop.package_state_root
+    RuntimeLayout::from_root(tool_root)
+        .scoop
+        .state_root
+        .join("packages")
 }
 
 pub fn scoop_cache_root(tool_root: &Path) -> PathBuf {
@@ -37,7 +41,7 @@ pub fn scoop_bucket_root(tool_root: &Path, bucket_name: &str) -> PathBuf {
 }
 
 pub fn packages_state_root(tool_root: &Path) -> PathBuf {
-    RuntimeLayout::from_root(tool_root).scoop.package_state_root
+    scoop_package_state_root(tool_root)
 }
 
 pub fn package_state_path(tool_root: &Path, package_name: &str) -> PathBuf {

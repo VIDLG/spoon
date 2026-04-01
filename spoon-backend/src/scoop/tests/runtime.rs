@@ -243,7 +243,7 @@ fn runtime_writes_canonical_scoop_state() {
         let db_path = db_path_for_layout(&layout);
         assert!(db_path.exists(), "control-plane DB should exist");
         assert!(
-            !layout.scoop.package_state_root.join("test-pkg.json").exists(),
+            !layout.scoop.state_root.join("packages").join("test-pkg.json").exists(),
             "legacy flat JSON package-state file must not be written anymore"
         );
     });
