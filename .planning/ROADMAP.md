@@ -25,7 +25,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
   1. A developer can trigger MSVC operations and detail/status reads without app modules depending on MSVC module internals.
   2. Backend context and layout decisions used by live MSVC flows are explicit and auditable rather than partially reconstructed in the app.
   3. MSVC progress/result surfaces are emitted from backend-owned models and events that the app only translates.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 7: Canonical MSVC State and Lifecycle
 **Goal**: `spoon-backend` owns one coherent MSVC state model and one explicit lifecycle model for install/update/remove/repair-style behavior.
@@ -61,7 +61,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 6. MSVC Seams and Ownership Completion | 0/0 | Pending | - |
+| 6. MSVC Seams and Ownership Completion | 0/4 | Planned | - |
 | 7. Canonical MSVC State and Lifecycle | 0/0 | Pending | - |
 | 8. Shared Backend Contract Hardening | 0/0 | Pending | - |
 | 9. MSVC and Shared Safety Net | 0/0 | Pending | - |
