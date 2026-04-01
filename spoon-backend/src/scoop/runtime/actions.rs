@@ -521,8 +521,9 @@ pub async fn execute_package_action_streaming_with_host(
         ScoopPackageAction::Reapply => {
             reapply_lifecycle(tool_root, &effective_plan.package_name, host, emit).await
         }
-        ScoopPackageAction::Other => Err(BackendError::Other(
-            "unsupported Scoop package action".to_string(),
+        ScoopPackageAction::Other => Err(BackendError::unsupported_operation(
+            "Scoop package",
+            "action",
         )),
     }
 }
@@ -578,8 +579,9 @@ where
         ScoopPackageAction::Reapply => {
             reapply_lifecycle(&context.root, &effective_plan.package_name, &host, emit).await
         }
-        ScoopPackageAction::Other => Err(BackendError::Other(
-            "unsupported Scoop package action".to_string(),
+        ScoopPackageAction::Other => Err(BackendError::unsupported_operation(
+            "Scoop package",
+            "action",
         )),
     }
 }
@@ -616,10 +618,7 @@ pub async fn execute_package_action_outcome_streaming_with_host(
         effective_plan.package_name
     );
     if !acquire_lock(&layout, &lock_key, plan.action.as_str()).await? {
-        return Err(BackendError::Other(format!(
-            "operation lock is already held for {}",
-            lock_key
-        )));
+        return Err(BackendError::OperationLockHeld { lock_key });
     }
     let bucket_name = effective_plan
         .resolved_manifest
@@ -717,10 +716,7 @@ where
         effective_plan.package_name
     );
     if !acquire_lock(&layout, &lock_key, plan.action.as_str()).await? {
-        return Err(BackendError::Other(format!(
-            "operation lock is already held for {}",
-            lock_key
-        )));
+        return Err(BackendError::OperationLockHeld { lock_key });
     }
     let bucket_name = effective_plan
         .resolved_manifest

@@ -24,8 +24,8 @@ fn start_menu_shortcuts_root(host: &dyn ScoopRuntimeHost) -> Result<PathBuf> {
             .join(".spoon-test-startmenu")
             .join("Spoon Apps"));
     }
-    let data_dir = dirs::data_dir().ok_or_else(|| {
-        BackendError::Other("failed to resolve Windows data directory".to_string())
+    let data_dir = dirs::data_dir().ok_or(BackendError::PlatformDirectoryUnavailable {
+        directory_label: "Windows data directory",
     })?;
     Ok(data_dir
         .join("Microsoft")
@@ -281,7 +281,7 @@ pub async fn reapply_package_command_surface_streaming_with_host(
     }
     let resolved = manifest::resolve_package_manifest(package_name, tool_root)
         .await
-        .ok_or_else(|| BackendError::Other("package manifest could not be resolved".to_string()))?;
+        .ok_or(BackendError::ManifestUnavailable)?;
     let manifest = load_manifest_value(&resolved.manifest_path).await?;
     let source = parse_selected_source(&manifest)?;
     remove_shims(tool_root, &state.bins).await?;

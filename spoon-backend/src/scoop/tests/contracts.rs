@@ -63,8 +63,9 @@ fn scoop_action_contract_uses_context() {
     .expect_err("unsupported action should still route through context");
 
     match err {
-        crate::BackendError::Other(message) => {
-            assert!(message.contains("unsupported Scoop package action"));
+        crate::BackendError::UnsupportedOperation { domain, operation } => {
+            assert_eq!(domain, "Scoop package");
+            assert_eq!(operation, "action");
         }
         other => panic!("expected unsupported action error, got {other:?}"),
     }

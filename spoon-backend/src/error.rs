@@ -51,6 +51,10 @@ pub enum BackendError {
     #[error("manifest validation failed: {0}")]
     ManifestValidation(String),
 
+    /// Required manifest or manifest-derived resolution was unavailable.
+    #[error("package manifest could not be resolved")]
+    ManifestUnavailable,
+
     /// Operation cancelled by user.
     #[error("Cancelled by user.")]
     Cancelled,
@@ -74,6 +78,27 @@ pub enum BackendError {
         operation: &'static str,
         source: Box<dyn std::error::Error + Send + Sync + 'static>,
     },
+
+    /// A requested operation is not supported in the current backend domain.
+    #[error("unsupported {domain} operation: {operation}")]
+    UnsupportedOperation {
+        domain: &'static str,
+        operation: String,
+    },
+
+    /// A required runtime or OS directory could not be resolved.
+    #[error("failed to resolve {directory_label}")]
+    PlatformDirectoryUnavailable {
+        directory_label: &'static str,
+    },
+
+    /// An operation lock was already held.
+    #[error("operation lock is already held for {lock_key}")]
+    OperationLockHeld { lock_key: String },
+
+    /// An archive path had an unsupported archive kind.
+    #[error("unsupported archive kind for {path}")]
+    UnsupportedArchiveKind { path: PathBuf },
 
     /// Generic error for business logic or other situations.
     #[error("{0}")]
@@ -150,6 +175,16 @@ impl BackendError {
         Self::Task {
             operation,
             source: Box::new(source),
+        }
+    }
+
+    pub fn unsupported_operation(
+        domain: &'static str,
+        operation: impl Into<String>,
+    ) -> Self {
+        Self::UnsupportedOperation {
+            domain,
+            operation: operation.into(),
         }
     }
 }

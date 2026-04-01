@@ -20,7 +20,7 @@ pub(crate) async fn plan_package_lifecycle(
         Some(resolved) => resolved,
         None => resolve_manifest(tool_root, &plan.package_name)
             .await
-            .ok_or_else(|| BackendError::Other("package manifest could not be resolved".to_string()))?,
+            .ok_or(BackendError::ManifestUnavailable)?,
     };
     let manifest = load_manifest_value(&resolved.manifest_path).await?;
     let source = parse_selected_source(&manifest)?;

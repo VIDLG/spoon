@@ -48,10 +48,9 @@ pub fn extract_archive_sync(
     destination: &Path,
 ) -> Result<ArchiveKind> {
     let kind = detect_archive_kind(archive_path).ok_or_else(|| {
-        BackendError::Other(format!(
-            "unsupported archive kind for {}",
-            archive_path.display()
-        ))
+        BackendError::UnsupportedArchiveKind {
+            path: archive_path.to_path_buf(),
+        }
     })?;
     match kind {
         ArchiveKind::Zip => extract_zip_archive_sync(archive_path, destination)?,
