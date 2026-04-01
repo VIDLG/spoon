@@ -55,7 +55,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
   1. Risky MSVC lifecycle and state transitions are covered by backend-focused regression tests.
   2. App-side tests for MSVC/shared flows remain thin-shell tests rather than re-owning backend logic.
   3. A small amount of smoke coverage still exercises the most valuable integration seams without turning into coverage theater.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ## Progress
 
@@ -64,7 +64,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 | 6. MSVC Seams and Ownership Completion | 4/4 | Complete | 2026-04-01 |
 | 7. Canonical MSVC State and Lifecycle | 4/4 | Complete | 2026-04-01 |
 | 8. Shared Backend Contract Hardening | 4/4 | Complete | 2026-04-01 |
-| 9. MSVC and Shared Safety Net | 0/0 | Pending | - |
+| 9. MSVC and Shared Safety Net | 0/4 | Planned | - |
 
 ## Backlog
 

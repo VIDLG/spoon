@@ -7,17 +7,17 @@
 
 ### MSVC Architecture
 
-- [ ] **MSVC-01**: `spoon-backend` exposes explicit MSVC operation and query entry points so the app shell no longer depends on MSVC module internals.
-- [ ] **MSVC-02**: MSVC persisted facts and read models are represented through canonical backend-owned state rather than scattered module-local structs.
-- [ ] **MSVC-03**: MSVC install, update, remove, and repair-style flows execute through explicit backend lifecycle stages with clear side-effect ownership.
-- [ ] **MSVC-04**: Spoon app surfaces MSVC status, detail, and progress from backend models/events without reconstructing backend behavior locally.
+- [x] **MSVC-01**: `spoon-backend` exposes explicit MSVC operation and query entry points so the app shell no longer depends on MSVC module internals.
+- [x] **MSVC-02**: MSVC persisted facts and read models are represented through canonical backend-owned state rather than scattered module-local structs.
+- [x] **MSVC-03**: MSVC install, update, remove, and repair-style flows execute through explicit backend lifecycle stages with clear side-effect ownership.
+- [x] **MSVC-04**: Spoon app surfaces MSVC status, detail, and progress from backend models/events without reconstructing backend behavior locally.
 
 ### Shared Backend Contracts
 
-- [ ] **BECT-01**: Backend event semantics for core product flows use stronger typed contracts instead of relying on weak stringly progress categories.
-- [ ] **BECT-02**: Backend error handling distinguishes domain, infrastructure, and user-action-needed failures without defaulting broad cases to `Other(String)` or equivalent buckets.
-- [ ] **BECT-03**: Reusable filesystem and path operations are centralized into backend-owned helpers instead of remaining duplicated across runtime domains.
-- [ ] **BECT-04**: Production backend runtime logic avoids hardcoded install-sensitive absolute paths when layout, system, or runtime abstractions can derive them.
+- [x] **BECT-01**: Backend event semantics for core product flows use stronger typed contracts instead of relying on weak stringly progress categories.
+- [x] **BECT-02**: Backend error handling distinguishes domain, infrastructure, and user-action-needed failures without defaulting broad cases to `Other(String)` or equivalent buckets.
+- [x] **BECT-03**: Reusable filesystem and path operations are centralized into backend-owned helpers instead of remaining duplicated across runtime domains.
+- [x] **BECT-04**: Production backend runtime logic avoids hardcoded install-sensitive absolute paths when layout, system, or runtime abstractions can derive them.
 
 ### Safety and Verification
 
@@ -45,14 +45,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSVC-01 | Phase 6 | Pending |
-| MSVC-02 | Phase 7 | Pending |
-| MSVC-03 | Phase 7 | Pending |
-| MSVC-04 | Phase 6 | Pending |
-| BECT-01 | Phase 8 | Pending |
-| BECT-02 | Phase 8 | Pending |
-| BECT-03 | Phase 8 | Pending |
-| BECT-04 | Phase 8 | Pending |
+| MSVC-01 | Phase 6 | Complete |
+| MSVC-02 | Phase 7 | Complete |
+| MSVC-03 | Phase 7 | Complete |
+| MSVC-04 | Phase 6 | Complete |
+| BECT-01 | Phase 8 | Complete |
+| BECT-02 | Phase 8 | Complete |
+| BECT-03 | Phase 8 | Complete |
+| BECT-04 | Phase 8 | Complete |
 | TEST-04 | Phase 9 | Pending |
 | TEST-05 | Phase 9 | Pending |
 | TEST-06 | Phase 9 | Pending |
@@ -64,4 +64,4 @@
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after milestone start*
+*Last updated: 2026-04-01 after Phase 8 completion*

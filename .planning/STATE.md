@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Backend Architecture Completion
 status: active
-stopped_at: Phase 8 complete; ready to discuss/plan Phase 9
+stopped_at: Phase 9 planned; ready to execute
 last_updated: "2026-04-01T00:00:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 12
+  total_plans: 16
   completed_plans: 12
   percent: 75
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Prepare Phase 9 (`MSVC and Shared Safety Net`).
+**Current focus:** Execute Phase 9 (`MSVC and Shared Safety Net`).
 
 ## Current Position
 
-Phase: 08 (shared-backend-contract-hardening) - COMPLETE  
-Plan: 4 of 4  
-Status: Ready to discuss/plan Phase 9  
-Last activity: 2026-04-01 - Phase 8 complete
+Phase: 09 (msvc-and-shared-safety-net)  
+Plan: 0 of 4  
+Status: Ready to execute  
+Last activity: 2026-04-01 - Phase 9 planned
 
 Progress: [#######---] 75%
 
@@ -48,6 +48,7 @@ Progress: [#######---] 75%
 - Audit derive-not-store redundancies in backend state and read models. See [`2026-04-01-audit-derive-not-store-fields.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-audit-derive-not-store-fields.md).
 - Simplify `SystemPort` / `ScoopRuntimeHost` boundaries and remove `home_dir()` from `SystemPort`. See [`2026-04-01-simplify-system-port-and-runtime-host-boundaries.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-simplify-system-port-and-runtime-host-boundaries.md).
 - Revisit the backend event contract seed when trigger conditions are met. See [`SEED-001-backend-event-contract-hardening.md`](/d:/projects/spoon/.planning/seeds/SEED-001-backend-event-contract-hardening.md).
+- Revisit `async_zip` as a possible shared backend ZIP extraction backend when archive primitives are revisited. See [`SEED-002-async-zip-backend-evaluation.md`](/d:/projects/spoon/.planning/seeds/SEED-002-async-zip-backend-evaluation.md).
 - Review backlog phase [`999.1-test-architecture-cleanup`](/d:/projects/spoon/.planning/phases/999.1-test-architecture-cleanup).
 
 ### Guardrails
@@ -58,5 +59,5 @@ Progress: [#######---] 75%
 ## Session Continuity
 
 Last session: 2026-04-01T00:00:00.000Z  
-Stopped at: Phase 8 complete; next step is Phase 9 discussion/planning  
-Resume file: .planning/phases/08-shared-backend-contract-hardening/08-VERIFICATION.md
+Stopped at: Phase 9 planned; next step is execution  
+Resume file: .planning/phases/09-msvc-and-shared-safety-net/09-01-PLAN.md
