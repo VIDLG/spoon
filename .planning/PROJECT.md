@@ -10,11 +10,15 @@
 - Archived requirements: [`v0.5.0-REQUIREMENTS.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-REQUIREMENTS.md)
 - Final audit: [`v0.5.0-MILESTONE-AUDIT.md`](/d:/projects/spoon/.planning/v0.5.0-MILESTONE-AUDIT.md)
 
-## Next Milestone Goals
+## Current Milestone: v0.7.0 Scoop Legacy Cleanup and Domain Refinement
 
-- Decide what the next milestone should focus on beyond the now-completed backend architecture cleanup.
-- Re-open planning with `$gsd-new-milestone` instead of extending the archived `v0.6.0` milestone.
-- Carry forward the recorded follow-up todos, seeds, and backlog items.
+**Goal:** systematically clean the remaining outdated or poorly shaped code in `spoon-backend/src/scoop/` without reopening a giant cross-domain refactor.
+
+**Target features:**
+- Remove or downgrade JSON-era and deprecated Scoop path/state assumptions that still survive in active code.
+- Consolidate stale helper layers, host seams, and duplicated runtime utilities inside the Scoop backend domain.
+- Tighten Scoop read models and runtime contracts where low-value redundancy or legacy abstractions still remain.
+- Refresh the Scoop-focused safety net after the cleanup so the reduced legacy surface stays stable.
 
 # Spoon Backend Refactoring
 
