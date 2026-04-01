@@ -9,6 +9,7 @@ use spoon::config;
 use spoon::status::ToolStatus;
 use spoon::tool;
 use spoon::tui::test_support::Harness;
+use spoon_backend::layout::RuntimeLayout;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -144,10 +145,9 @@ fn tools_table_shows_size_for_managed_tool() {
     })
     .unwrap();
 
-    let jq_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("jq")
-        .join("current");
+    let jq_root = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .package_current_root("jq");
     let jq_shims = config::shims_root_from(&tool_root);
     std::fs::create_dir_all(&jq_root).unwrap();
     std::fs::create_dir_all(&jq_shims).unwrap();

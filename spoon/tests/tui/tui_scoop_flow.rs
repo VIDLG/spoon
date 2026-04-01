@@ -4,6 +4,7 @@ use std::path::Path;
 use crossterm::event::KeyCode;
 use spoon::config;
 use spoon::tui::test_support::Harness;
+use spoon_backend::layout::RuntimeLayout;
 
 #[path = "../common/mod.rs"]
 mod common;
@@ -85,9 +86,10 @@ fn harness_can_drive_real_scoop_install_update_uninstall_flow() {
     wait_for_completed_output(&mut app, NETWORK_TIMEOUT);
     app.press(KeyCode::Enter).unwrap();
 
+    let layout = RuntimeLayout::from_root(Path::new(&tool_root));
     assert!(
-        !config::scoop_root_from(Path::new(&tool_root)).exists(),
+        !layout.scoop.root.exists(),
         "expected Scoop root to be removed: {}",
-        config::scoop_root_from(Path::new(&tool_root)).display()
+        layout.scoop.root.display()
     );
 }

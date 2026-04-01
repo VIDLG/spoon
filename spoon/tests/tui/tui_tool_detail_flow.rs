@@ -7,6 +7,7 @@ use common::fixtures::{seed_msvc_manifest, select_tool_by_key, unique_temp_dir};
 use common::tui::open_tools;
 use spoon::config;
 use spoon::tui::test_support::Harness;
+use spoon_backend::layout::RuntimeLayout;
 
 #[test]
 fn tools_detail_opens_and_closes_with_escape() {
@@ -141,10 +142,9 @@ fn tool_detail_prioritizes_summary_ops_versions_and_config() {
         msvc_arch: "auto".to_string(),
     })
     .unwrap();
-    let claude_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("claude-code")
-        .join("current");
+    let claude_root = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .package_current_root("claude-code");
     let claude_shims = config::shims_root_from(&tool_root);
     std::fs::create_dir_all(&claude_root).unwrap();
     std::fs::create_dir_all(&claude_shims).unwrap();

@@ -7,6 +7,7 @@ use common::tui::open_global_form;
 use spoon::config;
 use spoon::editor;
 use spoon::tui::test_support::Harness;
+use spoon_backend::layout::RuntimeLayout;
 use std::fs;
 
 fn set_available_test_editor() {
@@ -323,10 +324,9 @@ fn editor_setup_uninstall_refreshes_candidate_status_before_return() {
             .unwrap()
             .as_nanos()
     ));
-    let managed_nano = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("nano")
-        .join("current")
+    let managed_nano = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .package_current_root("nano")
         .join("nano.exe");
     std::fs::create_dir_all(managed_nano.parent().unwrap()).unwrap();
     std::fs::write(&managed_nano, b"managed nano").unwrap();

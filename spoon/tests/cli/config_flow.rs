@@ -285,12 +285,9 @@ fn config_python_set_reapplies_pip_mirror_for_installed_python() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let current_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("python")
-        .join("current");
-    std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
+    let current_root = layout.scoop.package_current_root("python");
+    std::fs::create_dir_all(&current_root).unwrap();
     spoon::runtime::test_block_on(write_installed_state(
         &layout,
         &InstalledPackageState {
@@ -349,12 +346,9 @@ fn config_git_set_reapplies_proxy_policy_for_installed_git() {
     let env = create_configured_home_with_proxy("http://127.0.0.1:7897");
     let temp_home = env.home;
     let tool_root = env.root;
-    let current_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("git")
-        .join("current");
-    std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
+    let current_root = layout.scoop.package_current_root("git");
+    std::fs::create_dir_all(&current_root).unwrap();
     spoon::runtime::test_block_on(write_installed_state(
         &layout,
         &InstalledPackageState {
@@ -500,9 +494,9 @@ fn config_python_set_reapplies_command_profile_for_installed_python() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let package_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("python");
+    let package_root = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .package_app_root("python");
     let current_root = package_root.join("current");
     let scripts_root = current_root.join("Scripts");
     let bucket_root = tool_root
@@ -744,10 +738,7 @@ fn scoop_info_shows_applied_policy_integrations() {
         },
     ))
     .unwrap();
-    let current_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("python")
-        .join("current");
+    let current_root = layout.scoop.package_current_root("python");
     std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
@@ -838,10 +829,7 @@ fn scoop_info_does_not_repeat_desired_policy_inside_applied_values() {
         },
     ))
     .unwrap();
-    let current_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("git")
-        .join("current");
+    let current_root = layout.scoop.package_current_root("git");
     std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(

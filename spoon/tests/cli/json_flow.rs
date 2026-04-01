@@ -193,9 +193,7 @@ fn scoop_bucket_remove_json_prints_structured_action_result() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        spoon::config::scoop_root_from(&tool_root)
-            .join("buckets")
-            .join("extras"),
+        RuntimeLayout::from_root(&tool_root).scoop.bucket_root("extras"),
     )
     .unwrap();
 
@@ -289,9 +287,7 @@ fn doctor_json_prints_structured_scoop_runtime_repair_summary() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        spoon::config::scoop_root_from(&env.root)
-            .join("buckets")
-            .join("main"),
+        RuntimeLayout::from_root(&env.root).scoop.bucket_root("main"),
     )
     .unwrap();
 
@@ -333,10 +329,7 @@ fn scoop_prefix_json_prints_structured_prefix_view() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        spoon::config::scoop_root_from(&tool_root)
-            .join("apps")
-            .join(package_name)
-            .join("current"),
+        layout.scoop.package_current_root(package_name),
     )
     .unwrap();
 
@@ -394,7 +387,7 @@ fn json_errors_print_stable_error_envelope() {
 fn scoop_cache_clear_json_prints_structured_cache_action() {
     let env = create_configured_home();
     let temp_home = env.home;
-    let scoop_cache = spoon::config::scoop_root_from(&env.root).join("cache");
+    let scoop_cache = RuntimeLayout::from_root(&env.root).scoop.cache_root;
     std::fs::create_dir_all(&scoop_cache).unwrap();
     std::fs::write(scoop_cache.join("demo.txt"), "demo").unwrap();
 
@@ -456,11 +449,15 @@ fn package_report_uses_backend_models() {
         "RuntimeLayout prefix should contain 'current'"
     );
 
-    // Verify the path matches the old package_current_root derivation
-    let old_prefix = spoon_backend::scoop::package_current_root(&tool_root, package_name);
+    // Verify the path matches the expected explicit layout derivation
+    let old_prefix = tool_root
+        .join("scoop")
+        .join("apps")
+        .join(package_name)
+        .join("current");
     assert_eq!(
         layout_prefix, old_prefix,
-        "RuntimeLayout prefix should match backend package_current_root derivation"
+        "RuntimeLayout prefix should match the explicit Scoop layout derivation"
     );
 }
 
@@ -490,9 +487,7 @@ fn bucket_json_uses_backend_repo_sync_outcome() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        spoon::config::scoop_root_from(&tool_root)
-            .join("buckets")
-            .join("main"),
+        RuntimeLayout::from_root(&tool_root).scoop.bucket_root("main"),
     )
     .unwrap();
 
