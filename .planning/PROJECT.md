@@ -1,19 +1,20 @@
 ## Current State
 
-- Shipped milestone: `v0.5.0`
+- Shipped milestone: `v0.6.0`
+- Archived roadmap: [`v0.6.0-ROADMAP.md`](/d:/projects/spoon/.planning/milestones/v0.6.0-ROADMAP.md)
+- Archived requirements: [`v0.6.0-REQUIREMENTS.md`](/d:/projects/spoon/.planning/milestones/v0.6.0-REQUIREMENTS.md)
+- Final audit: [`v0.6.0-MILESTONE-AUDIT.md`](/d:/projects/spoon/.planning/v0.6.0-MILESTONE-AUDIT.md)
+
+- Previous shipped milestone: `v0.5.0`
 - Archived roadmap: [`v0.5.0-ROADMAP.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-ROADMAP.md)
 - Archived requirements: [`v0.5.0-REQUIREMENTS.md`](/d:/projects/spoon/.planning/milestones/v0.5.0-REQUIREMENTS.md)
 - Final audit: [`v0.5.0-MILESTONE-AUDIT.md`](/d:/projects/spoon/.planning/v0.5.0-MILESTONE-AUDIT.md)
 
-## Current Milestone: v0.6.0 Backend Architecture Completion
+## Next Milestone Goals
 
-**Goal:** Systematically clean the remaining `spoon-backend` architecture by making `msvc` the primary refactor target and closing the most important shared backend contract gaps.
-
-**Target features:**
-- Systematically restructure `spoon-backend/src/msvc/` around explicit backend seams, canonical state, and lifecycle ownership.
-- Harden shared backend contracts that now affect both Scoop and MSVC: events, errors, filesystem helpers, and runtime path handling.
-- Keep `scoop` in maintenance mode for spillover cleanup only, instead of reopening a second large Scoop-led refactor.
-- Add focused backend/app safety coverage for MSVC and shared-contract regressions.
+- Decide what the next milestone should focus on beyond the now-completed backend architecture cleanup.
+- Re-open planning with `$gsd-new-milestone` instead of extending the archived `v0.6.0` milestone.
+- Carry forward the recorded follow-up todos, seeds, and backlog items.
 
 # Spoon Backend Refactoring
 
