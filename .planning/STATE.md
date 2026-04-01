@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Backend Architecture Completion
 status: active
-stopped_at: Phase 7 planned; ready to execute
+stopped_at: Phase 7 complete; ready to discuss/plan Phase 8
 last_updated: "2026-04-01T00:00:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 4
-  percent: 25
+  completed_plans: 8
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Execute Phase 7 (`Canonical MSVC State and Lifecycle`).
+**Current focus:** Prepare Phase 8 (`Shared Backend Contract Hardening`).
 
 ## Current Position
 
-Phase: 07 (canonical-msvc-state-and-lifecycle)  
-Plan: 0 of 4  
-Status: Ready to execute  
-Last activity: 2026-04-01 - Phase 7 planned
+Phase: 07 (canonical-msvc-state-and-lifecycle) - COMPLETE  
+Plan: 4 of 4  
+Status: Ready to discuss/plan Phase 8  
+Last activity: 2026-04-01 - Phase 7 complete
 
-Progress: [###-------] 25%
+Progress: [#####-----] 50%
 
 ## Carried Context
 
@@ -46,6 +46,7 @@ Progress: [###-------] 25%
 - Tighten the backend error contract. See [`2026-03-31-tighten-backend-error-contract.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-tighten-backend-error-contract.md).
 - Remove hardcoded production paths from backend runtime execution. See [`2026-03-31-remove-hardcoded-production-paths.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-remove-hardcoded-production-paths.md).
 - Audit derive-not-store redundancies in backend state and read models. See [`2026-04-01-audit-derive-not-store-fields.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-audit-derive-not-store-fields.md).
+- Simplify `SystemPort` / `ScoopRuntimeHost` boundaries and remove `home_dir()` from `SystemPort`. See [`2026-04-01-simplify-system-port-and-runtime-host-boundaries.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-simplify-system-port-and-runtime-host-boundaries.md).
 - Revisit the backend event contract seed when trigger conditions are met. See [`SEED-001-backend-event-contract-hardening.md`](/d:/projects/spoon/.planning/seeds/SEED-001-backend-event-contract-hardening.md).
 - Review backlog phase [`999.1-test-architecture-cleanup`](/d:/projects/spoon/.planning/phases/999.1-test-architecture-cleanup).
 
@@ -57,5 +58,5 @@ Progress: [###-------] 25%
 ## Session Continuity
 
 Last session: 2026-04-01T00:00:00.000Z  
-Stopped at: Phase 7 planned; next step is execution  
-Resume file: .planning/phases/07-canonical-msvc-state-and-lifecycle/07-01-PLAN.md
+Stopped at: Phase 7 complete; next step is Phase 8 discussion/planning  
+Resume file: .planning/phases/07-canonical-msvc-state-and-lifecycle/07-VERIFICATION.md

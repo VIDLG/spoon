@@ -11,7 +11,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 ## Active Milestone: v0.6.0 Backend Architecture Completion
 
 - [x] **Phase 6: MSVC Seams and Ownership Completion** - Finish the app/backend seam for MSVC and split entry-point ownership cleanly into backend contracts.
-- [ ] **Phase 7: Canonical MSVC State and Lifecycle** - Replace ad hoc MSVC models and flows with canonical backend state plus explicit lifecycle structure.
+- [x] **Phase 7: Canonical MSVC State and Lifecycle** - Replace ad hoc MSVC models and flows with canonical backend state plus explicit lifecycle structure.
 - [ ] **Phase 8: Shared Backend Contract Hardening** - Tighten backend event/error/fsx/path contracts that now affect both Scoop and MSVC.
 - [ ] **Phase 9: MSVC and Shared Safety Net** - Add focused regression coverage so the MSVC cleanup and shared contract changes remain safe to evolve.
 
@@ -62,7 +62,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 6. MSVC Seams and Ownership Completion | 4/4 | Complete | 2026-04-01 |
-| 7. Canonical MSVC State and Lifecycle | 0/4 | Planned | - |
+| 7. Canonical MSVC State and Lifecycle | 4/4 | Complete | 2026-04-01 |
 | 8. Shared Backend Contract Hardening | 0/0 | Pending | - |
 | 9. MSVC and Shared Safety Net | 0/0 | Pending | - |
 
