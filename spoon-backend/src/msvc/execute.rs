@@ -3,14 +3,16 @@ use std::path::Path;
 use crate::{BackendContext, BackendError, BackendEvent, CancellationToken, Result, check_token_cancel};
 
 use super::{
-    MsvcOperationKind, MsvcOperationOutcome, MsvcRequest, MsvcRuntimeKind, ToolchainFlags,
+    ManagedMsvcStateDetail, MsvcCanonicalState, MsvcOperationKind, MsvcOperationOutcome,
+    MsvcRequest, MsvcRuntimeKind, MsvcValidationStatus, ToolchainFlags,
     ensure_cached_companion_cabs, ensure_cached_payloads, ensure_extracted_archives,
     ensure_extracted_msis, ensure_install_image, ensure_materialized_toolchain,
     ensure_msi_media_metadata, ensure_staged_external_cabs, managed_toolchain_flags_with_request,
     manifest, manifest_dir, msvc_dir, native_host_arch, paths, remove_autoenv_dir,
     remove_managed_toolchain_wrappers, user_facing_toolchain_label, write_installed_state,
     write_managed_toolchain_wrappers, write_runtime_state, cleanup_post_install_cache,
-    read_installed_toolchain_target, runtime_state_path, push_stream_line,
+    read_canonical_state, read_installed_toolchain_target, runtime_state_path, push_stream_line,
+    write_canonical_state,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +63,39 @@ fn managed_toolchain_is_current(tool_root: &Path, latest: &manifest::ToolchainTa
             .is_some_and(|installed| installed.msvc == latest.msvc && installed.sdk == latest.sdk)
 }
 
+async fn write_managed_canonical_state(
+    request: &MsvcRequest,
+    operation: MsvcOperationKind,
+    installed: bool,
+    version: Option<String>,
+    sdk_version: Option<String>,
+    validation_status: Option<MsvcValidationStatus>,
+    validation_message: Option<String>,
+) -> Result<()> {
+    let layout = crate::layout::RuntimeLayout::from_root(&request.root);
+    let previous = read_canonical_state(&layout).await;
+    let state = MsvcCanonicalState {
+        runtime_kind: MsvcRuntimeKind::Managed,
+        installed,
+        version,
+        sdk_version,
+        last_operation: Some(operation),
+        last_stage: Some(super::MsvcLifecycleStage::Completed),
+        validation_status: validation_status.or_else(|| {
+            previous
+                .as_ref()
+                .and_then(|state| state.validation_status.clone())
+        }),
+        validation_message: validation_message
+            .or_else(|| previous.as_ref().and_then(|state| state.validation_message.clone())),
+        managed: ManagedMsvcStateDetail {
+            selected_target_arch: Some(request.normalized_target_arch()),
+        },
+        official: previous.map(|state| state.official).unwrap_or_default(),
+    };
+    write_canonical_state(&layout, &state).await
+}
+
 async fn run_toolchain_action_async(
     request: &MsvcRequest,
     action: ToolchainAction,
@@ -96,6 +131,16 @@ async fn run_toolchain_action_async(
     if action == ToolchainAction::Update
         && managed_toolchain_is_current(tool_root, &target_packages)
     {
+        write_managed_canonical_state(
+            request,
+            action.operation_kind(),
+            true,
+            Some(user_facing_toolchain_label(&target_packages.msvc)),
+            Some(user_facing_toolchain_label(&target_packages.sdk)),
+            None,
+            None,
+        )
+        .await?;
         push_stream_line(
             &mut lines,
             &mut emit,
@@ -205,6 +250,16 @@ async fn run_toolchain_action_async(
         ),
     );
     write_installed_state(tool_root, &target_packages)?;
+    write_managed_canonical_state(
+        request,
+        action.operation_kind(),
+        true,
+        Some(user_facing_toolchain_label(&target_packages.msvc)),
+        Some(user_facing_toolchain_label(&target_packages.sdk)),
+        None,
+        None,
+    )
+    .await?;
     match managed_toolchain_flags_with_request(request).await {
         Ok(wrapper_flags) => {
             for line in
@@ -394,6 +449,7 @@ where
 }
 
 pub async fn uninstall_toolchain(tool_root: &Path) -> Result<MsvcOperationOutcome> {
+    let request = MsvcRequest::for_tool_root(tool_root);
     let target = msvc_dir(tool_root);
     let state_root = paths::msvc_state_root(tool_root);
     let mut lines = vec![format!("> remove MSVC toolchain at {}", target.display())];
@@ -416,6 +472,16 @@ pub async fn uninstall_toolchain(tool_root: &Path) -> Result<MsvcOperationOutcom
         "Managed MSVC cache is retained at {}",
         paths::msvc_cache_root(tool_root).display()
     ));
+    write_managed_canonical_state(
+        &request,
+        MsvcOperationKind::Uninstall,
+        false,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
 
     Ok(MsvcOperationOutcome {
         kind: "msvc_operation",

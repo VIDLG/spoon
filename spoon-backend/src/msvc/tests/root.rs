@@ -150,6 +150,13 @@ fn latest_toolchain_version_label(tool_root: Option<&Path>) -> Option<String> {
     latest_toolchain_version_label_with_context(&context)
 }
 
+fn read_canonical_state_for_test(
+    tool_root: &Path,
+) -> Option<crate::msvc::MsvcCanonicalState> {
+    let layout = crate::layout::RuntimeLayout::from_root(tool_root);
+    block_on(crate::msvc::read_canonical_state(&layout))
+}
+
 #[test]
 fn user_facing_toolchain_label_strips_internal_prefixes() {
     assert_eq!(
@@ -249,6 +256,19 @@ fn install_toolchain_prefers_cached_manifest_target_over_driver_list() {
             "{:?}",
             result.output
         );
+    let canonical = read_canonical_state_for_test(&tool_root).expect("canonical state");
+    assert_eq!(canonical.runtime_kind, crate::msvc::MsvcRuntimeKind::Managed);
+    assert!(canonical.installed);
+    assert_eq!(canonical.version.as_deref(), Some("14.44.35207"));
+    assert_eq!(canonical.sdk_version.as_deref(), Some("10.0.26100.1"));
+    assert_eq!(
+        canonical.last_operation,
+        Some(crate::msvc::MsvcOperationKind::Install)
+    );
+    assert_eq!(
+        canonical.last_stage,
+        Some(crate::msvc::MsvcLifecycleStage::Completed)
+    );
 }
 
 #[test]
@@ -1242,6 +1262,12 @@ fn uninstall_toolchain_removes_managed_wrappers() {
     assert!(!shims_root(&tool_root).join("spoon-cl.cmd").exists());
     assert!(!shims_root(&tool_root).join("spoon-link.cmd").exists());
     assert!(!shims_root(&tool_root).join("spoon-lib.cmd").exists());
+    let canonical = read_canonical_state_for_test(&tool_root).expect("canonical state");
+    assert!(!canonical.installed);
+    assert_eq!(
+        canonical.last_operation,
+        Some(crate::msvc::MsvcOperationKind::Uninstall)
+    );
 }
 
 #[test]
@@ -1788,6 +1814,15 @@ fn validate_toolchain_keeps_artifacts_by_default_for_inspection() {
 
     let result = block_on(validate_toolchain(&tool_root)).expect("validate keep artifacts");
     assert!(result.is_success(), "{:?}", result.output);
+    let canonical = read_canonical_state_for_test(&tool_root).expect("canonical state");
+    assert_eq!(
+        canonical.last_operation,
+        Some(crate::msvc::MsvcOperationKind::Validate)
+    );
+    assert_eq!(
+        canonical.validation_status,
+        Some(crate::msvc::MsvcValidationStatus::Valid)
+    );
     assert!(
         result
             .output

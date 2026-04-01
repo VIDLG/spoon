@@ -21,6 +21,10 @@ use super::validation::{
     RustValidationTemplateOptions, locate_cargo, write_validation_cpp_template,
     write_validation_rust_templates,
 };
+use super::{
+    MsvcCanonicalState, MsvcLifecycleStage, MsvcOperationKind, MsvcRuntimeKind,
+    MsvcValidationStatus, OfficialMsvcStateDetail, read_canonical_state, write_canonical_state,
+};
 
 const OFFICIAL_BUILD_TOOLS_BOOTSTRAPPER_URL: &str =
     "https://aka.ms/vs/17/release/vs_BuildTools.exe";
@@ -1215,6 +1219,46 @@ fn write_installed_state(tool_root: &Path, state: &OfficialInstalledState) -> Re
     Ok(())
 }
 
+async fn write_official_canonical_state(
+    tool_root: &Path,
+    operation: MsvcOperationKind,
+    installed: bool,
+    installer_mode: Option<OfficialInstallerMode>,
+    validation_status: Option<MsvcValidationStatus>,
+    validation_message: Option<String>,
+) -> Result<()> {
+    let layout = crate::layout::RuntimeLayout::from_root(tool_root);
+    let previous = read_canonical_state(&layout).await;
+    let detected = if installed {
+        detect_installed_state(&official_instance_root(tool_root))
+    } else {
+        OfficialInstalledState {
+            version: None,
+            sdk_version: None,
+        }
+    };
+    let state = MsvcCanonicalState {
+        runtime_kind: MsvcRuntimeKind::Official,
+        installed,
+        version: detected.version,
+        sdk_version: detected.sdk_version,
+        last_operation: Some(operation),
+        last_stage: Some(MsvcLifecycleStage::Completed),
+        validation_status: validation_status.or_else(|| {
+            previous
+                .as_ref()
+                .and_then(|state| state.validation_status.clone())
+        }),
+        validation_message: validation_message
+            .or_else(|| previous.as_ref().and_then(|state| state.validation_message.clone())),
+        managed: previous.as_ref().map(|state| state.managed.clone()).unwrap_or_default(),
+        official: OfficialMsvcStateDetail {
+            installer_mode: installer_mode.map(OfficialInstallerMode::as_cli_token).map(str::to_string),
+        },
+    };
+    write_canonical_state(&layout, &state).await
+}
+
 fn run_bootstrapper(
     bootstrapper_path: &Path,
     args: &[String],
@@ -1356,6 +1400,15 @@ async fn run_official_action_async(
                 paths::official_msvc_cache_root(tool_root).display()
             ),
         );
+        write_official_canonical_state(
+            tool_root,
+            super::MsvcOperationKind::Uninstall,
+            false,
+            Some(mode),
+            None,
+            None,
+        )
+        .await?;
         return Ok(super::MsvcOperationOutcome {
             kind: "msvc_operation",
             runtime: super::MsvcRuntimeKind::Official,
@@ -1445,6 +1498,15 @@ async fn run_official_action_async(
                 paths::official_msvc_cache_root(tool_root).display()
             ),
         );
+        write_official_canonical_state(
+            tool_root,
+            super::MsvcOperationKind::Uninstall,
+            false,
+            Some(mode),
+            None,
+            None,
+        )
+        .await?;
         return Ok(super::MsvcOperationOutcome {
             kind: "msvc_operation",
             runtime: super::MsvcRuntimeKind::Official,
@@ -1481,6 +1543,19 @@ async fn run_official_action_async(
             format!("Detected official Windows SDK version: {sdk_version}"),
         );
     }
+    write_official_canonical_state(
+        tool_root,
+        match action {
+            OfficialAction::Install => super::MsvcOperationKind::Install,
+            OfficialAction::Update => super::MsvcOperationKind::Update,
+            OfficialAction::Uninstall => super::MsvcOperationKind::Uninstall,
+        },
+        true,
+        Some(mode),
+        None,
+        None,
+    )
+    .await?;
     Ok(super::MsvcOperationOutcome {
         kind: "msvc_operation",
         runtime: super::MsvcRuntimeKind::Official,

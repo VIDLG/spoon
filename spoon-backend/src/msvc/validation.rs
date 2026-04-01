@@ -11,7 +11,11 @@ use super::paths;
 use super::wrappers::{
     ensure_managed_toolchain_wrappers, spoon_cl_wrapper_path, spoon_link_wrapper_path,
 };
-use super::{is_target_arch_dir, msvc_dir, runtime_state_path};
+use super::{
+    MsvcLifecycleStage, MsvcOperationKind, MsvcRuntimeKind, MsvcValidationStatus,
+    ManagedMsvcStateDetail, is_target_arch_dir, msvc_dir, read_canonical_state, runtime_state_path,
+    write_canonical_state,
+};
 use crate::BackendContext;
 use crate::CommandStatus;
 use crate::{BackendError, Result};
@@ -370,6 +374,23 @@ pub(crate) async fn validate_toolchain_with_request(
         "Kept validation workspace {} for inspection.",
         validate_root.display()
     ));
+    let layout = crate::layout::RuntimeLayout::from_root(tool_root);
+    let previous = read_canonical_state(&layout).await;
+    let canonical_state = super::MsvcCanonicalState {
+        runtime_kind: MsvcRuntimeKind::Managed,
+        installed: true,
+        version: previous.as_ref().and_then(|state| state.version.clone()),
+        sdk_version: previous.as_ref().and_then(|state| state.sdk_version.clone()),
+        last_operation: Some(MsvcOperationKind::Validate),
+        last_stage: Some(MsvcLifecycleStage::Completed),
+        validation_status: Some(MsvcValidationStatus::Valid),
+        validation_message: Some("validated successfully".to_string()),
+        managed: ManagedMsvcStateDetail {
+            selected_target_arch: Some(request.normalized_target_arch()),
+        },
+        official: previous.map(|state| state.official).unwrap_or_default(),
+    };
+    write_canonical_state(&layout, &canonical_state).await?;
     Ok(super::MsvcOperationOutcome {
         kind: "msvc_operation",
         runtime: super::MsvcRuntimeKind::Managed,
