@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::{BackendError, BackendEvent, Result};
+use crate::platform::msiexec_path;
 
 use super::selected_architecture_key;
 
@@ -71,7 +72,10 @@ fn render_hook_prelude(
     prefix
         .push_str("$ArgList = @('/a', $Path, '/qn', \"TARGETDIR=$DestinationPath\\SourceDir\"); ");
     prefix.push_str("if ($Switches) { $ArgList += (-split $Switches) }; ");
-    prefix.push_str("$status = Start-Process -FilePath 'C:\\Windows\\System32\\msiexec.exe' -ArgumentList $ArgList -Wait -PassThru -WindowStyle Hidden; ");
+    prefix.push_str(&format!(
+        "$status = Start-Process -FilePath '{}' -ArgumentList $ArgList -Wait -PassThru -WindowStyle Hidden; ",
+        escape_powershell_literal(&msiexec_path().display().to_string())
+    ));
     prefix.push_str("if ($status.ExitCode -ne 0) { abort \"Failed to extract files from $Path with msiexec exit code $($status.ExitCode).\" }; ");
     prefix.push_str("if ($ExtractDir -and (Test-Path \"$DestinationPath\\SourceDir\")) { movedir \"$DestinationPath\\SourceDir\\$ExtractDir\" $OriDestinationPath | Out-Null; Remove-Item $DestinationPath -Recurse -Force } ");
     prefix.push_str("elseif ($ExtractDir) { movedir \"$DestinationPath\\$ExtractDir\" $OriDestinationPath | Out-Null; Remove-Item $DestinationPath -Recurse -Force } ");

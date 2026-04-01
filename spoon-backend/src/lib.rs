@@ -9,6 +9,7 @@ mod fsx;
 mod gitx;
 pub mod layout;
 pub mod msvc;
+mod platform;
 pub mod ports;
 mod proxy;
 pub mod scoop;
@@ -31,6 +32,7 @@ pub use gitx::{RepoSyncOutcome, clone_repo};
 pub use layout::{ManagedMsvcLayout, MsvcLayout, OfficialMsvcLayout, RuntimeLayout, ScoopLayout};
 pub use ports::SystemPort;
 pub use proxy::{ReqwestClientBuilder, normalize_proxy_url};
+pub use platform::{msiexec_path, windows_system_tool};
 pub use scoop::{ScoopIntegrationPort, SupplementalShimSpec};
 pub use task::{
     CancellationToken, TaskCancellation, await_task_with_events, check_token_cancel,

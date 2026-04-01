@@ -8,6 +8,7 @@ use zip::ZipArchive;
 
 use crate::fsx;
 use crate::{BackendError, BackendEvent, Result};
+use crate::platform::msiexec_path;
 
 use super::paths;
 use super::runtime::SelectedPackageSource;
@@ -110,7 +111,7 @@ fn extract_msi_archive_sync(archive_path: &Path, destination: &Path) -> Result<(
     let target_dir = source_dir
         .canonicalize()
         .unwrap_or_else(|_| source_dir.to_path_buf());
-    let status = Command::new("C:\\Windows\\System32\\msiexec.exe")
+    let status = Command::new(msiexec_path())
         .arg("/a")
         .arg(archive_path)
         .arg("/qn")
