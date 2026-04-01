@@ -6,10 +6,11 @@ use walkdir::WalkDir;
 
 use crate::BackendContext;
 
+use super::detect::detect_runtimes;
 use super::official;
 use super::paths;
 use super::rules::read_installed_toolchain_target;
-use super::{manifest, manifest_dir, native_host_arch, runtime_state_path};
+use super::{manifest, manifest_dir, native_host_arch};
 
 pub fn user_facing_toolchain_label(raw: &str) -> String {
     raw.replace("msvc-", "").replace("sdk-", "")
@@ -130,32 +131,31 @@ pub async fn status_with_context<P>(context: &BackendContext<P>) -> MsvcStatus {
 
 async fn status_with_request(request: &super::MsvcRequest) -> MsvcStatus {
     let tool_root = request.root.as_path();
+    let detected = detect_runtimes(tool_root);
     let managed_root = paths::msvc_root(tool_root);
     let official_root = paths::official_msvc_root(tool_root);
-    let managed_installed = installed_toolchain_version_label(tool_root);
-    let official_installed = official::read_installed_version_label(tool_root);
-    let managed_runtime_state = runtime_state_path(tool_root);
-    let official_runtime_state = official::runtime_state_path(tool_root);
     let managed_wrapper_names = managed_wrapper_names(tool_root);
     MsvcStatus {
         kind: "msvc_status",
         success: true,
         managed: ManagedMsvcRuntimeStatus {
-            status: managed_installed
+            status: detected
+                .managed
+                .installed_version
                 .as_ref()
                 .map(|version| format!("installed ({version})"))
                 .unwrap_or_else(|| "not installed".to_string()),
-            installed_version: managed_installed.clone(),
+            installed_version: detected.managed.installed_version.clone(),
             root: managed_root.display().to_string(),
             toolchain: paths::msvc_toolchain_root(tool_root).display().to_string(),
             state: paths::msvc_state_root(tool_root).display().to_string(),
             cache: paths::msvc_cache_root(tool_root).display().to_string(),
-            runtime_state_present: managed_runtime_state.exists(),
+            runtime_state_present: detected.managed.runtime_state_present,
             archives: cached_payload_archive_count(Some(tool_root)).unwrap_or(0),
             staged_msi_payloads: staged_msi_payload_count(Some(tool_root)).unwrap_or(0),
             extracted_msi_payloads: extracted_msi_payload_count(Some(tool_root)).unwrap_or(0),
             install_image_files: install_image_file_count(Some(tool_root)).unwrap_or(0),
-            integration: if managed_installed.is_some() {
+            integration: if detected.managed.installed_version.is_some() {
                 MsvcIntegration::ActiveManaged(ManagedMsvcIntegration {
                     commands: MsvcCommandIntegration {
                         wrappers: managed_wrapper_names
@@ -173,11 +173,13 @@ async fn status_with_request(request: &super::MsvcRequest) -> MsvcStatus {
             },
         },
         official: OfficialMsvcRuntimeStatus {
-            status: official_installed
+            status: detected
+                .official
+                .installed_version
                 .as_ref()
                 .map(|version| format!("installed ({version})"))
                 .unwrap_or_else(|| "not installed".to_string()),
-            installed_version: official_installed.clone(),
+            installed_version: detected.official.installed_version.clone(),
             root: official_root.display().to_string(),
             state: paths::official_msvc_state_root(tool_root)
                 .display()
@@ -185,8 +187,8 @@ async fn status_with_request(request: &super::MsvcRequest) -> MsvcStatus {
             cache: paths::official_msvc_cache_root(tool_root)
                 .display()
                 .to_string(),
-            runtime_state_present: official_runtime_state.exists(),
-            integration: if official_installed.is_some() {
+            runtime_state_present: detected.official.runtime_state_present,
+            integration: if detected.official.installed_version.is_some() {
                 MsvcIntegration::ActiveOfficial(OfficialMsvcIntegration {
                     system: OfficialMsvcSystemIntegration {
                         vswhere_discovery: official::vswhere_path().display().to_string(),

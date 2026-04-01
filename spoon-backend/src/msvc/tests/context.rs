@@ -87,3 +87,62 @@ fn explicit_context_required_for_runtime_ops() {
         crate::msvc::paths::msvc_root(&tool_root)
     );
 }
+
+#[test]
+fn detect_runtimes_with_context_reports_managed_and_official_facts() {
+    let tool_root = temp_dir("msvc-detect-context");
+    let context = test_context(&tool_root);
+
+    let managed_state_root = crate::msvc::paths::msvc_state_root(&tool_root);
+    let official_state_root = crate::msvc::paths::official_msvc_state_root(&tool_root);
+    fs::create_dir_all(&managed_state_root).expect("managed state root");
+    fs::create_dir_all(&official_state_root).expect("official state root");
+
+    fs::write(
+        crate::msvc::runtime_state_path(&tool_root),
+        serde_json::json!({
+            "runtime": "managed"
+        })
+        .to_string(),
+    )
+    .expect("managed runtime state");
+    fs::write(
+        managed_state_root.join("installed.json"),
+        serde_json::json!({
+            "msvc": "msvc-14.44.35207",
+            "sdk": "sdk-10.0.26100.15"
+        })
+        .to_string(),
+    )
+    .expect("managed installed state");
+
+    fs::write(
+        crate::msvc::official::runtime_state_path(&tool_root),
+        serde_json::json!({
+            "runtime": "official"
+        })
+        .to_string(),
+    )
+    .expect("official runtime state");
+    fs::write(
+        crate::msvc::official::installed_state_path(&tool_root),
+        serde_json::json!({
+            "version": "14.44.35207",
+            "sdk_version": "10.0.26100.0"
+        })
+        .to_string(),
+    )
+    .expect("official installed state");
+
+    let detected = crate::msvc::detect_runtimes_with_context(&context);
+    assert!(detected.managed.available);
+    assert!(detected.official.available);
+    assert_eq!(
+        detected.managed.installed_version.as_deref(),
+        Some("14.44.35207 + 10.0.26100.15")
+    );
+    assert_eq!(
+        detected.official.installed_version.as_deref(),
+        Some("14.44.35207 + 10.0.26100.0")
+    );
+}

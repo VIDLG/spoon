@@ -1,10 +1,14 @@
 mod cache;
 mod common;
+mod detect;
+mod execute;
 mod manifest;
 mod msi_extract;
 pub mod official;
 mod package_rules;
 pub mod paths;
+mod plan;
+mod query;
 mod rules;
 mod status;
 mod validation;
@@ -17,14 +21,13 @@ use std::time::{Duration, Instant};
 
 use fs_err as fs;
 use reqwest::Client;
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
 use crate::{
-    BackendContext, BackendError, BackendEvent, CancellationToken, CommandStatus, ProgressEvent,
-    Result, check_token_cancel, event::progress_kind,
+    BackendError, BackendEvent, CancellationToken, ProgressEvent, Result, check_token_cancel,
+    event::progress_kind,
 };
 
 fn format_bytes(bytes: u64) -> String {
@@ -62,142 +65,50 @@ pub use self::package_rules::{
     identify_manifest_package_id, identify_payload, manifest_package_matches_msvc_target,
     normalize_msvc_build_version, package_kind, sdk_payload_matches_target,
 };
+pub use self::query::{
+    MsvcIntegration, MsvcStatus, installed_toolchain_version_label,
+    latest_toolchain_version_label, latest_toolchain_version_label_with_context, status,
+    status_with_context, user_facing_toolchain_label,
+};
 pub use self::paths::{
     msvc_cache_root, msvc_manifest_root, msvc_root, msvc_state_root, msvc_toolchain_root,
     native_msvc_arch, official_msvc_cache_root, official_msvc_root, official_msvc_state_root,
 };
+pub(crate) use self::plan::MsvcRequest;
+pub use self::plan::{MsvcOperationKind, MsvcOperationOutcome, MsvcRuntimeKind, ToolchainFlags};
+pub use self::detect::{DetectedMsvcRuntime, MsvcRuntimeDetection, detect_runtimes, detect_runtimes_with_context};
 pub use self::rules::{
     ToolchainTarget, installed_state_path, package_token_after_prefix,
     parse_toolchain_target_from_lines, pick_higher_version, read_installed_toolchain_target,
     select_latest_toolchain_from_packages, version_key, write_installed_toolchain_target,
 };
-pub use self::status::{
-    MsvcIntegration, MsvcStatus, latest_toolchain_version_label_with_context, status,
-    status_with_context,
-};
-pub use self::status::{count_files_recursively, user_facing_toolchain_label};
-pub use self::status::{installed_toolchain_version_label, latest_toolchain_version_label};
+pub use self::status::count_files_recursively;
 pub use self::validation::{validate_toolchain, validate_toolchain_with_context};
-use self::wrappers::managed_toolchain_flags_with_request;
+pub(crate) use self::wrappers::managed_toolchain_flags_with_request;
 pub use self::wrappers::{
     managed_toolchain_flags, reapply_managed_command_surface_streaming,
     remove_managed_toolchain_wrappers, write_managed_toolchain_wrappers,
 };
+pub use self::execute::{
+    ToolchainAction, handle_manifest_refresh_failure, install_toolchain_async,
+    install_toolchain_async_streaming, install_toolchain_async_with_context,
+    install_toolchain_streaming, install_toolchain_streaming_with_context,
+    managed_toolchain_flags_with_context, uninstall_toolchain, uninstall_toolchain_with_context,
+    update_toolchain_async, update_toolchain_async_streaming, update_toolchain_async_with_context,
+    update_toolchain_streaming, update_toolchain_streaming_with_context,
+};
 
-#[derive(Debug, Clone)]
-pub(crate) struct MsvcRequest {
-    pub root: PathBuf,
-    pub proxy: String,
-    pub command_profile: String,
-    pub selected_target_arch: String,
-    pub test_mode: bool,
-}
-
-impl MsvcRequest {
-    pub(crate) fn for_tool_root(tool_root: &Path) -> Self {
-        Self {
-            root: tool_root.to_path_buf(),
-            proxy: String::new(),
-            command_profile: "default".to_string(),
-            selected_target_arch: paths::native_msvc_arch().to_string(),
-            test_mode: false,
-        }
-    }
-
-    pub(crate) fn from_context<P>(context: &BackendContext<P>) -> Self {
-        Self {
-            root: context.root.clone(),
-            proxy: context.proxy.clone().unwrap_or_default(),
-            command_profile: context.msvc_command_profile.clone(),
-            selected_target_arch: context.msvc_target_arch.clone(),
-            test_mode: context.test_mode,
-        }
-    }
-
-    pub(crate) fn normalized_target_arch(&self) -> String {
-        let selected = self.selected_target_arch.trim();
-        if selected.is_empty() {
-            return paths::native_msvc_arch().to_string();
-        }
-        match selected.to_ascii_lowercase().as_str() {
-            "auto" => paths::native_msvc_arch().to_string(),
-            "x64" | "x86" | "arm64" | "arm" => selected.to_ascii_lowercase(),
-            _ => paths::native_msvc_arch().to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ToolchainFlags {
-    pub compiler: PathBuf,
-    pub linker: PathBuf,
-    pub librarian: PathBuf,
-    pub resource_compiler: Option<PathBuf>,
-    pub manifest_tool: Option<PathBuf>,
-    pub nmake: Option<PathBuf>,
-    pub dumpbin: Option<PathBuf>,
-    pub include_dirs: Vec<PathBuf>,
-    pub lib_dirs: Vec<PathBuf>,
-    pub path_dirs: Vec<PathBuf>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MsvcRuntimeKind {
-    Managed,
-    Official,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MsvcOperationKind {
-    Install,
-    Update,
-    Uninstall,
-    Validate,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct MsvcOperationOutcome {
-    pub kind: &'static str,
-    pub runtime: MsvcRuntimeKind,
-    pub operation: MsvcOperationKind,
-    pub status: CommandStatus,
-    pub title: String,
-    pub output: Vec<String>,
-    pub streamed: bool,
-}
-
-impl MsvcOperationOutcome {
-    pub const fn is_success(&self) -> bool {
-        self.status.is_success()
-    }
-}
-
-impl ToolchainFlags {
-    pub fn cflags(&self) -> Vec<String> {
-        self.include_dirs
-            .iter()
-            .map(|path| format!("/I\"{}\"", path.display()))
-            .collect()
-    }
-
-    pub fn libs(&self) -> Vec<String> {
-        self.lib_dirs
-            .iter()
-            .map(|path| format!("/LIBPATH:\"{}\"", path.display()))
-            .collect()
-    }
-}
-
-fn external<T, E>(result: std::result::Result<T, E>, message: impl Into<String>) -> Result<T>
+pub(super) fn external<T, E>(
+    result: std::result::Result<T, E>,
+    message: impl Into<String>,
+) -> Result<T>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
     result.map_err(|err| BackendError::external(message.into(), err))
 }
 
-fn native_host_arch() -> &'static str {
+pub(super) fn native_host_arch() -> &'static str {
     paths::native_msvc_arch()
 }
 
@@ -241,7 +152,7 @@ fn is_target_arch_dir(path: &Path, target_arch: &str) -> bool {
         .is_some_and(|name| name.eq_ignore_ascii_case(target_arch))
 }
 
-fn msvc_dir(tool_root: &Path) -> PathBuf {
+pub(super) fn msvc_dir(tool_root: &Path) -> PathBuf {
     paths::msvc_toolchain_root(tool_root)
 }
 
@@ -249,7 +160,7 @@ pub fn runtime_state_path(tool_root: &Path) -> PathBuf {
     paths::msvc_state_root(tool_root).join("runtime.json")
 }
 
-fn manifest_dir(tool_root: &Path) -> PathBuf {
+pub(super) fn manifest_dir(tool_root: &Path) -> PathBuf {
     paths::msvc_manifest_root(tool_root)
 }
 
@@ -578,7 +489,7 @@ async fn download_or_copy_payload(
     Ok(())
 }
 
-async fn ensure_cached_payloads(
+pub(super) async fn ensure_cached_payloads(
     tool_root: &Path,
     target: &manifest::ToolchainTarget,
     payloads: &[manifest::SelectedPayload],
@@ -685,7 +596,7 @@ async fn ensure_cached_payloads(
     Ok(lines)
 }
 
-fn ensure_extracted_archives(
+pub(super) fn ensure_extracted_archives(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
 ) -> Result<Vec<String>> {
@@ -742,7 +653,7 @@ fn ensure_extracted_archives(
     )])
 }
 
-fn ensure_msi_media_metadata(
+pub(super) fn ensure_msi_media_metadata(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
 ) -> Result<Vec<String>> {
@@ -812,7 +723,7 @@ fn ensure_msi_media_metadata(
     Ok(lines)
 }
 
-async fn ensure_cached_companion_cabs(
+pub(super) async fn ensure_cached_companion_cabs(
     tool_root: &Path,
     target: &manifest::ToolchainTarget,
     payloads: &[manifest::SelectedPayload],
@@ -879,7 +790,7 @@ async fn ensure_cached_companion_cabs(
     Ok(lines)
 }
 
-fn ensure_staged_external_cabs(
+pub(super) fn ensure_staged_external_cabs(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
 ) -> Result<Vec<String>> {
@@ -977,7 +888,7 @@ fn ensure_staged_external_cabs(
     )])
 }
 
-fn ensure_extracted_msis(
+pub(super) fn ensure_extracted_msis(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
     emit: &mut Option<&mut dyn FnMut(BackendEvent)>,
@@ -1201,7 +1112,7 @@ fn copy_tree_into(src: &Path, dest: &Path) -> Result<usize> {
     Ok(copied)
 }
 
-fn ensure_install_image(
+pub(super) fn ensure_install_image(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
 ) -> Result<Vec<String>> {
@@ -1252,7 +1163,10 @@ fn ensure_install_image(
     )])
 }
 
-fn write_installed_state(tool_root: &Path, target: &manifest::ToolchainTarget) -> Result<()> {
+pub(super) fn write_installed_state(
+    tool_root: &Path,
+    target: &manifest::ToolchainTarget,
+) -> Result<()> {
     let managed_root = paths::msvc_root(tool_root);
     // Convert manifest::ToolchainTarget to rules::ToolchainTarget
     let rules_target = rules::ToolchainTarget {
@@ -1268,7 +1182,7 @@ fn write_installed_state(tool_root: &Path, target: &manifest::ToolchainTarget) -
     Ok(())
 }
 
-fn write_runtime_state(tool_root: &Path) -> Result<Vec<String>> {
+pub(super) fn write_runtime_state(tool_root: &Path) -> Result<Vec<String>> {
     let state_root = paths::msvc_state_root(tool_root);
     external(
         fs::create_dir_all(&state_root),
@@ -1295,7 +1209,7 @@ fn write_runtime_state(tool_root: &Path) -> Result<Vec<String>> {
     )])
 }
 
-fn remove_autoenv_dir(tool_root: &Path) -> Result<Vec<String>> {
+pub(super) fn remove_autoenv_dir(tool_root: &Path) -> Result<Vec<String>> {
     let autoenv_root = msvc_dir(tool_root).join("autoenv");
     if !autoenv_root.exists() {
         return Ok(Vec::new());
@@ -1310,7 +1224,7 @@ fn remove_autoenv_dir(tool_root: &Path) -> Result<Vec<String>> {
     )])
 }
 
-fn ensure_materialized_toolchain(
+pub(super) fn ensure_materialized_toolchain(
     tool_root: &Path,
     target: &manifest::ToolchainTarget,
 ) -> Result<Vec<String>> {
@@ -1341,7 +1255,7 @@ fn ensure_materialized_toolchain(
     )])
 }
 
-fn cleanup_post_install_cache(tool_root: &Path) -> Vec<String> {
+pub(super) fn cleanup_post_install_cache(tool_root: &Path) -> Vec<String> {
     let cache_root = paths::msvc_cache_root(tool_root);
     let cleanup_targets = [cache_root.join("image")];
     let mut removed = 0_usize;
@@ -1392,431 +1306,6 @@ fn dir_size_bytes(root: &Path) -> Option<u64> {
         total = total.saturating_add(entry.metadata().ok()?.len());
     }
     Some(total)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolchainAction {
-    Install,
-    Update,
-}
-
-impl ToolchainAction {
-    fn title(self) -> &'static str {
-        match self {
-            Self::Install => "install MSVC Toolchain",
-            Self::Update => "update MSVC Toolchain",
-        }
-    }
-
-    const fn operation_kind(self) -> MsvcOperationKind {
-        match self {
-            Self::Install => MsvcOperationKind::Install,
-            Self::Update => MsvcOperationKind::Update,
-        }
-    }
-}
-
-pub fn handle_manifest_refresh_failure(
-    action: ToolchainAction,
-    lines: &mut Vec<String>,
-    emit: &mut Option<&mut dyn FnMut(BackendEvent)>,
-    err: BackendError,
-) -> Result<()> {
-    if action == ToolchainAction::Update {
-        return Err(BackendError::Other(format!(
-            "failed to refresh latest managed MSVC manifest for update: {err}"
-        )));
-    }
-    push_stream_line(
-        lines,
-        emit,
-        format!("Warning: failed to refresh managed MSVC manifest cache: {err}"),
-    );
-    Ok(())
-}
-
-fn managed_toolchain_is_current(tool_root: &Path, latest: &manifest::ToolchainTarget) -> bool {
-    paths::msvc_toolchain_root(tool_root).exists()
-        && runtime_state_path(tool_root).exists()
-        && read_installed_toolchain_target(&paths::msvc_root(tool_root))
-            .is_some_and(|installed| installed.msvc == latest.msvc && installed.sdk == latest.sdk)
-}
-
-async fn run_toolchain_action_async(
-    request: &MsvcRequest,
-    action: ToolchainAction,
-    cancel: Option<&CancellationToken>,
-    mut emit: Option<&mut dyn FnMut(BackendEvent)>,
-) -> Result<MsvcOperationOutcome> {
-    check_token_cancel(cancel)?;
-    let tool_root = request.root.as_path();
-    let proxy = request.proxy.as_str();
-    let command_profile = request.command_profile.as_str();
-    let selected_target_arch = request.normalized_target_arch();
-    let mut lines = Vec::new();
-    let manifest_root = manifest_dir(tool_root);
-    if !request.test_mode {
-        match manifest::sync_release_manifest_cache_async(&manifest_root, proxy).await {
-            Ok(sync_lines) => {
-                for line in sync_lines {
-                    push_stream_line(&mut lines, &mut emit, line);
-                }
-            }
-            Err(err) => handle_manifest_refresh_failure(action, &mut lines, &mut emit, err)?,
-        }
-    }
-    let Some(target_packages) = manifest::latest_toolchain_target_from_cached_manifest(
-        &manifest_root,
-        native_host_arch(),
-        &selected_target_arch,
-    ) else {
-        return Err(BackendError::Other(
-            "failed to determine latest MSVC toolchain target from cached manifest".to_string(),
-        ));
-    };
-    if action == ToolchainAction::Update
-        && managed_toolchain_is_current(tool_root, &target_packages)
-    {
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!(
-                "Managed MSVC toolchain is already up to date: {}",
-                user_facing_toolchain_label(&target_packages.label())
-            ),
-        );
-        return Ok(MsvcOperationOutcome {
-            kind: "msvc_operation",
-            runtime: MsvcRuntimeKind::Managed,
-            operation: action.operation_kind(),
-            title: action.title().to_string(),
-            status: CommandStatus::Success,
-            output: lines,
-            streamed: false,
-        });
-    }
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
-            "Selected target from cached manifest: {}",
-            target_packages.label()
-        ),
-    );
-    let Some(payloads) = manifest::selected_payloads_from_cached_manifest(
-        &manifest_root,
-        &target_packages,
-        native_host_arch(),
-        &selected_target_arch,
-    ) else {
-        return Err(BackendError::Other(format!(
-            "payload plan is not available yet for {}; refresh the cached manifest first",
-            target_packages.label()
-        )));
-    };
-    for line in ensure_cached_payloads(
-        tool_root,
-        &target_packages,
-        &payloads,
-        proxy,
-        cancel,
-        &mut emit,
-    )
-    .await?
-    {
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_msi_media_metadata(tool_root, &payloads)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in
-        ensure_cached_companion_cabs(tool_root, &target_packages, &payloads, proxy, &mut emit)
-            .await?
-    {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_staged_external_cabs(tool_root, &payloads)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_extracted_msis(tool_root, &payloads, &mut emit)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_extracted_archives(tool_root, &payloads)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_install_image(tool_root, &payloads)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_materialized_toolchain(tool_root, &target_packages)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in cleanup_post_install_cache(tool_root) {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in write_runtime_state(tool_root)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in remove_autoenv_dir(tool_root)? {
-        check_token_cancel(cancel)?;
-        push_stream_line(&mut lines, &mut emit, line);
-    }
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
-            "Selected {} payloads from cached manifest for installation.",
-            payloads.len()
-        ),
-    );
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
-            "Installed latest MSVC toolchain target directly with spoon: {} + {}",
-            target_packages.msvc, target_packages.sdk
-        ),
-    );
-    write_installed_state(tool_root, &target_packages)?;
-    match managed_toolchain_flags_with_request(request).await {
-        Ok(wrapper_flags) => {
-            for line in
-                write_managed_toolchain_wrappers(tool_root, command_profile, &wrapper_flags)?
-            {
-                check_token_cancel(cancel)?;
-                push_stream_line(&mut lines, &mut emit, line);
-            }
-        }
-        Err(err) => {
-            push_stream_line(
-                &mut lines,
-                &mut emit,
-                format!("Skipped managed wrapper generation: {err}"),
-            );
-        }
-    }
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
-            "Managed wrappers are materialized under {}.",
-            paths::shims_root(tool_root).display()
-        ),
-    );
-
-    Ok(MsvcOperationOutcome {
-        kind: "msvc_operation",
-        runtime: MsvcRuntimeKind::Managed,
-        operation: action.operation_kind(),
-        title: action.title().to_string(),
-        status: CommandStatus::Success,
-        output: lines,
-        streamed: false,
-    })
-}
-
-pub async fn install_toolchain_async(tool_root: &Path) -> Result<MsvcOperationOutcome> {
-    let request = MsvcRequest::for_tool_root(tool_root);
-    run_toolchain_action_async(&request, ToolchainAction::Install, None, None).await
-}
-
-pub async fn update_toolchain_async(tool_root: &Path) -> Result<MsvcOperationOutcome> {
-    let request = MsvcRequest::for_tool_root(tool_root);
-    run_toolchain_action_async(&request, ToolchainAction::Update, None, None).await
-}
-
-pub async fn install_toolchain_async_with_context<P>(
-    context: &BackendContext<P>,
-) -> Result<MsvcOperationOutcome> {
-    let request = MsvcRequest::from_context(context);
-    run_toolchain_action_async(&request, ToolchainAction::Install, None, None).await
-}
-
-pub async fn update_toolchain_async_with_context<P>(
-    context: &BackendContext<P>,
-) -> Result<MsvcOperationOutcome> {
-    let request = MsvcRequest::from_context(context);
-    run_toolchain_action_async(&request, ToolchainAction::Update, None, None).await
-}
-
-pub async fn managed_toolchain_flags_with_context<P>(
-    context: &BackendContext<P>,
-) -> Result<ToolchainFlags> {
-    let request = MsvcRequest::from_context(context);
-    managed_toolchain_flags_with_request(&request).await
-}
-
-pub async fn install_toolchain_async_streaming<F>(
-    tool_root: &Path,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::for_tool_root(tool_root);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result = run_toolchain_action_async(
-        &request,
-        ToolchainAction::Install,
-        None,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn update_toolchain_async_streaming<F>(
-    tool_root: &Path,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::for_tool_root(tool_root);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result =
-        run_toolchain_action_async(&request, ToolchainAction::Update, None, Some(&mut callback))
-            .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn install_toolchain_streaming<F>(
-    tool_root: &Path,
-    cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::for_tool_root(tool_root);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result = run_toolchain_action_async(
-        &request,
-        ToolchainAction::Install,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn update_toolchain_streaming<F>(
-    tool_root: &Path,
-    cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::for_tool_root(tool_root);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result = run_toolchain_action_async(
-        &request,
-        ToolchainAction::Update,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn install_toolchain_streaming_with_context<P, F>(
-    context: &BackendContext<P>,
-    cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::from_context(context);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result = run_toolchain_action_async(
-        &request,
-        ToolchainAction::Install,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn update_toolchain_streaming_with_context<P, F>(
-    context: &BackendContext<P>,
-    cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> Result<MsvcOperationOutcome>
-where
-    F: FnMut(BackendEvent),
-{
-    let request = MsvcRequest::from_context(context);
-    let mut callback = emit as &mut dyn FnMut(BackendEvent);
-    let mut result = run_toolchain_action_async(
-        &request,
-        ToolchainAction::Update,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn uninstall_toolchain(tool_root: &Path) -> Result<MsvcOperationOutcome> {
-    let target = msvc_dir(tool_root);
-    let state_root = paths::msvc_state_root(tool_root);
-    let mut lines = vec![format!("> remove MSVC toolchain at {}", target.display())];
-    lines.extend(remove_managed_toolchain_wrappers(tool_root)?);
-
-    if target.exists() {
-        external(
-            fs::remove_dir_all(&target),
-            format!("failed to remove {}", target.display()),
-        )?;
-        lines.push("Removed toolchain directory.".to_string());
-    } else {
-        lines.push("Toolchain directory not present; nothing to remove.".to_string());
-    }
-    if state_root.exists() {
-        external(
-            fs::remove_dir_all(&state_root),
-            format!("failed to remove {}", state_root.display()),
-        )?;
-        lines.push("Removed managed state directory.".to_string());
-    }
-
-    lines.push(format!(
-        "Managed MSVC cache is retained at {}",
-        paths::msvc_cache_root(tool_root).display()
-    ));
-
-    Ok(MsvcOperationOutcome {
-        kind: "msvc_operation",
-        runtime: MsvcRuntimeKind::Managed,
-        operation: MsvcOperationKind::Uninstall,
-        title: "uninstall MSVC Toolchain".to_string(),
-        status: CommandStatus::Success,
-        output: lines,
-        streamed: false,
-    })
-}
-
-pub async fn uninstall_toolchain_with_context<P>(
-    context: &BackendContext<P>,
-) -> Result<MsvcOperationOutcome> {
-    uninstall_toolchain(&context.root).await
 }
 
 #[cfg(test)]
