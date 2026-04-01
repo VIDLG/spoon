@@ -35,7 +35,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
   1. A developer can query MSVC state and inputs from one canonical backend model instead of scattered module-specific records.
   2. MSVC lifecycle behavior is split into focused backend stages instead of large mixed-responsibility flows.
   3. Side effects and persisted state transitions have clear ownership boundaries suitable for future diagnostics and repair.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 8: Shared Backend Contract Hardening
 **Goal**: The backend contracts shared across runtime domains become stronger and more reusable, especially around events, errors, filesystem helpers, and runtime path handling.
@@ -62,7 +62,7 @@ This roadmap continues phase numbering after `v0.5.0` and finishes the broader `
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 6. MSVC Seams and Ownership Completion | 4/4 | Complete | 2026-04-01 |
-| 7. Canonical MSVC State and Lifecycle | 0/0 | Pending | - |
+| 7. Canonical MSVC State and Lifecycle | 0/4 | Planned | - |
 | 8. Shared Backend Contract Hardening | 0/0 | Pending | - |
 | 9. MSVC and Shared Safety Net | 0/0 | Pending | - |
 

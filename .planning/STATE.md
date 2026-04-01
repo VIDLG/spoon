@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Backend Architecture Completion
 status: active
-stopped_at: Phase 6 complete; ready to discuss/plan Phase 7
+stopped_at: Phase 7 planned; ready to execute
 last_updated: "2026-04-01T00:00:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
+  total_plans: 8
   completed_plans: 4
   percent: 25
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Prepare Phase 7 (`Canonical MSVC State and Lifecycle`).
+**Current focus:** Execute Phase 7 (`Canonical MSVC State and Lifecycle`).
 
 ## Current Position
 
-Phase: 06 (msvc-seams-and-ownership-completion) - COMPLETE  
-Plan: 4 of 4  
-Status: Ready to discuss/plan Phase 7  
-Last activity: 2026-04-01 - Phase 6 complete
+Phase: 07 (canonical-msvc-state-and-lifecycle)  
+Plan: 0 of 4  
+Status: Ready to execute  
+Last activity: 2026-04-01 - Phase 7 planned
 
 Progress: [###-------] 25%
 
@@ -45,6 +45,7 @@ Progress: [###-------] 25%
 - Consolidate remaining reusable filesystem helpers into [`fsx.rs`](/d:/projects/spoon/spoon-backend/src/fsx.rs). See [`2026-03-31-consolidate-remaining-fsx-helpers.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-consolidate-remaining-fsx-helpers.md).
 - Tighten the backend error contract. See [`2026-03-31-tighten-backend-error-contract.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-tighten-backend-error-contract.md).
 - Remove hardcoded production paths from backend runtime execution. See [`2026-03-31-remove-hardcoded-production-paths.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-remove-hardcoded-production-paths.md).
+- Audit derive-not-store redundancies in backend state and read models. See [`2026-04-01-audit-derive-not-store-fields.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-audit-derive-not-store-fields.md).
 - Revisit the backend event contract seed when trigger conditions are met. See [`SEED-001-backend-event-contract-hardening.md`](/d:/projects/spoon/.planning/seeds/SEED-001-backend-event-contract-hardening.md).
 - Review backlog phase [`999.1-test-architecture-cleanup`](/d:/projects/spoon/.planning/phases/999.1-test-architecture-cleanup).
 
@@ -56,5 +57,5 @@ Progress: [###-------] 25%
 ## Session Continuity
 
 Last session: 2026-04-01T00:00:00.000Z  
-Stopped at: Phase 6 complete; next step is Phase 7 discussion/planning  
-Resume file: .planning/phases/06-msvc-seams-and-ownership-completion/06-VERIFICATION.md
+Stopped at: Phase 7 planned; next step is execution  
+Resume file: .planning/phases/07-canonical-msvc-state-and-lifecycle/07-01-PLAN.md
