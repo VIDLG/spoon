@@ -1159,6 +1159,15 @@ async fn validate_toolchain_with_request(
         "Kept official validation workspace at {} for inspection.",
         validate_root.display()
     ));
+    write_official_canonical_state(
+        tool_root,
+        super::MsvcOperationKind::Validate,
+        true,
+        None,
+        Some(MsvcValidationStatus::Valid),
+        Some("validated successfully".to_string()),
+    )
+    .await?;
 
     Ok(super::MsvcOperationOutcome {
         kind: "msvc_operation",

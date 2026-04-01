@@ -7,7 +7,17 @@ use common::constants::{CHUNK_STANDARD, PAYLOAD_CHUNK_DELAY_MS, PAYLOAD_STANDARD
 use common::fixtures::spawn_slow_payload_server;
 use common::setup::{create_configured_home, write_test_config};
 use spoon::config;
+use spoon_backend::{RuntimeLayout, msvc as backend_msvc};
 use std::process::Command;
+
+fn read_canonical_msvc_state(tool_root: &std::path::Path) -> Option<backend_msvc::MsvcCanonicalState> {
+    let layout = RuntimeLayout::from_root(tool_root);
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(backend_msvc::read_canonical_state(&layout))
+}
 
 #[test]
 fn msvc_status_lists_managed_and_official_runtime_state() {
@@ -114,6 +124,15 @@ exit /b 0\r\n",
     assert_contains(&stdout, "Installed official MSVC runtime into");
     assert_path_exists(&config::official_msvc_root_from(&tool_root));
     assert_path_exists(&config::official_msvc_state_root_from(&tool_root).join("runtime.json"));
+    let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
+    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert!(canonical.installed);
+    assert_eq!(canonical.version.as_deref(), Some("14.44.35207"));
+    assert_eq!(canonical.sdk_version.as_deref(), Some("10.0.26100.0"));
+    assert_eq!(
+        canonical.last_operation,
+        Some(backend_msvc::MsvcOperationKind::Install)
+    );
 }
 
 #[test]
@@ -162,6 +181,13 @@ exit /b 0\r\n",
     assert_path_missing(&instance_root);
     assert_path_missing(&state_root);
     assert_path_exists(&cache_root);
+    let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
+    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert!(!canonical.installed);
+    assert_eq!(
+        canonical.last_operation,
+        Some(backend_msvc::MsvcOperationKind::Uninstall)
+    );
 }
 
 #[test]
