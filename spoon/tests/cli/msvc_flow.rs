@@ -487,6 +487,17 @@ fn msvc_validate_without_runtime_uses_installed_runtime_set() {
         "Compiled official C++/Win32 validation sample successfully.",
     );
     assert_contains(&stdout, "Ran official validation sample successfully.");
+    let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
+    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert!(canonical.installed);
+    assert_eq!(
+        canonical.last_operation,
+        Some(backend_msvc::MsvcOperationKind::Validate)
+    );
+    assert_eq!(
+        canonical.validation_status,
+        Some(backend_msvc::MsvcValidationStatus::Valid)
+    );
 }
 
 #[test]
