@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 pub mod context;
+mod archive;
 pub mod control_plane;
 mod download;
 mod error;

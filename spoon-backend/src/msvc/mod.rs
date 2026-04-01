@@ -16,7 +16,7 @@ mod status;
 mod validation;
 mod wrappers;
 
-use std::io::{self, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -25,9 +25,8 @@ use fs_err as fs;
 use reqwest::Client;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
-use zip::ZipArchive;
-
 use crate::{
+    archive::extract_zip_archive_sync,
     BackendError, BackendEvent, CancellationToken, ProgressEvent, Result, check_token_cancel,
     download::copy_or_download_to_file, event::progress_kind,
 };
@@ -172,48 +171,6 @@ pub fn runtime_state_path(tool_root: &Path) -> PathBuf {
 
 pub(super) fn manifest_dir(tool_root: &Path) -> PathBuf {
     paths::msvc_manifest_root(tool_root)
-}
-
-fn extract_zip_archive(archive_path: &Path, destination: &Path) -> Result<()> {
-    let file = external(
-        fs::File::open(archive_path),
-        format!("failed to open {}", archive_path.display()),
-    )?;
-    let mut archive = external(
-        ZipArchive::new(file),
-        format!("invalid zip {}", archive_path.display()),
-    )?;
-
-    for index in 0..archive.len() {
-        let mut entry = external(archive.by_index(index), "failed to read zip entry")?;
-        let Some(relative_path) = entry.enclosed_name() else {
-            continue;
-        };
-        let output_path = destination.join(relative_path);
-        if entry.is_dir() {
-            external(
-                fs::create_dir_all(&output_path),
-                format!("failed to create {}", output_path.display()),
-            )?;
-            continue;
-        }
-        if let Some(parent) = output_path.parent() {
-            external(
-                fs::create_dir_all(parent),
-                format!("failed to create {}", parent.display()),
-            )?;
-        }
-        let mut output = external(
-            fs::File::create(&output_path),
-            format!("failed to create {}", output_path.display()),
-        )?;
-        external(
-            io::copy(&mut entry, &mut output),
-            format!("failed to extract {}", output_path.display()),
-        )?;
-    }
-
-    Ok(())
 }
 
 fn payload_cache_dir(tool_root: &Path) -> PathBuf {
@@ -534,7 +491,7 @@ pub(super) fn ensure_extracted_archives(
             fs::create_dir_all(&destination),
             format!("failed to create {}", destination.display()),
         )?;
-        extract_zip_archive(&source, &destination)?;
+        extract_zip_archive_sync(&source, &destination)?;
         external(
             fs::write(&marker, b"ok"),
             format!("failed to write {}", marker.display()),
