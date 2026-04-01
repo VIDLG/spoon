@@ -272,6 +272,63 @@ fn install_toolchain_prefers_cached_manifest_target_over_driver_list() {
 }
 
 #[test]
+fn install_toolchain_does_not_commit_canonical_state_when_payload_hash_is_invalid() {
+    let _lock = env_lock();
+    config::enable_test_mode();
+    let tool_root = temp_dir("install-invalid-hash");
+    let payload_root = temp_dir("install-invalid-hash-payloads");
+    fs::create_dir_all(&payload_root).unwrap();
+    let sdk_payload = payload_root.join("sdk-tools.msi");
+    let sdk_bytes = b"fake sdk payload bytes";
+    fs::write(&sdk_payload, sdk_bytes).unwrap();
+    let sdk_url = format!(
+        "file:///{}",
+        sdk_payload.display().to_string().replace('\\', "/")
+    );
+
+    let manifest_root = msvc_manifest_root(&tool_root).join("vs");
+    fs::create_dir_all(&manifest_root).unwrap();
+    fs::write(
+        manifest_root.join("latest.json"),
+        serde_json::json!({
+            "packages": [
+                {
+                    "id": "Microsoft.VC.14.44.35207.Tools.HostX64.TargetX64.base",
+                    "version": "14.44.35207",
+                    "language": "neutral",
+                    "payloads": []
+                },
+                {
+                    "id": "WindowsSdkPackageB",
+                    "version": "10.0.26100.1",
+                    "language": "en-US",
+                    "payloads": [
+                        {
+                            "url": sdk_url,
+                            "fileName": "Installers\\Windows SDK for Windows Store Apps Tools-x86_en-us.msi",
+                            "sha256": "deadbeef"
+                        }
+                    ]
+                }
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let err = block_on(install_toolchain_async(&tool_root)).expect_err("install should fail");
+    assert!(
+        err.to_string().contains("invalid payload sha256")
+            || err.to_string().contains("invalid package"),
+        "{err:#}"
+    );
+    assert!(
+        read_canonical_state_for_test(&tool_root).is_none(),
+        "failed install must not leave canonical state behind"
+    );
+}
+
+#[test]
 fn install_toolchain_caches_selected_payload_archives() {
     let _lock = env_lock();
     config::enable_test_mode();
