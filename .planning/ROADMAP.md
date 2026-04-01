@@ -25,7 +25,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 **Success Criteria** (what must be TRUE):
   1. Active Scoop runtime logic no longer relies on stale JSON-era package-state or bucket-registry concepts except for explicit legacy detection/repair surfaces.
   2. Layout/path helpers inside the Scoop domain better reflect the current control-plane reality.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 11: Scoop Runtime Host and Helper Consolidation
 **Goal**: simplify the Scoop backend domain by reducing stale helper layers, duplicated host seams, and ambiguous runtime responsibilities.
@@ -58,7 +58,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 10. Scoop Legacy Path and State Cleanup | 0/0 | Pending | - |
+| 10. Scoop Legacy Path and State Cleanup | 0/4 | Planned | - |
 | 11. Scoop Runtime Host and Helper Consolidation | 0/0 | Pending | - |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 0/0 | Pending | - |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
