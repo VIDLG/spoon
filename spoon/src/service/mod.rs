@@ -17,7 +17,8 @@ pub use cache::{
 };
 pub use spoon_backend::{
     BackendContext, BackendError, BackendEvent, CancellationToken, CommandStatus, FinishEvent,
-    ProgressEvent, ProgressState, ProgressUnit, Result, SystemPort,
+    NoticeEvent, NoticeLevel, ProgressEvent, ProgressKind, ProgressState, ProgressUnit, Result,
+    StageEvent, SystemPort,
 };
 use spoon_backend::scoop::ScoopIntegrationPort;
 
@@ -323,13 +324,14 @@ pub(crate) fn resolved_pip_mirror_url_for_display(policy_value: &str) -> String 
     crate::packages::python::resolved_pip_mirror_url_for_display(policy_value)
 }
 
-fn format_backend_progress(progress: &ProgressEvent) -> String {
-    if let Some(stage) = progress.stage {
-        return match progress.state {
-            ProgressState::Completed => format!("Stage complete: {}", stage.as_str()),
-            ProgressState::Running => format!("Stage: {}", stage.as_str()),
-        };
+fn format_backend_stage(stage: &StageEvent) -> String {
+    match stage.state {
+        ProgressState::Completed => format!("Stage complete: {}", stage.stage.as_str()),
+        ProgressState::Running => format!("Stage: {}", stage.stage.as_str()),
     }
+}
+
+fn format_backend_progress(progress: &ProgressEvent) -> String {
     match progress.unit {
         ProgressUnit::Bytes => match (progress.current, progress.total) {
             (Some(current), Some(total)) => {
@@ -364,11 +366,20 @@ fn format_backend_progress(progress: &ProgressEvent) -> String {
     }
 }
 
+fn format_backend_notice(notice: &NoticeEvent) -> String {
+    match notice.level {
+        NoticeLevel::Info => notice.message.clone(),
+        NoticeLevel::Warning => format!("Warning: {}", notice.message),
+    }
+}
+
 pub fn stream_chunk_from_backend_event(event: BackendEvent) -> Option<StreamChunk> {
     match event {
+        BackendEvent::Stage(stage) => Some(StreamChunk::ReplaceLast(format_backend_stage(&stage))),
         BackendEvent::Progress(progress) => {
             Some(StreamChunk::ReplaceLast(format_backend_progress(&progress)))
         }
+        BackendEvent::Notice(notice) => Some(StreamChunk::Append(format_backend_notice(&notice))),
         BackendEvent::Finished(finish) => match finish.message {
             Some(message) => Some(StreamChunk::Append(message)),
             None if matches!(finish.status, CommandStatus::Success) => None,

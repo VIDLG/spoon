@@ -83,8 +83,9 @@ fn collect_stages(events: &[BackendEvent]) -> Vec<LifecycleStage> {
     events
         .iter()
         .filter_map(|event| match event {
-            BackendEvent::Progress(progress) => progress.stage,
+            BackendEvent::Stage(stage) => Some(stage.stage),
             BackendEvent::Finished(_) => None,
+            BackendEvent::Progress(_) | BackendEvent::Notice(_) => None,
         })
         .collect()
 }

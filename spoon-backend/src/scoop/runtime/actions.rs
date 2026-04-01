@@ -11,7 +11,7 @@ use crate::{
 };
 use crate::control_plane::{acquire_lock, begin_operation, complete_operation, release_lock, set_operation_stage};
 use crate::control_plane::sqlite::db_path_for_layout;
-use crate::event::{LifecycleStage, ProgressEvent, ProgressState, progress_kind};
+use crate::event::{LifecycleStage, StageEvent};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{
     InstalledPackageState, read_installed_state,
@@ -50,12 +50,12 @@ use super::{
 };
 
 fn emit_stage(emit: &mut dyn FnMut(BackendEvent), stage: LifecycleStage) {
-    let mut event =
-        ProgressEvent::activity(progress_kind::LIFECYCLE, stage.as_str()).with_stage(stage);
-    if matches!(stage, LifecycleStage::Completed) {
-        event = event.with_state(ProgressState::Completed);
-    }
-    emit(BackendEvent::Progress(event));
+    let event = if matches!(stage, LifecycleStage::Completed) {
+        StageEvent::completed(stage)
+    } else {
+        StageEvent::started(stage)
+    };
+    emit(BackendEvent::Stage(event));
 }
 
 async fn effective_runtime_plan(

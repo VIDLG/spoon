@@ -1,7 +1,8 @@
 //! Tests for event emission and progress tracking.
 
 use crate::{
-    BackendEvent, CommandStatus, EventSink, FinishEvent, ProgressEvent, ProgressState, ProgressUnit,
+    BackendEvent, CommandStatus, EventSink, FinishEvent, NoticeEvent, NoticeLevel, ProgressEvent,
+    ProgressKind, ProgressUnit, StageEvent, ProgressState,
 };
 
 #[test]
@@ -22,20 +23,20 @@ fn finish_event_all_variants() {
 #[test]
 fn progress_event_all_constructors() {
     // Bytes progress
-    let event = ProgressEvent::bytes("download", "file.zip", 1024, Some(2048));
-    assert_eq!(event.kind, "download");
+    let event = ProgressEvent::bytes(ProgressKind::Download, "file.zip", 1024, Some(2048));
+    assert_eq!(event.kind, ProgressKind::Download);
     assert_eq!(event.unit, ProgressUnit::Bytes);
 
     // Items progress
-    let event = ProgressEvent::items("extract", "files", 5, 10);
+    let event = ProgressEvent::items(ProgressKind::Extract, "files", 5, 10);
     assert_eq!(event.unit, ProgressUnit::Items);
 
     // Steps progress
-    let event = ProgressEvent::steps("build", "compiling", 2, 4);
+    let event = ProgressEvent::steps(ProgressKind::Work, "compiling", 2, 4);
     assert_eq!(event.unit, ProgressUnit::Steps);
 
     // Activity (indeterminate) progress
-    let event = ProgressEvent::activity("cache", "warming up");
+    let event = ProgressEvent::activity(ProgressKind::Cache, "warming up");
     assert_eq!(event.unit, ProgressUnit::Unknown);
     assert_eq!(event.current, None);
     assert_eq!(event.total, None);
@@ -43,12 +44,21 @@ fn progress_event_all_constructors() {
 
 #[test]
 fn progress_event_with_modifiers() {
-    let event = ProgressEvent::bytes("download", "file.zip", 1024, Some(2048))
-        .with_id("download-123")
-        .with_state(ProgressState::Completed);
+    let event =
+        ProgressEvent::bytes(ProgressKind::Download, "file.zip", 1024, Some(2048)).with_id("download-123");
 
     assert_eq!(event.id, Some("download-123".to_string()));
-    assert_eq!(event.state, ProgressState::Completed);
+}
+
+#[test]
+fn stage_and_notice_events_are_constructible() {
+    let stage = StageEvent::started(crate::LifecycleStage::Planned).with_id("op-1");
+    assert_eq!(stage.id.as_deref(), Some("op-1"));
+    assert_eq!(stage.state, ProgressState::Running);
+
+    let notice = NoticeEvent::warning("careful").with_code("warning.demo");
+    assert_eq!(notice.level, NoticeLevel::Warning);
+    assert_eq!(notice.code.as_deref(), Some("warning.demo"));
 }
 
 #[test]

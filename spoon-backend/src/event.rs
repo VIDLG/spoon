@@ -4,16 +4,19 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::CommandStatus;
 
 pub mod progress_kind {
-    pub const GIT: &str = "git";
-    pub const DOWNLOAD: &str = "download";
-    pub const CACHE: &str = "cache";
-    pub const EXTRACT: &str = "extract";
-    pub const LIFECYCLE: &str = "lifecycle";
+    use super::ProgressKind;
+
+    pub const GIT: ProgressKind = ProgressKind::Git;
+    pub const DOWNLOAD: ProgressKind = ProgressKind::Download;
+    pub const CACHE: ProgressKind = ProgressKind::Cache;
+    pub const EXTRACT: ProgressKind = ProgressKind::Extract;
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub enum BackendEvent {
+    Stage(StageEvent),
     Progress(ProgressEvent),
+    Notice(NoticeEvent),
     Finished(FinishEvent),
 }
 
@@ -53,11 +56,16 @@ impl<'a> EventSink<'a> {
 pub struct FinishEvent {
     pub status: CommandStatus,
     pub message: Option<String>,
+    pub code: Option<String>,
 }
 
 impl FinishEvent {
     pub fn new(status: CommandStatus, message: Option<String>) -> Self {
-        Self { status, message }
+        Self {
+            status,
+            message,
+            code: None,
+        }
     }
 
     pub fn success(message: Option<String>) -> Self {
@@ -75,14 +83,57 @@ impl FinishEvent {
     pub fn blocked(message: impl Into<String>) -> Self {
         Self::new(CommandStatus::Blocked, Some(message.into()))
     }
+
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.code = Some(code.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StageEvent {
+    pub id: Option<String>,
+    pub stage: LifecycleStage,
+    pub state: ProgressState,
+}
+
+impl StageEvent {
+    pub fn new(stage: LifecycleStage, state: ProgressState) -> Self {
+        Self {
+            id: None,
+            stage,
+            state,
+        }
+    }
+
+    pub fn started(stage: LifecycleStage) -> Self {
+        Self::new(stage, ProgressState::Running)
+    }
+
+    pub fn completed(stage: LifecycleStage) -> Self {
+        Self::new(stage, ProgressState::Completed)
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgressKind {
+    Git,
+    Download,
+    Cache,
+    Extract,
+    Work,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProgressEvent {
     pub id: Option<String>,
-    pub kind: &'static str,
-    pub stage: Option<LifecycleStage>,
-    pub state: ProgressState,
+    pub kind: ProgressKind,
     pub label: String,
     pub current: Option<u64>,
     pub total: Option<u64>,
@@ -91,7 +142,7 @@ pub struct ProgressEvent {
 
 impl ProgressEvent {
     pub fn new(
-        kind: &'static str,
+        kind: ProgressKind,
         label: impl Into<String>,
         current: Option<u64>,
         total: Option<u64>,
@@ -100,8 +151,6 @@ impl ProgressEvent {
         Self {
             id: None,
             kind,
-            stage: None,
-            state: ProgressState::Running,
             label: label.into(),
             current,
             total,
@@ -110,7 +159,7 @@ impl ProgressEvent {
     }
 
     pub fn bytes(
-        kind: &'static str,
+        kind: ProgressKind,
         label: impl Into<String>,
         current: u64,
         total: Option<u64>,
@@ -118,15 +167,15 @@ impl ProgressEvent {
         Self::new(kind, label, Some(current), total, ProgressUnit::Bytes)
     }
 
-    pub fn items(kind: &'static str, label: impl Into<String>, current: u64, total: u64) -> Self {
+    pub fn items(kind: ProgressKind, label: impl Into<String>, current: u64, total: u64) -> Self {
         Self::new(kind, label, Some(current), Some(total), ProgressUnit::Items)
     }
 
-    pub fn steps(kind: &'static str, label: impl Into<String>, current: u64, total: u64) -> Self {
+    pub fn steps(kind: ProgressKind, label: impl Into<String>, current: u64, total: u64) -> Self {
         Self::new(kind, label, Some(current), Some(total), ProgressUnit::Steps)
     }
 
-    pub fn activity(kind: &'static str, label: impl Into<String>) -> Self {
+    pub fn activity(kind: ProgressKind, label: impl Into<String>) -> Self {
         Self::new(kind, label, None, None, ProgressUnit::Unknown)
     }
 
@@ -134,14 +183,34 @@ impl ProgressEvent {
         self.id = Some(id.into());
         self
     }
+}
 
-    pub fn with_stage(mut self, stage: LifecycleStage) -> Self {
-        self.stage = Some(stage);
-        self
+#[derive(Debug, Clone, Serialize)]
+pub struct NoticeEvent {
+    pub level: NoticeLevel,
+    pub message: String,
+    pub code: Option<String>,
+}
+
+impl NoticeEvent {
+    pub fn new(level: NoticeLevel, message: impl Into<String>) -> Self {
+        Self {
+            level,
+            message: message.into(),
+            code: None,
+        }
     }
 
-    pub fn with_state(mut self, state: ProgressState) -> Self {
-        self.state = state;
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(NoticeLevel::Info, message)
+    }
+
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self::new(NoticeLevel::Warning, message)
+    }
+
+    pub fn with_code(mut self, code: impl Into<String>) -> Self {
+        self.code = Some(code.into());
         self
     }
 }
@@ -150,6 +219,10 @@ impl ProgressEvent {
 #[serde(rename_all = "snake_case")]
 pub enum LifecycleStage {
     Planned,
+    Detecting,
+    Resolving,
+    Executing,
+    Validating,
     Acquiring,
     Materializing,
     PreparingHooks,
@@ -171,6 +244,10 @@ impl LifecycleStage {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Planned => "planned",
+            Self::Detecting => "detecting",
+            Self::Resolving => "resolving",
+            Self::Executing => "executing",
+            Self::Validating => "validating",
             Self::Acquiring => "acquiring",
             Self::Materializing => "materializing",
             Self::PreparingHooks => "preparing_hooks",
@@ -202,4 +279,11 @@ pub enum ProgressUnit {
 pub enum ProgressState {
     Running,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoticeLevel {
+    Info,
+    Warning,
 }

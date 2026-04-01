@@ -5,12 +5,12 @@ use common::assertions::assert_ok;
 use common::cli::run_in_home;
 use common::setup::create_configured_home;
 use spoon::service::{
-    BackendEvent, CommandStatus, FinishEvent, ProgressEvent, ProgressState, StreamChunk,
+    BackendEvent, CommandStatus, FinishEvent, NoticeEvent, StageEvent, StreamChunk,
     stream_chunk_from_backend_event,
 };
 use spoon_backend::layout::RuntimeLayout;
 use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
-use spoon_backend::LifecycleStage;
+use spoon_backend::{LifecycleStage};
 use serde_json::Value;
 
 fn parse_json(stdout: &str) -> Value {
@@ -86,15 +86,8 @@ fn json_status_uses_backend_read_models() {
 
 #[test]
 fn backend_stage_events_drive_app_stream_translation() {
-    let running = BackendEvent::Progress(
-        ProgressEvent::activity("lifecycle", "planned")
-            .with_stage(LifecycleStage::Planned),
-    );
-    let completed = BackendEvent::Progress(
-        ProgressEvent::activity("lifecycle", "completed")
-            .with_stage(LifecycleStage::Completed)
-            .with_state(ProgressState::Completed),
-    );
+    let running = BackendEvent::Stage(StageEvent::started(LifecycleStage::Planned));
+    let completed = BackendEvent::Stage(StageEvent::completed(LifecycleStage::Completed));
 
     let running_chunk = stream_chunk_from_backend_event(running);
     let completed_chunk = stream_chunk_from_backend_event(completed);
@@ -142,5 +135,22 @@ fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementati
     match explicit {
         Some(StreamChunk::Append(line)) => assert_eq!(line, "hook failed before commit"),
         other => panic!("unexpected explicit failure chunk: {:?}", other),
+    }
+}
+
+#[test]
+fn backend_notice_events_append_visible_messages() {
+    let info = stream_chunk_from_backend_event(BackendEvent::Notice(NoticeEvent::info("hello")));
+    let warning = stream_chunk_from_backend_event(BackendEvent::Notice(NoticeEvent::warning(
+        "careful now",
+    )));
+
+    match info {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "hello"),
+        other => panic!("unexpected info notice chunk: {:?}", other),
+    }
+    match warning {
+        Some(StreamChunk::Append(line)) => assert_eq!(line, "Warning: careful now"),
+        other => panic!("unexpected warning notice chunk: {:?}", other),
     }
 }
