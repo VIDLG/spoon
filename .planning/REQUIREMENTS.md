@@ -21,9 +21,9 @@
 
 ### Safety and Verification
 
-- [ ] **TEST-04**: Focused backend tests cover MSVC lifecycle regressions and shared backend contract changes close to the logic that changed.
-- [ ] **TEST-05**: App-shell tests for MSVC and shared output remain translation/orchestration focused and do not re-implement backend semantics.
-- [ ] **TEST-06**: Real or ignored smoke coverage stays narrow but still exercises the highest-value MSVC/shared backend integration seams.
+- [x] **TEST-04**: Focused backend tests cover MSVC lifecycle regressions and shared backend contract changes close to the logic that changed.
+- [x] **TEST-05**: App-shell tests for MSVC and shared output remain translation/orchestration focused and do not re-implement backend semantics.
+- [x] **TEST-06**: Real or ignored smoke coverage stays narrow but still exercises the highest-value MSVC/shared backend integration seams.
 
 ## v2 Requirements
 
@@ -53,9 +53,9 @@
 | BECT-02 | Phase 8 | Complete |
 | BECT-03 | Phase 8 | Complete |
 | BECT-04 | Phase 8 | Complete |
-| TEST-04 | Phase 9 | Pending |
-| TEST-05 | Phase 9 | Pending |
-| TEST-06 | Phase 9 | Pending |
+| TEST-04 | Phase 9 | Complete |
+| TEST-05 | Phase 9 | Complete |
+| TEST-06 | Phase 9 | Complete |
 
 **Coverage:**
 - v1 requirements: 11 total
@@ -64,4 +64,4 @@
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-04-01 after Phase 8 completion*
+*Last updated: 2026-04-01 after Phase 9 completion*
