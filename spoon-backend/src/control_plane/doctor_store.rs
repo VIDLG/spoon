@@ -14,29 +14,6 @@ pub struct DoctorIssueRecord {
     pub resolved: bool,
 }
 
-pub async fn replace_legacy_state_issues(
-    layout: &RuntimeLayout,
-    descriptions: &[String],
-) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
-    let descriptions = descriptions.to_vec();
-    db.call_write(move |conn| {
-        conn.execute(
-            "DELETE FROM doctor_issues WHERE category = 'legacy_state'",
-            [],
-        )?;
-        for description in descriptions {
-            conn.execute(
-                "INSERT INTO doctor_issues (severity, category, description, resolved)
-                 VALUES ('warning', 'legacy_state', ?1, 0)",
-                params![description],
-            )?;
-        }
-        Ok(())
-    })
-    .await
-}
-
 pub async fn sync_failed_lifecycle_issues(layout: &RuntimeLayout) -> Result<()> {
     let db = ControlPlaneDb::open_for_layout(layout).await?;
     db.call_write(move |conn| {

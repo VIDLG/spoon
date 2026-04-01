@@ -6,7 +6,6 @@ mod info;
 pub(crate) mod lifecycle;
 pub mod manifest;
 pub mod ports;
-pub mod paths;
 pub mod planner;
 mod projection;
 mod query;
@@ -43,12 +42,6 @@ pub use manifest::{
     ScoopManifest, ScoopStringField, Shortcut, StringOrArray, SuggestMap, latest_version,
     latest_version_async, load_manifest, load_manifest_sync, load_package_manifest,
     load_package_manifest_sync, parse_manifest, resolve_package_manifest, search_manifests_async,
-};
-pub use paths::{
-    package_app_root, package_current_root, package_persist_root, package_state_path,
-    package_version_root, packages_state_root, scoop_bucket_registry_path, scoop_bucket_root,
-    scoop_buckets_root, scoop_cache_root, scoop_package_state_root, scoop_root, scoop_state_root,
-    shims_root,
 };
 pub use planner::{ScoopPackageAction, ScoopPackagePlan, infer_tool_root, plan_package_action};
 pub use ports::{ScoopIntegrationPort, SupplementalShimSpec};

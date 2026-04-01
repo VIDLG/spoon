@@ -32,10 +32,6 @@ use super::super::lifecycle::reapply::reapply as reapply_lifecycle;
 use super::super::lifecycle::state::{commit_installed_state, remove_installed_state as remove_lifecycle_state};
 use super::super::lifecycle::surface::{apply_install_surface, remove_surface};
 use super::super::lifecycle::uninstall::uninstall as uninstall_lifecycle;
-use super::super::paths;
-use super::super::paths::{
-    package_app_root, package_current_root, package_persist_root, package_version_root,
-};
 use super::super::planner::{ScoopPackageAction, ScoopPackagePlan};
 use super::execution::ContextRuntimeHost;
 use super::hooks::{HookContext, execute_hook_scripts};
@@ -126,7 +122,7 @@ async fn install_package_with_dependencies(
     let resolved = &planned.resolved;
     let source = &planned.source;
     let existing_state = read_installed_state(&layout, &plan.package_name).await;
-    let current_root = package_current_root(tool_root, &plan.package_name);
+    let current_root = layout.scoop.package_current_root(&plan.package_name);
     if let Some(existing) = &existing_state
         && current_root.exists()
         && existing.version == source.version
@@ -144,7 +140,7 @@ async fn install_package_with_dependencies(
     let hook_context = HookContext {
         app: plan.package_name.clone(),
         bucket: Some(resolved.bucket.name.clone()),
-        buckets_dir: paths::scoop_root(tool_root).join("buckets"),
+        buckets_dir: layout.scoop.buckets_root.clone(),
     };
     for dependency in &source.depends {
         let dependency_name = dependency_lookup_key(dependency);
@@ -154,7 +150,7 @@ async fn install_package_with_dependencies(
         if read_installed_state(&layout, &dependency_name)
             .await
             .is_some()
-            || package_current_root(tool_root, &dependency_name).exists()
+            || layout.scoop.package_current_root(&dependency_name).exists()
         {
             tracing::info!("Dependency '{}' is already installed.", dependency_name);
             continue;
@@ -185,17 +181,19 @@ async fn install_package_with_dependencies(
     }
     if let Some(previous) = existing_state {
         sync_persist_entries(
-            &package_current_root(tool_root, &plan.package_name),
-            &package_persist_root(tool_root, &plan.package_name),
+            &layout.scoop.package_current_root(&plan.package_name),
+            &layout.scoop.package_persist_root(&plan.package_name),
             &previous.persist,
             emit,
         )
         .await?;
         remove_surface(tool_root, &previous.bins, &previous.shortcuts, host).await?;
     }
-    let version_root = package_version_root(tool_root, &plan.package_name, &source.version);
-    let persist_root = package_persist_root(tool_root, &plan.package_name);
-    let shims_root = paths::shims_root(tool_root);
+    let version_root = layout
+        .scoop
+        .package_version_root(&plan.package_name, &source.version);
+    let persist_root = layout.scoop.package_persist_root(&plan.package_name);
+    let shims_root = layout.shims.clone();
     let archive_paths = acquire_payloads(
         tool_root,
         &plan.package_name,
@@ -396,12 +394,12 @@ pub(crate) async fn uninstall_package(
 ) -> Result<Vec<String>> {
     let state = read_installed_state(layout, package_name).await;
     if let Some(state) = &state {
-        let current_root = package_current_root(tool_root, package_name);
-        let persist_root = package_persist_root(tool_root, package_name);
+        let current_root = layout.scoop.package_current_root(package_name);
+        let persist_root = layout.scoop.package_persist_root(package_name);
         let hook_context = HookContext {
             app: package_name.to_string(),
             bucket: Some(state.bucket.clone()),
-            buckets_dir: paths::scoop_root(tool_root).join("buckets"),
+            buckets_dir: layout.scoop.buckets_root.clone(),
         };
         set_operation_stage(layout, operation_id, LifecycleStage::PreUninstallHooks).await?;
         emit_stage(emit, LifecycleStage::PreUninstallHooks);
@@ -439,7 +437,7 @@ pub(crate) async fn uninstall_package(
         emit_stage(emit, LifecycleStage::SurfaceRemoving);
         remove_surface(tool_root, &state.bins, &state.shortcuts, host).await?;
     }
-    let package_root = package_app_root(tool_root, package_name);
+    let package_root = layout.scoop.package_app_root(package_name);
     if package_root.exists() {
         fs::remove_dir_all(&package_root).await.map_err(|err| {
             BackendError::Other(format!(
@@ -452,12 +450,12 @@ pub(crate) async fn uninstall_package(
     emit_stage(emit, LifecycleStage::StateRemoving);
     remove_lifecycle_state(layout, package_name).await?;
     if let Some(state) = &state {
-        let current_root = package_current_root(tool_root, package_name);
-        let persist_root = package_persist_root(tool_root, package_name);
+        let current_root = layout.scoop.package_current_root(package_name);
+        let persist_root = layout.scoop.package_persist_root(package_name);
         let hook_context = HookContext {
             app: package_name.to_string(),
             bucket: Some(state.bucket.clone()),
-            buckets_dir: paths::scoop_root(tool_root).join("buckets"),
+            buckets_dir: layout.scoop.buckets_root.clone(),
         };
         set_operation_stage(layout, operation_id, LifecycleStage::PostUninstallHooks).await?;
         emit_stage(emit, LifecycleStage::PostUninstallHooks);

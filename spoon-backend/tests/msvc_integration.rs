@@ -2,7 +2,7 @@ use spoon_backend::msvc::{
     ToolchainTarget, msvc_root, msvc_state_root, msvc_toolchain_root, status,
     write_installed_toolchain_target,
 };
-use spoon_backend::scoop::shims_root;
+use spoon_backend::layout::RuntimeLayout;
 
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     tokio::runtime::Builder::new_current_thread()
@@ -29,7 +29,7 @@ fn msvc_status_reports_managed_install_with_runtime_state() {
         spoon_backend::msvc::runtime_state_path(&root),
         serde_json::json!({
             "toolchain_root": msvc_toolchain_root(&root),
-            "wrappers_root": shims_root(&root),
+            "wrappers_root": RuntimeLayout::from_root(&root).shims,
             "runtime": "managed"
         })
         .to_string(),
@@ -43,8 +43,12 @@ fn msvc_status_reports_managed_install_with_runtime_state() {
         },
     )
     .unwrap();
-    std::fs::create_dir_all(shims_root(&root)).unwrap();
-    std::fs::write(shims_root(&root).join("spoon-cl.cmd"), "@echo off").unwrap();
+    std::fs::create_dir_all(RuntimeLayout::from_root(&root).shims.clone()).unwrap();
+    std::fs::write(
+        RuntimeLayout::from_root(&root).shims.join("spoon-cl.cmd"),
+        "@echo off",
+    )
+    .unwrap();
 
     let value = serde_json::to_value(block_on(status(&root))).unwrap();
     assert_eq!(value["kind"], "msvc_status");

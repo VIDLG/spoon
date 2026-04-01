@@ -5,10 +5,9 @@ use tokio::fs;
 
 use crate::archive::extract_zip_archive_sync;
 use crate::fsx;
+use crate::layout::RuntimeLayout;
 use crate::{BackendError, BackendEvent, Result};
 use crate::platform::msiexec_path;
-
-use super::paths;
 use super::runtime::SelectedPackageSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,13 +165,15 @@ fn extract_7z_archive_with_helper_sync(
 }
 
 pub fn helper_7z_candidates(tool_root: &Path) -> Vec<PathBuf> {
+    let layout = RuntimeLayout::from_root(tool_root);
     vec![
-        paths::scoop_root(tool_root)
-            .join("apps")
+        layout
+            .scoop
+            .apps_root
             .join("7zip")
             .join("current")
             .join("7z.exe"),
-        paths::shims_root(tool_root).join("7z.cmd"),
+        layout.shims.join("7z.cmd"),
     ]
 }
 

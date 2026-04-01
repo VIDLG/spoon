@@ -11,8 +11,6 @@ use crate::layout::RuntimeLayout;
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::manifest;
-use super::super::paths;
-use super::super::paths::{package_current_root, package_persist_root};
 use super::super::ports::ScoopIntegrationPort;
 use super::source::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
 use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost};
@@ -272,7 +270,7 @@ pub async fn reapply_package_command_surface_streaming_with_host(
             package_name
         )]);
     };
-    let current_root = package_current_root(tool_root, package_name);
+    let current_root = layout.scoop.package_current_root(package_name);
     if !current_root.exists() {
         return Ok(vec![format!(
             "Skipped command-surface reapply for '{}': current install root was not found.",
@@ -285,8 +283,8 @@ pub async fn reapply_package_command_surface_streaming_with_host(
     let manifest = load_manifest_value(&resolved.manifest_path).await?;
     let source = parse_selected_source(&manifest)?;
     remove_shims(tool_root, &state.bins).await?;
-    let shims_root = paths::shims_root(tool_root);
-    let persist_root = package_persist_root(tool_root, package_name);
+    let shims_root = layout.shims.clone();
+    let persist_root = layout.scoop.package_persist_root(package_name);
     let aliases = write_shims(
         package_name,
         &shims_root,
@@ -462,7 +460,7 @@ pub(crate) async fn write_shortcuts(
 }
 
 pub async fn remove_shims(tool_root: &Path, aliases: &[String]) -> Result<()> {
-    let shims_root = paths::shims_root(tool_root);
+    let shims_root = RuntimeLayout::from_root(tool_root).shims;
     for alias in aliases {
         let path = shims_root.join(format!("{alias}.cmd"));
         if path.exists() {

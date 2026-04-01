@@ -2,7 +2,7 @@
 
 use crate::control_plane::{
     ControlPlaneDb, acquire_lock, begin_operation, complete_operation, list_doctor_issues,
-    release_lock, replace_legacy_state_issues, set_operation_stage,
+    release_lock, set_operation_stage,
 };
 use crate::event::LifecycleStage;
 use crate::layout::RuntimeLayout;
@@ -107,13 +107,8 @@ async fn sqlite_store_facade_hides_driver_details() {
         .await
         .expect("release lock");
 
-    replace_legacy_state_issues(&layout, &[String::from("legacy issue found")])
-        .await
-        .expect("replace issues");
     let issues = list_doctor_issues(&layout).await.expect("list issues");
-    assert_eq!(issues.len(), 1);
-    assert_eq!(issues[0].category, "legacy_state");
-    assert_eq!(issues[0].description, "legacy issue found");
+    assert!(issues.is_empty(), "fresh control plane should have no doctor issues");
 }
 
 #[tokio::test]

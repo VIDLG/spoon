@@ -2,7 +2,6 @@ use std::path::Path;
 
 use super::buckets;
 use super::manifest::{self, ScoopManifest};
-use super::paths;
 use super::state::InstalledPackageState;
 use crate::layout::RuntimeLayout;
 use serde::Serialize;
@@ -90,11 +89,9 @@ async fn search_manifests_local_async(
 ) -> Vec<(String, String, ScoopManifest)> {
     let query = query.trim().to_ascii_lowercase();
     let mut matches = Vec::new();
+    let layout = RuntimeLayout::from_root(tool_root);
     for bucket in buckets::load_buckets_from_registry(tool_root).await {
-        let bucket_root = paths::scoop_root(tool_root)
-            .join("buckets")
-            .join(&bucket.name)
-            .join("bucket");
+        let bucket_root = layout.scoop.bucket_root(&bucket.name).join("bucket");
         let Ok(mut entries) = tokio::fs::read_dir(&bucket_root).await else {
             continue;
         };
@@ -127,15 +124,14 @@ async fn search_manifests_local_async(
 
 pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
     let layout = RuntimeLayout::from_root(tool_root);
-    let scoop_root = paths::scoop_root(tool_root);
     let buckets = buckets::load_buckets_from_registry(tool_root).await;
     let summaries = super::state::list_installed_summaries(&layout).await;
     ScoopStatus {
         kind: "scoop_status",
         success: true,
         runtime: ScoopRuntimeStatus {
-            root: scoop_root.display().to_string(),
-            shims: paths::shims_root(tool_root).display().to_string(),
+            root: layout.scoop.root.display().to_string(),
+            shims: layout.shims.display().to_string(),
             bucket_count: buckets.len(),
             installed_package_count: summaries.len(),
         },
@@ -149,10 +145,10 @@ pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
             .collect(),
         installed_packages: summaries,
         paths: ScoopPaths {
-            apps: scoop_root.join("apps").display().to_string(),
-            cache: scoop_root.join("cache").display().to_string(),
-            persist: scoop_root.join("persist").display().to_string(),
-            state: paths::scoop_state_root(tool_root).display().to_string(),
+            apps: layout.scoop.apps_root.display().to_string(),
+            cache: layout.scoop.cache_root.display().to_string(),
+            persist: layout.scoop.persist_root.display().to_string(),
+            state: layout.scoop.state_root.display().to_string(),
         },
     }
 }

@@ -115,39 +115,10 @@ pub fn msvc_domain_root_from(tool_root: &Path) -> PathBuf {
     tool_root.join("msvc")
 }
 
-// Deprecated: use RuntimeLayout::from_root(root).scoop.root instead (per D-10, D-11)
-#[deprecated]
-pub fn scoop_root_from(tool_root: &Path) -> PathBuf {
-    tool_root.join("scoop")
-}
-
 // Deprecated: use RuntimeLayout::from_root(root).shims instead (per D-10, D-11)
 #[deprecated]
 pub fn shims_root_from(tool_root: &Path) -> PathBuf {
     tool_root.join("shims")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).scoop.state_root instead (per D-10, D-11)
-#[deprecated]
-pub fn scoop_state_root_from(tool_root: &Path) -> PathBuf {
-    scoop_root_from(tool_root).join("state")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).scoop.bucket_registry_path instead (per D-10, D-11)
-#[deprecated]
-pub fn scoop_bucket_registry_path_from(tool_root: &Path) -> PathBuf {
-    scoop_state_root_from(tool_root).join("buckets.json")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).scoop.apps_root.join("git").join("current").join("usr").join("bin") instead (per D-10, D-11)
-#[deprecated]
-pub fn scoop_git_usr_bin_from(tool_root: &Path) -> PathBuf {
-    scoop_root_from(tool_root)
-        .join("apps")
-        .join("git")
-        .join("current")
-        .join("usr")
-        .join("bin")
 }
 
 // Deprecated: use RuntimeLayout::from_root(root).msvc.managed.root instead (per D-10, D-11)

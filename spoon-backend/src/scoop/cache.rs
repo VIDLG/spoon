@@ -4,9 +4,8 @@ use std::path::Path;
 use tokio::fs as tokio_fs;
 
 use crate::fsx::directory_size;
+use crate::layout::RuntimeLayout;
 use crate::{BackendError, Result};
-
-use super::paths;
 
 fn recreate_empty_dir(path: &Path) -> Result<()> {
     if path.exists() {
@@ -33,7 +32,7 @@ pub fn clear(cache_root: &Path) -> Result<Vec<String>> {
 }
 
 pub async fn package_cache_size(tool_root: &Path, package_name: &str) -> Result<u64> {
-    let cache_root = paths::scoop_root(tool_root).join("cache");
+    let cache_root = RuntimeLayout::from_root(tool_root).scoop.cache_root;
     let mut entries = match tokio_fs::read_dir(&cache_root).await {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(0),

@@ -3,8 +3,9 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use spoon_backend::{
+    RuntimeLayout,
     msvc::{clear_cache as clear_msvc_cache, msvc_cache_root, prune_cache as prune_msvc_cache},
-    scoop::{clear_cache as clear_scoop_cache, prune_cache as prune_scoop_cache, scoop_cache_root},
+    scoop::{clear_cache as clear_scoop_cache, prune_cache as prune_scoop_cache},
 };
 
 use super::{CommandResult, CommandStatus, Result};
@@ -41,8 +42,9 @@ pub struct CacheRoots {
 }
 
 pub fn roots_for_tool_root(tool_root: &Path) -> CacheRoots {
+    let layout = RuntimeLayout::from_root(tool_root);
     CacheRoots {
-        scoop: scoop_cache_root(tool_root),
+        scoop: layout.scoop.cache_root,
         msvc: msvc_cache_root(tool_root),
     }
 }

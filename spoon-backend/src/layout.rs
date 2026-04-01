@@ -42,6 +42,28 @@ pub struct OfficialMsvcLayout {
     pub state_root: PathBuf,
 }
 
+impl ScoopLayout {
+    pub fn bucket_root(&self, bucket_name: &str) -> PathBuf {
+        self.buckets_root.join(bucket_name)
+    }
+
+    pub fn package_app_root(&self, package_name: &str) -> PathBuf {
+        self.apps_root.join(package_name)
+    }
+
+    pub fn package_version_root(&self, package_name: &str, version: &str) -> PathBuf {
+        self.package_app_root(package_name).join(version)
+    }
+
+    pub fn package_current_root(&self, package_name: &str) -> PathBuf {
+        self.package_app_root(package_name).join("current")
+    }
+
+    pub fn package_persist_root(&self, package_name: &str) -> PathBuf {
+        self.persist_root.join(package_name)
+    }
+}
+
 impl RuntimeLayout {
     pub fn from_root(root: &Path) -> Self {
         let root = root.to_path_buf();

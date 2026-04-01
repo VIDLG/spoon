@@ -158,10 +158,7 @@ fn scoop_info_prints_manifest_and_install_details() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        config::scoop_root_from(&tool_root)
-            .join("apps")
-            .join("jq")
-            .join("current"),
+        layout.scoop.package_current_root("jq"),
     )
     .unwrap();
 
@@ -225,10 +222,9 @@ fn scoop_prefix_prints_current_install_root() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let current_root = config::scoop_root_from(&tool_root)
-        .join("apps")
-        .join("jq")
-        .join("current");
+    let current_root = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .package_current_root("jq");
     std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(

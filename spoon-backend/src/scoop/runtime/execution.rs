@@ -7,9 +7,9 @@ use tokio::fs;
 
 use crate::Result;
 use crate::{BackendContext, BackendError, BackendEvent, SystemPort};
+use crate::layout::RuntimeLayout;
 
 use super::super::ports::{ScoopIntegrationPort, SupplementalShimSpec};
-use super::super::paths;
 
 pub trait ScoopRuntimeHost {
     fn test_mode_enabled(&self) -> bool;
@@ -131,7 +131,7 @@ async fn remove_old_scoop_shims(
     tool_root: &Path,
     host: &dyn ScoopRuntimeHost,
 ) -> Result<Vec<String>> {
-    let old_root = paths::scoop_root(tool_root).join("shims");
+    let old_root = RuntimeLayout::from_root(tool_root).scoop.root.join("shims");
     let mut lines = Vec::new();
     if old_root.exists() {
         fs::remove_dir_all(&old_root).await.map_err(|err| {
@@ -155,7 +155,7 @@ pub async fn ensure_scoop_shims_activated_with_host(
     host: &dyn ScoopRuntimeHost,
 ) -> Result<Vec<String>> {
     let mut output = remove_old_scoop_shims(tool_root, host).await?;
-    let shims_root = paths::shims_root(tool_root);
+    let shims_root = RuntimeLayout::from_root(tool_root).shims;
     fs::create_dir_all(&shims_root)
         .await
         .map_err(|err| BackendError::fs("create", &shims_root, err))?;

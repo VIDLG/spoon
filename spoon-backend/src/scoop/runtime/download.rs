@@ -8,6 +8,7 @@ use super::{PackagePayload, SelectedPackageSource};
 use crate::{
     BackendError, BackendEvent, CancellationToken, ReqwestClientBuilder, Result,
     download::copy_or_download_to_file, event::progress_kind,
+    layout::RuntimeLayout,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,8 +76,9 @@ pub fn package_cache_file(
         .map(|value| format!(".{}", value.to_string_lossy()))
         .unwrap_or_else(|| ".download".to_string());
     let hash_suffix = payload.hash.chars().take(12).collect::<String>();
-    super::super::paths::scoop_root(tool_root)
-        .join("cache")
+    RuntimeLayout::from_root(tool_root)
+        .scoop
+        .cache_root
         .join(format!("{package_name}#{version}#{hash_suffix}{ext}"))
 }
 

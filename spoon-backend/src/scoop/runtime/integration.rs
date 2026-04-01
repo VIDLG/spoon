@@ -8,12 +8,12 @@ use crate::layout::RuntimeLayout;
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::buckets;
-use super::super::paths::{package_current_root, package_persist_root};
 use super::super::ports::ScoopIntegrationPort;
 use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost, parse_selected_source};
 
 pub fn helper_executable_path(tool_root: &Path, package_name: &str) -> Option<PathBuf> {
-    let current_root = package_current_root(tool_root, package_name);
+    let layout = RuntimeLayout::from_root(tool_root);
+    let current_root = layout.scoop.package_current_root(package_name);
     let direct = current_root.join(format!("{package_name}.exe"));
     if direct.exists() {
         return Some(direct);
@@ -54,14 +54,14 @@ pub async fn reapply_package_integrations_streaming_with_host(
             package_name
         )]);
     };
-    let current_root = package_current_root(tool_root, package_name);
+    let current_root = layout.scoop.package_current_root(package_name);
     if !current_root.exists() {
         return Ok(vec![format!(
             "Skipped integration reapply for '{}': current install root was not found.",
             package_name
         )]);
     }
-    let persist_root = package_persist_root(tool_root, package_name);
+    let persist_root = layout.scoop.package_persist_root(package_name);
     let integrations =
         apply_package_integrations(host, package_name, &current_root, &persist_root, emit).await?;
     state.integrations = integrations.clone();

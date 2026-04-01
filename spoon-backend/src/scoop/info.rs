@@ -6,9 +6,9 @@ use serde::Serialize;
 
 use crate::CommandStatus;
 use crate::control_plane::sqlite::db_path_for_layout;
+use crate::layout::RuntimeLayout;
 
 use super::manifest;
-use super::paths::{package_current_root, package_persist_root};
 use super::projection::{
     collect_bin_items, collect_shortcut_items, collect_urls_vec, directory_size,
     integration_display_key, json_value_or_display, license_display_value, manifest_value,
@@ -17,7 +17,6 @@ use super::projection::{
 };
 use super::state::read_installed_state;
 use super::state::InstalledPackageState;
-use crate::layout::RuntimeLayout;
 
 #[derive(Debug, Serialize)]
 pub struct ScoopPackageActionOutcome {
@@ -73,7 +72,7 @@ pub async fn package_operation_outcome(
     streamed: bool,
 ) -> ScoopPackageOperationOutcome {
     let layout = RuntimeLayout::from_root(tool_root);
-    let prefix = package_current_root(tool_root, package_name);
+    let prefix = layout.scoop.package_current_root(package_name);
     let installed_version = read_installed_state(&layout, package_name)
         .await
         .map(|state| state.version.trim().to_string());
@@ -275,7 +274,7 @@ where
     let installed_version = installed_state
         .as_ref()
         .map(|state| state.version.trim().to_string());
-    let current_root = package_current_root(tool_root, package_name);
+    let current_root = layout.scoop.package_current_root(package_name);
 
     let Some(resolved) = resolved else {
         return ScoopPackageDetailsOutcome::Error(ScoopPackageDetailsError {
@@ -458,7 +457,7 @@ where
         })
         .unwrap_or_default();
 
-    let persist_root = package_persist_root(tool_root, package_name);
+    let persist_root = layout.scoop.package_persist_root(package_name);
     let resolved_env_add_paths = if runtime_env_add_paths.is_empty() {
         resolve_env_paths(manifest_env_add_paths, &current_root, &persist_root)
     } else {

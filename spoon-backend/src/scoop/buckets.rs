@@ -5,9 +5,6 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::control_plane::ControlPlaneDb;
-use super::paths::{
-    scoop_bucket_root, scoop_buckets_root,
-};
 use crate::layout::RuntimeLayout;
 use crate::BackendContext;
 use crate::{BackendError, BackendEvent, CommandStatus, Result, clone_repo, fsx};
@@ -195,7 +192,8 @@ pub async fn sync_main_bucket_registry(tool_root: &Path) -> Result<()> {
 }
 
 pub async fn ensure_main_bucket_ready(tool_root: &Path, proxy: &str) -> Result<()> {
-    let main_root = scoop_bucket_root(tool_root, "main");
+    let layout = RuntimeLayout::from_root(tool_root);
+    let main_root = layout.scoop.bucket_root("main");
     let registry_has_main = load_buckets_from_registry(tool_root)
         .await
         .into_iter()
@@ -228,10 +226,12 @@ pub async fn ensure_main_bucket_ready_with_context<P>(context: &BackendContext<P
 }
 
 pub async fn resolve_manifest(tool_root: &Path, package_name: &str) -> Option<ResolvedBucket> {
+    let layout = RuntimeLayout::from_root(tool_root);
     let buckets = load_buckets_from_registry(tool_root).await;
     for bucket in buckets {
-        let manifest_path = scoop_buckets_root(tool_root)
-            .join(&bucket.name)
+        let manifest_path = layout
+            .scoop
+            .bucket_root(&bucket.name)
             .join("bucket")
             .join(format!("{package_name}.json"));
         if tokio::fs::metadata(&manifest_path).await.is_ok() {
@@ -264,8 +264,9 @@ pub fn resolve_manifest_sync(tool_root: &Path, package_name: &str) -> Option<Res
         .collect::<Vec<_>>();
 
     for bucket in buckets {
-        let manifest_path = scoop_buckets_root(tool_root)
-            .join(&bucket.name)
+        let manifest_path = layout
+            .scoop
+            .bucket_root(&bucket.name)
             .join("bucket")
             .join(format!("{package_name}.json"));
         if manifest_path.exists() {
@@ -289,7 +290,7 @@ pub async fn add_bucket_to_registry(
             "bucket name must not be empty".to_string(),
         ));
     }
-    let bucket_dir = scoop_buckets_root(tool_root).join(name);
+    let bucket_dir = RuntimeLayout::from_root(tool_root).scoop.bucket_root(name);
     if bucket_dir.exists() {
         return Err(BackendError::Other(format!(
             "bucket '{}' already exists",
@@ -407,7 +408,7 @@ pub async fn remove_bucket_from_registry(tool_root: &Path, name: &str) -> Result
             "bucket 'main' cannot be removed".to_string(),
         ));
     }
-    let bucket_dir = scoop_buckets_root(tool_root).join(name);
+    let bucket_dir = RuntimeLayout::from_root(tool_root).scoop.bucket_root(name);
     if !bucket_dir.exists() {
         return Err(BackendError::Other(format!(
             "bucket '{}' is not installed",
@@ -518,7 +519,9 @@ pub async fn update_buckets_streaming(
             skipped += 1;
             continue;
         }
-        let current_root = scoop_bucket_root(tool_root, &bucket.name);
+        let current_root = RuntimeLayout::from_root(tool_root)
+            .scoop
+            .bucket_root(&bucket.name);
         let branch = if bucket.branch.trim().is_empty() {
             "master"
         } else {

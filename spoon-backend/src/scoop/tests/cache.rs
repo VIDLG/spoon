@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::scoop::cache::package_cache_size;
-use crate::scoop::paths::scoop_root;
+use crate::layout::RuntimeLayout;
 use crate::tests::{block_on, temp_dir};
 
 #[test]
@@ -19,7 +19,10 @@ fn package_cache_size_returns_zero_when_cache_root_is_missing() {
 #[test]
 fn package_cache_size_keeps_zero_for_empty_matching_entry() {
     let tool_root = temp_dir("scoop-cache-size-empty-entry");
-    let cache_entry = scoop_root(&tool_root).join("cache").join("git#1.0");
+    let cache_entry = RuntimeLayout::from_root(&tool_root)
+        .scoop
+        .cache_root
+        .join("git#1.0");
     fs::create_dir_all(&cache_entry).expect("cache entry should be created");
 
     let size = block_on(package_cache_size(&tool_root, "git"))

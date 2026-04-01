@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
-use crate::scoop::doctor::detect_legacy_flat_state_files;
 use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
 use crate::scoop::state::{
     InstalledPackageState, read_installed_state, write_installed_state,
@@ -209,121 +208,6 @@ fn runtime_status_uses_canonical_installed_state() {
         assert_eq!(status.installed_packages[0].version, "3.1.0");
         assert_eq!(status.installed_packages[1].name, "beta-lib");
         assert_eq!(status.installed_packages[1].version, "0.5.2");
-    });
-}
-
-#[test]
-fn sqlite_cutover_reports_legacy_json_state() {
-    let tmp = temp_dir("legacy-flat-state");
-    std::fs::create_dir_all(&tmp).expect("create temp dir");
-    let layout = RuntimeLayout::from_root(&tmp);
-
-    block_on(async {
-        // Seed a legacy flat control-plane file directly in scoop/state/ (old layout)
-        std::fs::create_dir_all(&layout.scoop.state_root).expect("create state root");
-        let legacy_path = layout.scoop.state_root.join("old-tool.json");
-        let legacy_content = serde_json::json!({
-            "name": "old-tool",
-            "version": "1.0.0",
-            "bucket": "main",
-            "architecture": "x64"
-        });
-        tokio::fs::write(&legacy_path, serde_json::to_string_pretty(&legacy_content).unwrap())
-            .await
-            .expect("write legacy state file");
-
-        // Seed a legacy package-state JSON in packages/ too; this is also stale after cutover.
-        let legacy_package_dir = layout.scoop.state_root.join("packages");
-        std::fs::create_dir_all(&legacy_package_dir).expect("create legacy packages dir");
-        let legacy_package_path = legacy_package_dir.join("legacy-pkg.json");
-        tokio::fs::write(
-            &legacy_package_path,
-            serde_json::json!({
-                "package": "legacy-pkg",
-                "version": "9.9.9",
-                "bucket": "extras"
-            })
-            .to_string(),
-        )
-        .await
-        .expect("write legacy package state");
-
-        // Also seed a canonical SQLite-backed state to confirm the DB path is not reported as legacy.
-        let canonical_state = InstalledPackageState {
-            package: "canonical-tool".to_string(),
-            version: "2.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        };
-        write_installed_state(&layout, &canonical_state)
-            .await
-            .expect("write canonical state");
-
-        // Detect legacy files
-        let issues = detect_legacy_flat_state_files(&layout).await;
-
-        // Should find both legacy JSON control-plane files
-        assert_eq!(issues.len(), 2, "expected exactly 2 legacy state issues");
-        assert_eq!(issues[0].kind, "legacy scoop state");
-        assert!(
-            issues.iter().any(|issue| issue.path.contains("old-tool.json")),
-            "issues should reference old-tool.json"
-        );
-        assert!(
-            issues
-                .iter()
-                .all(|issue| issue.message.contains("SQLite is authoritative")),
-            "issue messages should mention SQLite authority"
-        );
-        assert!(
-            issues
-                .iter()
-                .all(|issue| issue.message.contains("repair manually") || issue.message.contains("delete the old JSON state")),
-            "issue messages should instruct manual repair or cleanup"
-        );
-    });
-}
-
-#[test]
-fn no_legacy_issues_when_state_is_clean() {
-    let tmp = temp_dir("clean-state-no-legacy");
-    std::fs::create_dir_all(&tmp).expect("create temp dir");
-    let layout = RuntimeLayout::from_root(&tmp);
-
-    block_on(async {
-        // Only canonical state exists
-        let state = InstalledPackageState {
-            package: "clean-tool".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: None,
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        };
-        write_installed_state(&layout, &state)
-            .await
-            .expect("write canonical state");
-
-        let issues = detect_legacy_flat_state_files(&layout).await;
-        assert!(issues.is_empty(), "clean state should produce no legacy issues");
     });
 }
 
