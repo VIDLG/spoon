@@ -22,10 +22,6 @@ use zip::write::SimpleFileOptions;
 struct TestPorts;
 
 impl SystemPort for TestPorts {
-    fn home_dir(&self) -> PathBuf {
-        PathBuf::from(".")
-    }
-
     fn ensure_user_path_entry(&self, _path: &Path) -> Result<()> {
         Ok(())
     }

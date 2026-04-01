@@ -90,10 +90,6 @@ pub fn configured_tool_root() -> Option<PathBuf> {
     crate::config::configured_tool_root()
 }
 
-pub fn home_dir() -> PathBuf {
-    crate::config::home_dir()
-}
-
 pub(crate) fn load_global_config() -> GlobalConfig {
     crate::config::load_global_config()
 }
@@ -114,10 +110,6 @@ pub(crate) fn load_backend_config() -> BackendConfig {
 pub(crate) struct AppSystemPort;
 
 impl SystemPort for AppSystemPort {
-    fn home_dir(&self) -> PathBuf {
-        crate::config::home_dir()
-    }
-
     fn ensure_user_path_entry(&self, path: &Path) -> spoon_backend::Result<()> {
         crate::config::ensure_user_path_entry(path)
             .map_err(|err| BackendError::Other(format!("failed to update user PATH: {err}")))
@@ -138,10 +130,6 @@ impl SystemPort for AppSystemPort {
 }
 
 impl SystemPort for &'static AppSystemPort {
-    fn home_dir(&self) -> PathBuf {
-        (*self).home_dir()
-    }
-
     fn ensure_user_path_entry(&self, path: &Path) -> spoon_backend::Result<()> {
         (*self).ensure_user_path_entry(path)
     }

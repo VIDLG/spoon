@@ -17,12 +17,12 @@ use super::super::ports::ScoopIntegrationPort;
 use super::source::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
 use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost};
 
-fn start_menu_shortcuts_root(host: &dyn ScoopRuntimeHost) -> Result<PathBuf> {
-    if host.test_mode_enabled() || std::env::var_os("SPOON_TEST_HOME").is_some() {
-        return Ok(host
-            .home_dir()
-            .join(".spoon-test-startmenu")
-            .join("Spoon Apps"));
+fn start_menu_shortcuts_root(test_mode: bool) -> Result<PathBuf> {
+    if test_mode || std::env::var_os("SPOON_TEST_HOME").is_some() {
+        let test_home = std::env::var_os("SPOON_TEST_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("spoon-test-home"));
+        return Ok(test_home.join(".spoon-test-startmenu").join("Spoon Apps"));
     }
     let data_dir = dirs::data_dir().ok_or(BackendError::PlatformDirectoryUnavailable {
         directory_label: "Windows data directory",
@@ -379,7 +379,7 @@ pub(crate) async fn write_shortcuts(
     if source.shortcuts.is_empty() {
         return Ok(Vec::new());
     }
-    let shortcuts_root = start_menu_shortcuts_root(host)?;
+    let shortcuts_root = start_menu_shortcuts_root(host.test_mode_enabled())?;
     fs::create_dir_all(&shortcuts_root).await.map_err(|err| {
         BackendError::Other(format!(
             "failed to create {}: {err}",
@@ -481,7 +481,7 @@ pub async fn remove_shortcuts(
     if entries.is_empty() {
         return Ok(());
     }
-    let shortcuts_root = start_menu_shortcuts_root(host)?;
+    let shortcuts_root = start_menu_shortcuts_root(host.test_mode_enabled())?;
     for shortcut in entries {
         let path = shortcuts_root.join(&shortcut.name).with_extension("lnk");
         if path.exists() {

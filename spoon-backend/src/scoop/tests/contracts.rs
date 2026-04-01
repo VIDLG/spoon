@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::pin::Pin;
 
 use crate::scoop::{
@@ -13,10 +13,6 @@ use crate::{BackendContext, BackendEvent, Result, SystemPort};
 struct TestPorts;
 
 impl SystemPort for TestPorts {
-    fn home_dir(&self) -> PathBuf {
-        PathBuf::from(".")
-    }
-
     fn ensure_user_path_entry(&self, _path: &Path) -> Result<()> {
         Ok(())
     }

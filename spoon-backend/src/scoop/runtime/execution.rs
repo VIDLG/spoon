@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::pin::Pin;
 
 use tokio::fs;
@@ -13,7 +13,6 @@ use super::super::paths;
 
 pub trait ScoopRuntimeHost {
     fn test_mode_enabled(&self) -> bool;
-    fn home_dir(&self) -> PathBuf;
     fn ensure_user_path_entry(&self, path: &Path) -> Result<()>;
     fn ensure_process_path_entry(&self, path: &Path);
     fn remove_user_path_entry(&self, path: &Path) -> Result<()>;
@@ -38,12 +37,6 @@ pub struct NoopScoopRuntimeHost;
 impl ScoopRuntimeHost for NoopScoopRuntimeHost {
     fn test_mode_enabled(&self) -> bool {
         false
-    }
-
-    fn home_dir(&self) -> PathBuf {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     fn ensure_user_path_entry(&self, _path: &Path) -> Result<()> {
@@ -93,10 +86,6 @@ where
 {
     fn test_mode_enabled(&self) -> bool {
         self.context.test_mode
-    }
-
-    fn home_dir(&self) -> PathBuf {
-        self.context.ports.home_dir()
     }
 
     fn ensure_user_path_entry(&self, path: &Path) -> Result<()> {
