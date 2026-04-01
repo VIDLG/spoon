@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Execute Phase 10 with an aggressive forward cleanup of Scoop legacy path/state concepts.
+**Current focus:** Continue executing Phase 10 with layout-owned Scoop paths and no legacy JSON-state scaffolding.
 
 ## Current Position
 
 Phase: 10. Scoop Legacy Path and State Cleanup  
-Plan: Phase 10 planned  
-Status: Ready to execute Phase 10  
-Last activity: 2026-04-01 - Planned the Scoop legacy path/state cleanup phase
+Plan: 10-03 / 10-04 in progress  
+Status: Executing Phase 10  
+Last activity: 2026-04-01 - Completed the first two Scoop cleanup slices and continued test spillover alignment
 
 Progress: [----------] 0%
 
