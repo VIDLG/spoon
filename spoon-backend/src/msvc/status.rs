@@ -5,12 +5,16 @@ use serde::Serialize;
 use walkdir::WalkDir;
 
 use crate::BackendContext;
+use crate::layout::RuntimeLayout;
 
 use super::detect::detect_runtimes;
 use super::official;
 use super::paths;
 use super::rules::read_installed_toolchain_target;
-use super::{manifest, manifest_dir, native_host_arch};
+use super::{
+    MsvcRuntimeKind, MsvcValidationStatus, manifest, manifest_dir, native_host_arch,
+    read_canonical_state,
+};
 
 pub fn user_facing_toolchain_label(raw: &str) -> String {
     raw.replace("msvc-", "").replace("sdk-", "")
@@ -115,6 +119,9 @@ pub struct OfficialMsvcRuntimeStatus {
 pub struct MsvcStatus {
     pub kind: &'static str,
     pub success: bool,
+    pub authoritative_runtime: Option<MsvcRuntimeKind>,
+    pub validation_status: Option<MsvcValidationStatus>,
+    pub validation_message: Option<String>,
     pub managed: ManagedMsvcRuntimeStatus,
     pub official: OfficialMsvcRuntimeStatus,
 }
@@ -132,20 +139,51 @@ pub async fn status_with_context<P>(context: &BackendContext<P>) -> MsvcStatus {
 async fn status_with_request(request: &super::MsvcRequest) -> MsvcStatus {
     let tool_root = request.root.as_path();
     let detected = detect_runtimes(tool_root);
+    let layout = RuntimeLayout::from_root(tool_root);
+    let canonical = read_canonical_state(&layout).await;
     let managed_root = paths::msvc_root(tool_root);
     let official_root = paths::official_msvc_root(tool_root);
     let managed_wrapper_names = managed_wrapper_names(tool_root);
+    let canonical_managed_version = canonical
+        .as_ref()
+        .filter(|state| state.runtime_kind == MsvcRuntimeKind::Managed)
+        .and_then(|state| match (&state.version, &state.sdk_version) {
+            (Some(version), Some(sdk)) => Some(format!("{version} + {sdk}")),
+            (Some(version), None) => Some(version.clone()),
+            (None, Some(sdk)) => Some(sdk.clone()),
+            (None, None) => None,
+        });
+    let canonical_official_version = canonical
+        .as_ref()
+        .filter(|state| state.runtime_kind == MsvcRuntimeKind::Official)
+        .and_then(|state| match (&state.version, &state.sdk_version) {
+            (Some(version), Some(sdk)) => Some(format!("{version} + {sdk}")),
+            (Some(version), None) => Some(version.clone()),
+            (None, Some(sdk)) => Some(sdk.clone()),
+            (None, None) => None,
+        });
+    let managed_installed_version = canonical_managed_version
+        .clone()
+        .or_else(|| detected.managed.installed_version.clone());
+    let official_installed_version = canonical_official_version
+        .clone()
+        .or_else(|| detected.official.installed_version.clone());
     MsvcStatus {
         kind: "msvc_status",
         success: true,
+        authoritative_runtime: canonical.as_ref().map(|state| state.runtime_kind),
+        validation_status: canonical
+            .as_ref()
+            .and_then(|state| state.validation_status.clone()),
+        validation_message: canonical
+            .as_ref()
+            .and_then(|state| state.validation_message.clone()),
         managed: ManagedMsvcRuntimeStatus {
-            status: detected
-                .managed
-                .installed_version
+            status: managed_installed_version
                 .as_ref()
                 .map(|version| format!("installed ({version})"))
                 .unwrap_or_else(|| "not installed".to_string()),
-            installed_version: detected.managed.installed_version.clone(),
+            installed_version: managed_installed_version,
             root: managed_root.display().to_string(),
             toolchain: paths::msvc_toolchain_root(tool_root).display().to_string(),
             state: paths::msvc_state_root(tool_root).display().to_string(),
@@ -173,13 +211,11 @@ async fn status_with_request(request: &super::MsvcRequest) -> MsvcStatus {
             },
         },
         official: OfficialMsvcRuntimeStatus {
-            status: detected
-                .official
-                .installed_version
+            status: official_installed_version
                 .as_ref()
                 .map(|version| format!("installed ({version})"))
                 .unwrap_or_else(|| "not installed".to_string()),
-            installed_version: detected.official.installed_version.clone(),
+            installed_version: official_installed_version,
             root: official_root.display().to_string(),
             state: paths::official_msvc_state_root(tool_root)
                 .display()

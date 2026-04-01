@@ -74,6 +74,10 @@ fn msvc_context_drives_status_and_install() {
 
     let after = crate::tests::block_on(crate::msvc::status_with_context(&context));
     assert!(after.managed.status.contains("installed"));
+    assert_eq!(
+        after.authoritative_runtime,
+        Some(crate::msvc::MsvcRuntimeKind::Managed)
+    );
 }
 
 #[test]
@@ -205,5 +209,90 @@ fn canonical_msvc_state_roundtrips_via_sqlite_control_plane() {
     assert!(
         crate::tests::block_on(crate::msvc::read_canonical_state(&layout)).is_none(),
         "canonical msvc state should be removable"
+    );
+}
+
+#[test]
+fn status_prefers_canonical_runtime_summary_when_present() {
+    let tool_root = temp_dir("msvc-status-canonical");
+    let context = test_context(&tool_root);
+    let managed_state_root = crate::msvc::paths::msvc_state_root(&tool_root);
+    fs::create_dir_all(&managed_state_root).expect("managed state root");
+    fs::write(
+        managed_state_root.join("installed.json"),
+        serde_json::json!({
+            "msvc": "msvc-14.44.35207",
+            "sdk": "sdk-10.0.26100.15"
+        })
+        .to_string(),
+    )
+    .expect("legacy installed state");
+
+    let layout = RuntimeLayout::from_root(&tool_root);
+    crate::tests::block_on(crate::msvc::write_canonical_state(
+        &layout,
+        &crate::msvc::MsvcCanonicalState {
+            runtime_kind: crate::msvc::MsvcRuntimeKind::Managed,
+            installed: true,
+            version: Some("14.50.00000".to_string()),
+            sdk_version: Some("10.0.99999.1".to_string()),
+            last_operation: Some(crate::msvc::MsvcOperationKind::Update),
+            last_stage: Some(crate::msvc::MsvcLifecycleStage::Completed),
+            validation_status: Some(crate::msvc::MsvcValidationStatus::Valid),
+            validation_message: Some("validated successfully".to_string()),
+            managed: crate::msvc::ManagedMsvcStateDetail {
+                selected_target_arch: Some("x64".to_string()),
+            },
+            official: crate::msvc::OfficialMsvcStateDetail::default(),
+        },
+    ))
+    .expect("write canonical state");
+
+    let status = crate::tests::block_on(crate::msvc::status_with_context(&context));
+    assert_eq!(
+        status.authoritative_runtime,
+        Some(crate::msvc::MsvcRuntimeKind::Managed)
+    );
+    assert_eq!(
+        status.managed.installed_version.as_deref(),
+        Some("14.50.00000 + 10.0.99999.1")
+    );
+    assert_eq!(
+        status.validation_status,
+        Some(crate::msvc::MsvcValidationStatus::Valid)
+    );
+}
+
+#[test]
+fn doctor_reports_canonical_runtime_drift() {
+    let tool_root = temp_dir("msvc-doctor-drift");
+    let layout = RuntimeLayout::from_root(&tool_root);
+    crate::tests::block_on(crate::msvc::write_canonical_state(
+        &layout,
+        &crate::msvc::MsvcCanonicalState {
+            runtime_kind: crate::msvc::MsvcRuntimeKind::Official,
+            installed: true,
+            version: Some("14.44.35207".to_string()),
+            sdk_version: Some("10.0.26100.0".to_string()),
+            last_operation: Some(crate::msvc::MsvcOperationKind::Install),
+            last_stage: Some(crate::msvc::MsvcLifecycleStage::Completed),
+            validation_status: Some(crate::msvc::MsvcValidationStatus::Valid),
+            validation_message: None,
+            managed: crate::msvc::ManagedMsvcStateDetail::default(),
+            official: crate::msvc::OfficialMsvcStateDetail {
+                installer_mode: Some("quiet".to_string()),
+            },
+        },
+    ))
+    .expect("write canonical state");
+
+    let report = crate::tests::block_on(crate::msvc::doctor(&tool_root));
+    assert!(!report.healthy);
+    assert!(
+        report
+            .issues
+            .iter()
+            .any(|issue| issue.category == "canonical_runtime_drift"),
+        "{report:?}"
     );
 }

@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use crate::BackendContext;
-
 pub use super::status::{
     MsvcIntegration, MsvcStatus, installed_toolchain_version_label,
     latest_toolchain_version_label, latest_toolchain_version_label_with_context, user_facing_toolchain_label,

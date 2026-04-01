@@ -1,6 +1,7 @@
 mod cache;
 mod common;
 mod detect;
+mod doctor;
 mod execute;
 mod manifest;
 mod msi_extract;
@@ -85,6 +86,7 @@ pub use self::plan::{
     MsvcRuntimeKind, MsvcRuntimePreference, ToolchainFlags,
 };
 pub use self::detect::{DetectedMsvcRuntime, MsvcRuntimeDetection, detect_runtimes, detect_runtimes_with_context};
+pub use self::doctor::{MsvcDoctorIssue, MsvcDoctorReport, doctor, doctor_with_context};
 pub use self::rules::{
     ToolchainTarget, installed_state_path, package_token_after_prefix,
     parse_toolchain_target_from_lines, pick_higher_version, read_installed_toolchain_target,
