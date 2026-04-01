@@ -7,6 +7,7 @@ mod context;
 mod control_plane;
 mod event;
 mod fsx;
+mod platform;
 mod proxy;
 mod task;
 
