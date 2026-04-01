@@ -6,8 +6,8 @@ use tokio::fs;
 
 use super::{PackagePayload, SelectedPackageSource};
 use crate::{
-    BackendError, BackendEvent, CancellationToken, ProgressEvent, ReqwestClientBuilder, Result,
-    event::progress_kind,
+    BackendError, BackendEvent, CancellationToken, ReqwestClientBuilder, Result,
+    download::copy_or_download_to_file, event::progress_kind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,44 +130,16 @@ pub async fn ensure_downloaded_archive(
         payload.url
     );
     let client = ReqwestClientBuilder::new().proxy(proxy)?.build()?;
-    let response = client
-        .get(&payload.url)
-        .send()
-        .await
-        .map_err(|err| BackendError::network(&payload.url, err))?;
-    let mut response = response
-        .error_for_status()
-        .map_err(|err| BackendError::network(&payload.url, err))?;
-    let total = response.content_length();
-    let mut file = fs::File::create(&cache_path)
-        .await
-        .map_err(|err| BackendError::fs("create", &cache_path, err))?;
-    let mut downloaded = 0_u64;
-    let mut first_progress = true;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|err| BackendError::network(&payload.url, err))?
-    {
-        if cancel.is_some_and(CancellationToken::is_cancelled) {
-            return Err(BackendError::Cancelled);
-        }
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
-            .await
-            .map_err(|err| BackendError::fs("write", &cache_path, err))?;
-        downloaded += chunk.len() as u64;
-        if first_progress {
-            tracing::info!("Download progress started for {}", cache_path.display());
-            first_progress = false;
-        }
-        emit(BackendEvent::Progress(ProgressEvent::bytes(
-            progress_kind::DOWNLOAD,
-            cache_path.display().to_string(),
-            downloaded,
-            total,
-        )));
-    }
-    tokio::io::AsyncWriteExt::flush(&mut file).await.ok();
+    copy_or_download_to_file(
+        &client,
+        &payload.url,
+        &cache_path,
+        &cache_path.display().to_string(),
+        progress_kind::DOWNLOAD,
+        cancel,
+        emit,
+    )
+    .await?;
     let bytes = fs::read(&cache_path)
         .await
         .map_err(|err| BackendError::fs("read", &cache_path, err))?;

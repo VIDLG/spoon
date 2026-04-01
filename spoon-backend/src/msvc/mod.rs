@@ -16,7 +16,7 @@ mod status;
 mod validation;
 mod wrappers;
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -29,7 +29,7 @@ use zip::ZipArchive;
 
 use crate::{
     BackendError, BackendEvent, CancellationToken, ProgressEvent, Result, check_token_cancel,
-    event::progress_kind,
+    download::copy_or_download_to_file, event::progress_kind,
 };
 
 fn format_bytes(bytes: u64) -> String {
@@ -366,137 +366,22 @@ async fn download_or_copy_payload(
     cancel: Option<&CancellationToken>,
     emit: &mut Option<&mut dyn FnMut(BackendEvent)>,
 ) -> Result<()> {
-    check_token_cancel(cancel)?;
-    if let Some(path) = url.strip_prefix("file:///") {
-        external(
-            fs::copy(path, destination),
-            format!(
-                "failed to copy local payload from {} to {}",
-                path,
-                destination.display()
-            ),
-        )?;
-        return Ok(());
-    }
-
-    let path = Path::new(url);
-    if path.exists() {
-        external(
-            fs::copy(path, destination),
-            format!(
-                "failed to copy local payload from {} to {}",
-                path.display(),
-                destination.display()
-            ),
-        )?;
-        return Ok(());
-    }
-
-    let mut response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|err| BackendError::network(url, err))?
-        .error_for_status()
-        .map_err(|err| BackendError::network(url, err))?;
-    let mut file = external(
-        fs::File::create(destination),
-        format!("failed to create {}", destination.display()),
-    )?;
-    let total_bytes = response.content_length();
-    let mut downloaded_bytes = 0_u64;
-    let mut last_emitted_percent = None;
-    let mut last_emitted_mb_tenths = None;
-    if let Some(total_bytes) = total_bytes {
-        last_emitted_percent = Some(0);
-        if let Some(callback) = emit.as_deref_mut() {
-            callback(BackendEvent::Progress(ProgressEvent::bytes(
-                progress_kind::DOWNLOAD,
-                download_progress_target_label(file_name),
-                0,
-                Some(total_bytes),
-            )));
-        }
-    } else if let Some(callback) = emit.as_deref_mut() {
-        callback(BackendEvent::Progress(ProgressEvent::bytes(
-            progress_kind::DOWNLOAD,
-            download_progress_target_label(file_name),
-            0,
-            None,
-        )));
-    }
-    loop {
-        check_token_cancel(cancel)?;
-        let next_chunk = response.chunk().await;
-        let Some(chunk) = (match next_chunk {
-            Ok(chunk) => chunk,
-            Err(_err) if cancel.is_some_and(CancellationToken::is_cancelled) => {
-                return Err(BackendError::Cancelled);
-            }
-            Err(err) => {
-                return Err(BackendError::network(url, err)
-                    .context(format!("failed to read response for '{url}'")));
-            }
-        }) else {
-            break;
-        };
-        external(
-            file.write_all(&chunk),
-            format!("failed to write {}", destination.display()),
-        )?;
-        downloaded_bytes += chunk.len() as u64;
-        if let Some(total_bytes) = total_bytes {
-            let percent = if total_bytes == 0 {
-                0
-            } else {
-                ((downloaded_bytes as f64 / total_bytes as f64) * 100.0)
-                    .clamp(0.0, 100.0)
-                    .round() as u64
-            };
-            if last_emitted_percent != Some(percent) {
-                last_emitted_percent = Some(percent);
-                if let Some(callback) = emit.as_deref_mut() {
-                    callback(BackendEvent::Progress(ProgressEvent::bytes(
-                        progress_kind::DOWNLOAD,
-                        download_progress_target_label(file_name),
-                        downloaded_bytes,
-                        Some(total_bytes),
-                    )));
-                }
-            }
-        } else {
-            let downloaded_mb_tenths = downloaded_bytes / (1024 * 1024 / 10);
-            if last_emitted_mb_tenths != Some(downloaded_mb_tenths) {
-                last_emitted_mb_tenths = Some(downloaded_mb_tenths);
-                if let Some(callback) = emit.as_deref_mut() {
-                    callback(BackendEvent::Progress(ProgressEvent::bytes(
-                        progress_kind::DOWNLOAD,
-                        download_progress_target_label(file_name),
-                        downloaded_bytes,
-                        None,
-                    )));
-                }
-            }
-        }
-    }
-    if let Some(total_bytes) = total_bytes {
-        if let Some(callback) = emit.as_deref_mut() {
-            callback(BackendEvent::Progress(ProgressEvent::bytes(
-                progress_kind::DOWNLOAD,
-                download_progress_target_label(file_name),
-                downloaded_bytes,
-                Some(total_bytes),
-            )));
-        }
-    } else if let Some(callback) = emit.as_deref_mut() {
-        callback(BackendEvent::Progress(ProgressEvent::bytes(
-            progress_kind::DOWNLOAD,
-            download_progress_target_label(file_name),
-            downloaded_bytes,
-            None,
-        )));
-    }
-    Ok(())
+    let label = download_progress_target_label(file_name).to_string();
+    let mut noop = |_event: BackendEvent| {};
+    let emit_ref: &mut dyn FnMut(BackendEvent) = match emit.as_deref_mut() {
+        Some(callback) => callback,
+        None => &mut noop,
+    };
+    copy_or_download_to_file(
+        client,
+        url,
+        destination,
+        &label,
+        progress_kind::DOWNLOAD,
+        cancel,
+        emit_ref,
+    )
+    .await
 }
 
 pub(super) async fn ensure_cached_payloads(

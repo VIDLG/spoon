@@ -2,6 +2,7 @@ use serde::Serialize;
 
 pub mod context;
 pub mod control_plane;
+mod download;
 mod error;
 mod event;
 mod fsx;
