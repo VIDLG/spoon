@@ -182,6 +182,6 @@ mod tests {
             .await
             .expect("schema query should succeed");
 
-        assert_eq!(version, 1, "migration 0001 should be applied");
+        assert_eq!(version, 2, "migrations 0001 and 0002 should be applied");
     }
 }

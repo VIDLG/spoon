@@ -1,6 +1,7 @@
 use std::fs;
 
 use crate::BackendContext;
+use crate::layout::RuntimeLayout;
 use crate::tests::temp_dir;
 
 fn test_context(tool_root: &std::path::Path) -> BackendContext<()> {
@@ -168,5 +169,41 @@ fn msvc_operation_request_and_stage_contract_are_stable() {
     assert_eq!(
         crate::msvc::MsvcLifecycleStage::StateCommitting.as_str(),
         "state_committing"
+    );
+}
+
+#[test]
+fn canonical_msvc_state_roundtrips_via_sqlite_control_plane() {
+    let tool_root = temp_dir("msvc-canonical-state");
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let state = crate::msvc::MsvcCanonicalState {
+        runtime_kind: crate::msvc::MsvcRuntimeKind::Managed,
+        installed: true,
+        version: Some("14.44.35207".to_string()),
+        sdk_version: Some("10.0.26100.15".to_string()),
+        last_operation: Some(crate::msvc::MsvcOperationKind::Install),
+        last_stage: Some(crate::msvc::MsvcLifecycleStage::Completed),
+        validation_status: Some(crate::msvc::MsvcValidationStatus::Valid),
+        validation_message: Some("validated successfully".to_string()),
+        managed: crate::msvc::ManagedMsvcStateDetail {
+            selected_target_arch: Some("x64".to_string()),
+        },
+        official: crate::msvc::OfficialMsvcStateDetail {
+            installer_mode: None,
+        },
+    };
+
+    crate::tests::block_on(crate::msvc::write_canonical_state(&layout, &state))
+        .expect("write canonical msvc state");
+
+    let stored = crate::tests::block_on(crate::msvc::read_canonical_state(&layout))
+        .expect("stored canonical msvc state");
+    assert_eq!(stored, state);
+
+    crate::tests::block_on(crate::msvc::clear_canonical_state(&layout))
+        .expect("clear canonical msvc state");
+    assert!(
+        crate::tests::block_on(crate::msvc::read_canonical_state(&layout)).is_none(),
+        "canonical msvc state should be removable"
     );
 }

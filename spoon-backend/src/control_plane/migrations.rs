@@ -7,9 +7,13 @@ use rusqlite::Connection;
 
 /// Embedded SQL for the initial control-plane schema.
 const MIGRATION_0001: &str = include_str!("schema/0001_control_plane.sql");
+const MIGRATION_0002: &str = include_str!("schema/0002_msvc_control_plane.sql");
 
 /// All migrations in application order.
-const MIGRATIONS: &[(&str, &str)] = &[("0001_control_plane", MIGRATION_0001)];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_control_plane", MIGRATION_0001),
+    ("0002_msvc_control_plane", MIGRATION_0002),
+];
 
 /// Run all pending schema migrations against the provided database connection.
 ///

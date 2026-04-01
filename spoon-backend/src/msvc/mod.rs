@@ -10,6 +10,7 @@ pub mod paths;
 mod plan;
 mod query;
 mod rules;
+mod state;
 mod status;
 mod validation;
 mod wrappers;
@@ -69,6 +70,10 @@ pub use self::query::{
     MsvcIntegration, MsvcStatus, installed_toolchain_version_label,
     latest_toolchain_version_label, latest_toolchain_version_label_with_context, status,
     status_with_context, user_facing_toolchain_label,
+};
+pub use self::state::{
+    ManagedMsvcStateDetail, MsvcCanonicalState, MsvcValidationStatus,
+    OfficialMsvcStateDetail, clear_canonical_state, read_canonical_state, write_canonical_state,
 };
 pub use self::paths::{
     msvc_cache_root, msvc_manifest_root, msvc_root, msvc_state_root, msvc_toolchain_root,
