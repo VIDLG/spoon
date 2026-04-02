@@ -8,11 +8,11 @@ use tokio::fs;
 use crate::Result;
 use crate::{BackendContext, BackendError, BackendEvent, SystemPort};
 use crate::layout::RuntimeLayout;
+use crate::scoop::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::manifest;
 use super::super::ports::ScoopIntegrationPort;
-use super::source::{SelectedPackageSource, ShimTarget, ShortcutEntry, parse_selected_source};
 use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost};
 
 fn start_menu_shortcuts_root(test_mode: bool) -> Result<PathBuf> {

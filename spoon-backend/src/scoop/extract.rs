@@ -8,7 +8,7 @@ use crate::fsx;
 use crate::layout::RuntimeLayout;
 use crate::{BackendError, BackendEvent, Result};
 use crate::platform::msiexec_path;
-use super::runtime::SelectedPackageSource;
+use super::package_source::SelectedPackageSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {

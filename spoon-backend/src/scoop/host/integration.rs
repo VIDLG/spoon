@@ -5,11 +5,12 @@ use serde_json::Value;
 
 use crate::{BackendContext, BackendEvent, Result, SystemPort};
 use crate::layout::RuntimeLayout;
+use crate::scoop::parse_selected_source;
 use crate::scoop::state::{read_installed_state, write_installed_state};
 
 use super::super::buckets;
 use super::super::ports::ScoopIntegrationPort;
-use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost, parse_selected_source};
+use super::{NoopScoopRuntimeHost, ScoopRuntimeHost, execution::ContextRuntimeHost};
 
 pub fn helper_executable_path(tool_root: &Path, package_name: &str) -> Option<PathBuf> {
     let layout = RuntimeLayout::from_root(tool_root);

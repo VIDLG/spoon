@@ -11,7 +11,7 @@ use crate::{BackendContext, BackendError, Result, SystemPort};
 
 use super::buckets::load_buckets_from_registry;
 use super::ports::ScoopIntegrationPort;
-use super::runtime::{
+use super::host::{
     ContextRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated_with_host,
 };
 

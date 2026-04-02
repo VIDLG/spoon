@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{BackendEvent, Result};
 
-use super::super::runtime::{ScoopRuntimeHost, apply_package_integrations};
+use super::super::host::{ScoopRuntimeHost, apply_package_integrations};
 
 pub(crate) async fn run_integrations(
     host: &dyn ScoopRuntimeHost,

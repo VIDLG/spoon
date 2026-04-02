@@ -733,14 +733,14 @@ fn reapply_runs_without_hooks_and_reuses_back_half_modules() {
 
     let host = NoopScoopRuntimeHost;
     let mut sink = |_event: BackendEvent| {};
-    let surface = block_on(crate::scoop::runtime::reapply_package_command_surface_streaming_with_host(
+    let surface = block_on(crate::scoop::reapply_package_command_surface_streaming_with_host(
         &root,
         "demo",
         &host,
         &mut sink,
     ))
     .expect("surface reapply should succeed");
-    let integrations = block_on(crate::scoop::runtime::reapply_package_integrations_streaming_with_host(
+    let integrations = block_on(crate::scoop::reapply_package_integrations_streaming_with_host(
         &root,
         "demo",
         &host,

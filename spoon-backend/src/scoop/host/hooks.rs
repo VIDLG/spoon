@@ -3,8 +3,7 @@ use std::process::Command;
 
 use crate::{BackendError, BackendEvent, Result};
 use crate::platform::msiexec_path;
-
-use super::selected_architecture_key;
+use crate::scoop::selected_architecture_key;
 
 pub struct HookContext {
     pub app: String,

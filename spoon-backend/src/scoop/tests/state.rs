@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
-use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
+use crate::scoop::{PersistEntry, ShortcutEntry};
 use crate::scoop::state::{
     InstalledPackageState, read_installed_state, write_installed_state,
 };

@@ -17,33 +17,30 @@ use crate::scoop::state::{
     InstalledPackageState, read_installed_state,
 };
 
-use super::super::buckets;
-use super::super::ports::ScoopIntegrationPort;
-use super::super::cache::package_cache_size;
-use super::super::extract::{
+use super::buckets;
+use super::cache::package_cache_size;
+use super::extract::{
     refresh_current_entry,
 };
-use super::super::lifecycle::acquire::acquire_payloads;
-use super::super::lifecycle::integrate::run_integrations;
-use super::super::lifecycle::materialize::materialize_payloads;
-use super::super::lifecycle::persist::{restore_persist_entries, sync_persist_entries};
-use super::super::lifecycle::planner::plan_package_lifecycle;
-use super::super::lifecycle::reapply::reapply as reapply_lifecycle;
-use super::super::lifecycle::state::{commit_installed_state, remove_installed_state as remove_lifecycle_state};
-use super::super::lifecycle::surface::{apply_install_surface, remove_surface};
-use super::super::lifecycle::uninstall::uninstall as uninstall_lifecycle;
-use super::super::planner::{ScoopPackageAction, ScoopPackagePlan};
-use super::execution::ContextRuntimeHost;
-use super::hooks::{HookContext, execute_hook_scripts};
-use super::integration::helper_executable_path;
-use super::source::{dependency_lookup_key, selected_architecture_key};
-use super::surface::{
+use super::host::{
+    ContextRuntimeHost, HookContext, NoopScoopRuntimeHost, ScoopRuntimeHost,
+    ensure_scoop_shims_activated_with_context, ensure_scoop_shims_activated_with_host,
+    execute_hook_scripts, helper_executable_path,
     installed_targets_exist, installer_layout_error,
 };
-use super::{
-    NoopScoopRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated_with_context,
-    ensure_scoop_shims_activated_with_host,
-};
+use super::lifecycle::acquire::acquire_payloads;
+use super::lifecycle::integrate::run_integrations;
+use super::lifecycle::materialize::materialize_payloads;
+use super::lifecycle::persist::{restore_persist_entries, sync_persist_entries};
+use super::lifecycle::planner::plan_package_lifecycle;
+use super::lifecycle::reapply::reapply as reapply_lifecycle;
+use super::lifecycle::state::{commit_installed_state, remove_installed_state as remove_lifecycle_state};
+use super::lifecycle::surface::{apply_install_surface, remove_surface};
+use super::lifecycle::uninstall::uninstall as uninstall_lifecycle;
+use super::package_source::{dependency_lookup_key, selected_architecture_key};
+use super::ports::ScoopIntegrationPort;
+use super::planner::{ScoopPackageAction, ScoopPackagePlan};
+use super::{ScoopPackageOperationOutcome, package_operation_outcome};
 
 fn emit_stage(emit: &mut dyn FnMut(BackendEvent), stage: LifecycleStage) {
     let event = if matches!(stage, LifecycleStage::Completed) {
@@ -71,7 +68,7 @@ async fn effective_runtime_plan(
     if plan.resolved_manifest.is_some() {
         return Ok(plan.clone());
     }
-    Ok(super::super::planner::plan_package_action(
+    Ok(super::planner::plan_package_action(
         plan.action.as_str(),
         &plan.display_name,
         &plan.package_name,
@@ -160,7 +157,7 @@ async fn install_package_with_dependencies(
             dependency_name,
             plan.package_name
         );
-        let dependency_plan = super::super::planner::plan_package_action(
+        let dependency_plan = super::planner::plan_package_action(
             "install",
             &dependency_name,
             &dependency_name,
@@ -606,7 +603,7 @@ pub async fn execute_package_action_outcome_streaming_with_host(
     cancel: Option<&CancellationToken>,
     host: &dyn ScoopRuntimeHost,
     mut emit: Option<&mut dyn FnMut(BackendEvent)>,
-) -> Result<super::super::ScoopPackageOperationOutcome> {
+ ) -> Result<ScoopPackageOperationOutcome> {
     let mut output = Vec::new();
     let layout = RuntimeLayout::from_root(tool_root);
     let effective_plan = effective_runtime_plan(tool_root, proxy, plan).await?;
@@ -662,7 +659,7 @@ pub async fn execute_package_action_outcome_streaming_with_host(
             }
             set_operation_stage(&layout, operation_id, LifecycleStage::Completed).await?;
             complete_operation(&layout, operation_id, "completed", None).await?;
-            Ok(super::super::package_operation_outcome(
+            Ok(package_operation_outcome(
                 tool_root,
                 effective_plan.action.as_str(),
                 &effective_plan.package_name,
@@ -689,7 +686,7 @@ pub async fn execute_package_action_outcome_streaming(
     proxy: &str,
     cancel: Option<&CancellationToken>,
     emit: Option<&mut dyn FnMut(BackendEvent)>,
-) -> Result<super::super::ScoopPackageOperationOutcome> {
+) -> Result<ScoopPackageOperationOutcome> {
     let host = NoopScoopRuntimeHost;
     execute_package_action_outcome_streaming_with_host(tool_root, plan, proxy, cancel, &host, emit)
         .await
@@ -700,7 +697,7 @@ pub async fn execute_package_action_outcome_streaming_with_context<P>(
     plan: &ScoopPackagePlan,
     cancel: Option<&CancellationToken>,
     mut emit: Option<&mut dyn FnMut(BackendEvent)>,
-) -> Result<super::super::ScoopPackageOperationOutcome>
+) -> Result<ScoopPackageOperationOutcome>
 where
     P: SystemPort + ScoopIntegrationPort,
 {
@@ -758,7 +755,7 @@ where
             }
             set_operation_stage(&layout, operation_id, LifecycleStage::Completed).await?;
             complete_operation(&layout, operation_id, "completed", None).await?;
-            Ok(super::super::package_operation_outcome(
+            Ok(package_operation_outcome(
                 &context.root,
                 effective_plan.action.as_str(),
                 &effective_plan.package_name,

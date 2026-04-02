@@ -4,9 +4,9 @@ use tokio::fs;
 
 use crate::Result;
 use crate::{BackendError, BackendEvent};
+use crate::scoop::PersistEntry;
 
 use super::super::extract::{copy_path_recursive, remove_path_if_exists};
-use super::PersistEntry;
 
 pub async fn sync_persist_entries_from_root(
     install_root: &Path,

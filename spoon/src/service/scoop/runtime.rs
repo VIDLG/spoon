@@ -32,7 +32,7 @@ pub(crate) async fn reapply_package_integrations_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::runtime::reapply_package_integrations_streaming_with_context(
+        spoon_backend::scoop::reapply_package_integrations_streaming_with_context(
             &context,
             package_name,
             &mut backend_emit,
@@ -53,7 +53,7 @@ pub(crate) async fn reapply_package_command_surface_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::runtime::reapply_package_command_surface_streaming_with_context(
+        spoon_backend::scoop::reapply_package_command_surface_streaming_with_context(
             &context,
             package_name,
             &mut backend_emit,
@@ -78,7 +78,7 @@ pub(crate) async fn execute_package_action_outcome_streaming(
                 }
             };
             backend_to_anyhow(
-                spoon_backend::scoop::runtime::execute_package_action_outcome_streaming_with_context(
+                spoon_backend::scoop::execute_package_action_outcome_streaming_with_context(
                     &context,
                     plan,
                     cancel,
@@ -88,7 +88,7 @@ pub(crate) async fn execute_package_action_outcome_streaming(
             )
         }
         None => backend_to_anyhow(
-            spoon_backend::scoop::runtime::execute_package_action_outcome_streaming_with_context(
+            spoon_backend::scoop::execute_package_action_outcome_streaming_with_context(
                 &context, plan, cancel, None,
             )
             .await,

@@ -1,6 +1,6 @@
 use crate::{BackendEvent, Result};
 
-use super::super::runtime::{
+use super::super::host::{
     ScoopRuntimeHost, reapply_package_command_surface_streaming_with_host,
     reapply_package_integrations_streaming_with_host,
 };

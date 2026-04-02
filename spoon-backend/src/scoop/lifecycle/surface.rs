@@ -2,11 +2,12 @@ use std::path::Path;
 
 use crate::{BackendEvent, Result};
 
-use super::super::runtime::{ScoopRuntimeHost, SelectedPackageSource, ShortcutEntry};
-use super::super::runtime::surface::{
+use super::super::host::ScoopRuntimeHost;
+use super::super::host::surface::{
     remove_shims as remove_shims_impl, remove_shortcuts as remove_shortcuts_impl,
     write_shortcuts as write_shortcuts_impl, write_shims as write_shims_impl,
 };
+use super::super::package_source::{SelectedPackageSource, ShortcutEntry};
 
 pub(crate) async fn apply_install_surface(
     package_name: &str,

@@ -2,11 +2,11 @@ use std::path::Path;
 
 use crate::{BackendEvent, Result};
 
-use super::super::runtime::PersistEntry;
-use super::super::runtime::persist::{
+use super::super::host::persist::{
     restore_persist_entries_into_root as restore_impl,
     sync_persist_entries_from_root as sync_impl,
 };
+use super::super::package_source::PersistEntry;
 
 pub(crate) async fn restore_persist_entries(
     install_root: &Path,

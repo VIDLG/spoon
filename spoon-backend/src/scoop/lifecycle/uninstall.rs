@@ -1,8 +1,8 @@
 use crate::{BackendEvent, Result};
 use crate::layout::RuntimeLayout;
 
-use super::super::runtime::ScoopRuntimeHost;
-use super::super::runtime::actions;
+use super::super::actions;
+use super::super::host::ScoopRuntimeHost;
 
 pub(crate) async fn uninstall(
     tool_root: &std::path::Path,

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::{BackendEvent, Result};
 
 use super::super::extract::{extract_archive_to_root, materialize_installer_payloads_to_root};
-use super::super::runtime::SelectedPackageSource;
+use super::super::package_source::SelectedPackageSource;
 
 pub(crate) async fn materialize_payloads(
     tool_root: &Path,

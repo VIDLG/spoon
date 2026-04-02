@@ -4,11 +4,11 @@ use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use tokio::fs;
 
-use super::{PackagePayload, SelectedPackageSource};
 use crate::{
     BackendError, BackendEvent, CancellationToken, ReqwestClientBuilder, Result,
     download::copy_or_download_to_file, event::progress_kind,
     layout::RuntimeLayout,
+    scoop::{PackagePayload, SelectedPackageSource},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

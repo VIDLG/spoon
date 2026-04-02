@@ -4,7 +4,8 @@ use crate::{BackendError, Result};
 
 use super::super::buckets::{ResolvedBucket, resolve_manifest};
 use super::super::planner::ScoopPackagePlan;
-use super::super::runtime::{SelectedPackageSource, load_manifest_value, parse_selected_source};
+use super::super::host::surface::load_manifest_value;
+use super::super::package_source::{SelectedPackageSource, parse_selected_source};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PlannedPackageLifecycle {

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::scoop::runtime::{PersistEntry, ShortcutEntry};
+use crate::scoop::{PersistEntry, ShortcutEntry};
 
 /// Canonical installed-package record -- the single persisted state contract
 /// for Scoop packages in spoon-backend.

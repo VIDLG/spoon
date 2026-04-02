@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{BackendEvent, CancellationToken, Result};
 
-use super::super::runtime::{PackagePayload, SelectedPackageSource, ensure_downloaded_archive};
+use super::super::host::ensure_downloaded_archive;
+use super::super::package_source::{PackagePayload, SelectedPackageSource};
 
 pub(crate) async fn acquire_payloads(
     tool_root: &Path,
