@@ -45,9 +45,19 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
   2. The adjacent shared cleanup touched by the Scoop pass stays aligned with backend-owned contract rules.
 **Plans**: 4 plans
 
+### Phase 12.1: Control Plane Simplification and Migration Hardening (INSERTED)
+
+**Goal:** simplify the control-plane boundary so it is path-first rather than layout-first, and harden the migration story without overcomplicating the backend.
+**Requirements**: BECT-07, BECT-08
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 12.1 to break down)
+
 ### Phase 13: Scoop Cleanup Safety Net Refresh
 **Goal**: protect the Scoop legacy cleanup with focused backend and app-shell regressions.
-**Depends on**: Phase 12
+**Depends on**: Phase 12.1
 **Requirements**: TEST-07, TEST-08
 **Success Criteria** (what must be TRUE):
   1. Backend tests protect the Scoop legacy-cleanup breakpoints close to where the cleanup happened.
@@ -61,6 +71,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 | 10. Scoop Legacy Path and State Cleanup | 4/4 | Complete | 2026-04-01 |
 | 11. Scoop Runtime Host and Helper Consolidation | 4/4 | Complete | 2026-04-03 |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 4/4 | Complete | 2026-04-03 |
+| 12.1. Control Plane Simplification and Migration Hardening | 0/0 | Inserted | - |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
 
 ## Backlog

@@ -16,6 +16,8 @@
 
 - [ ] **BECT-05**: Shared cleanup needed to finish the Scoop legacy pass is resolved without reopening the full backend contract-hardening phase.
 - [ ] **BECT-06**: Remaining shared helper debt touched by the Scoop cleanup stays aligned with the backend-owned contract model rather than reintroducing app-side or legacy indirection.
+- [ ] **BECT-07**: Control-plane access is path-first at its core; layout-aware opening remains a convenience rather than the primary abstraction.
+- [ ] **BECT-08**: Control-plane migrations are simplified and hardened enough that future schema growth does not depend on ad hoc migration plumbing.
 
 ### Safety and Verification
 
@@ -48,12 +50,14 @@
 | SLEG-04 | Phase 10 | Pending |
 | BECT-05 | Phase 11 | Pending |
 | BECT-06 | Phase 12 | Pending |
+| BECT-07 | Phase 12.1 | Pending |
+| BECT-08 | Phase 12.1 | Pending |
 | TEST-07 | Phase 13 | Pending |
 | TEST-08 | Phase 13 | Pending |
 
 **Coverage:**
-- v1 requirements: 8 total
-- Mapped to phases: 8
+- v1 requirements: 10 total
+- Mapped to phases: 10
 - Unmapped: 0
 
 ---
