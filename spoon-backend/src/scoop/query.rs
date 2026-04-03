@@ -52,7 +52,9 @@ pub struct ScoopSearchResults {
 /// package name.
 pub async fn installed_package_states(tool_root: &Path) -> Vec<InstalledPackageState> {
     let layout = RuntimeLayout::from_root(tool_root);
-    super::state::list_all_installed_states(&layout).await
+    let mut states = super::state::list_installed_states(&layout).await;
+    states.sort_by(|a, b| a.package.cmp(&b.package));
+    states
 }
 
 /// Enumerate all canonical installed states through the store, applying an
@@ -65,7 +67,12 @@ where
     F: FnMut(&InstalledPackageState) -> bool,
 {
     let layout = RuntimeLayout::from_root(tool_root);
-    super::state::list_installed_states_filtered(&layout, filter).await
+    let mut states = super::state::list_installed_states(&layout).await;
+    if let Some(mut predicate) = filter {
+        states.retain(|state| predicate(state));
+    }
+    states.sort_by(|a, b| a.package.cmp(&b.package));
+    states
 }
 
 async fn search_manifests_local_async(
@@ -110,7 +117,15 @@ async fn search_manifests_local_async(
 pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
     let layout = RuntimeLayout::from_root(tool_root);
     let buckets = buckets::load_buckets_from_registry(tool_root).await;
-    let summaries = super::state::list_installed_summaries(&layout).await;
+    let mut summaries = super::state::list_installed_states(&layout)
+        .await
+        .into_iter()
+        .map(|state| InstalledPackageSummary {
+            name: state.package,
+            version: state.version.trim().to_string(),
+        })
+        .collect::<Vec<_>>();
+    summaries.sort_by(|a, b| a.name.cmp(&b.name));
     ScoopStatus {
         kind: "scoop_status",
         success: true,

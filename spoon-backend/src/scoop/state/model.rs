@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::scoop::{PersistEntry, ShortcutEntry};
@@ -37,4 +38,10 @@ pub struct InstalledPackageState {
     pub uninstaller_script: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub post_uninstall: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct InstalledPackageSummary {
+    pub name: String,
+    pub version: String,
 }
