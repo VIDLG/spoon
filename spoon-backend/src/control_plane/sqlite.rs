@@ -12,6 +12,8 @@ use rusqlite::Connection;
 use rusqlite_migration::{M, Migrations};
 use crate::Result;
 
+include!(concat!(env!("OUT_DIR"), "/control_plane_migrations.rs"));
+
 /// Backend-wide control-plane database handle.
 ///
 /// Construct via [`ControlPlaneDb::open`], which creates (or opens) the
@@ -107,13 +109,8 @@ async fn initialize_database(db_path: PathBuf) -> Result<()> {
     .map_err(|e| crate::BackendError::external("control-plane DB init task join failed", e))?
 }
 
-/// Embedded SQL for the control-plane schema.
-const MIGRATION_0001: &str = include_str!("schema/0001_control_plane.sql");
-const MIGRATION_0002: &str = include_str!("schema/0002_msvc_control_plane.sql");
-
 fn run_migrations(conn: &mut Connection) -> std::result::Result<(), rusqlite_migration::Error> {
-    let migrations = Migrations::new(vec![M::up(MIGRATION_0001), M::up(MIGRATION_0002)]);
-    migrations.to_latest(conn)
+    generated_migrations().to_latest(conn)
 }
 
 #[cfg(test)]
