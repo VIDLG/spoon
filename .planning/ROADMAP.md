@@ -71,7 +71,7 @@ Plans:
 | 10. Scoop Legacy Path and State Cleanup | 4/4 | Complete | 2026-04-01 |
 | 11. Scoop Runtime Host and Helper Consolidation | 4/4 | Complete | 2026-04-03 |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 4/4 | Complete | 2026-04-03 |
-| 12.1. Control Plane Simplification and Migration Hardening | 0/0 | Inserted | - |
+| 12.1. Control Plane Simplification and Migration Hardening | 4/4 | Complete | 2026-04-03 |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
 
 ## Backlog

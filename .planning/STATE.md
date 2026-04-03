@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Scoop Legacy Cleanup and Domain Refinement
 status: active
-stopped_at: Phase 12.1 planned
-last_updated: "2026-04-03T09:45:00.000Z"
+stopped_at: Phase 12.1 complete
+last_updated: "2026-04-03T10:30:00.000Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 12
-  percent: 75
+  completed_plans: 16
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Execute the inserted control-plane simplification phase before the final safety-net phase.
+**Current focus:** Prepare the final Scoop safety-net phase after completing the control-plane refactor.
 
 ## Current Position
 
-Phase: 12.1. Control Plane Simplification and Migration Hardening  
-Plan: Phase 12.1 planned  
-Status: Ready to execute Phase 12.1  
-Last activity: 2026-04-03 - Planned the inserted control-plane simplification phase
+Phase: 13. Scoop Cleanup Safety Net Refresh  
+Plan: Not started  
+Status: Phase 12.1 complete; ready to discuss and plan Phase 13  
+Last activity: 2026-04-03 - Completed Phase 12.1 and recorded verification
 
-Progress: [########--] 75%
+Progress: [########--] 80%
 
 ## Carried Context
 
@@ -68,6 +68,6 @@ Progress: [########--] 75%
 
 ## Session Continuity
 
-Last session: 2026-04-03T09:45:00.000Z  
-Stopped at: Phase 12.1 planned; next step is execution  
-Resume file: .planning/phases/12.1-control-plane-simplification-and-migration-hardening/12.1-01-PLAN.md
+Last session: 2026-04-03T10:30:00.000Z  
+Stopped at: Phase 12.1 complete; next step is Phase 13 discussion/planning  
+Resume file: .planning/ROADMAP.md
