@@ -57,13 +57,6 @@ pub use package_source::{
 };
 pub use planner::{ScoopPackageAction, ScoopPackagePlan, infer_tool_root, plan_package_action};
 pub use ports::{ScoopIntegrationPort, SupplementalShimSpec};
-pub use projection::{
-    bin_lines, collect_bin_items, collect_shortcut_items, collect_urls_vec, directory_size,
-    integration_display_key, json_value_or_display, license_display_value, license_field,
-    manifest_value, manifest_value_owned, notes_lines, policy_config_kind, resolve_env_map,
-    resolve_env_paths, shortcut_lines, string_items, string_map_items, url_lines, value_field,
-    value_to_display,
-};
 pub use query::{
     ScoopBucketEntry, ScoopInstalledPackageEntry, ScoopPaths, ScoopRuntimeStatus, ScoopSearchMatch,
     ScoopSearchResults, ScoopStatus, installed_package_states, installed_package_states_filtered,
