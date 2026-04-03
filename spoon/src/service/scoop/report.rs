@@ -36,7 +36,7 @@ pub async fn package_list_report(tool_root: &Path) -> CommandResult {
     let packages = installed_package_states(tool_root)
         .await
         .into_iter()
-        .map(|state| spoon_backend::scoop::ScoopInstalledPackageEntry {
+        .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
             name: state.package,
             version: state.version.trim().to_string(),
         })
@@ -84,11 +84,8 @@ pub async fn runtime_status_report(tool_root: &Path) -> CommandResult {
         "Scoop runtime:".to_string(),
         format!("  root: {}", data.runtime.root),
         format!("  shims: {}", data.runtime.shims),
-        format!("  buckets: {}", data.runtime.bucket_count),
-        format!(
-            "  installed packages: {}",
-            data.runtime.installed_package_count
-        ),
+        format!("  buckets: {}", data.buckets.len()),
+        format!("  installed packages: {}", data.installed_packages.len()),
     ];
     output.extend(section_lines("Buckets", data.buckets, "none", |bucket| {
         format!("{} | {} | {}", bucket.name, bucket.branch, bucket.source)

@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use crate::scoop::Bucket;
+use crate::scoop::state::InstalledPackageSummary;
 use crate::layout::RuntimeLayout;
 
 /// Aggregate backend status snapshot for app consumers.
@@ -23,23 +25,8 @@ pub struct BackendScoopSummary {
     pub installed: bool,
     pub root: String,
     pub shims: String,
-    pub bucket_count: usize,
-    pub installed_package_count: usize,
-    pub buckets: Vec<BackendBucketEntry>,
-    pub installed_packages: Vec<BackendInstalledPackageEntry>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BackendBucketEntry {
-    pub name: String,
-    pub branch: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct BackendInstalledPackageEntry {
-    pub name: String,
-    pub version: String,
+    pub buckets: Vec<Bucket>,
+    pub installed_packages: Vec<InstalledPackageSummary>,
 }
 
 /// Minimal MSVC summary for status display.
@@ -98,25 +85,8 @@ impl BackendStatusSnapshot {
                 installed: scoop_status.success,
                 root: layout.scoop.root.display().to_string(),
                 shims: layout.shims.display().to_string(),
-                bucket_count: scoop_status.runtime.bucket_count,
-                installed_package_count: scoop_status.runtime.installed_package_count,
-                buckets: scoop_status
-                    .buckets
-                    .into_iter()
-                    .map(|b| BackendBucketEntry {
-                        name: b.name,
-                        branch: b.branch,
-                        source: b.source,
-                    })
-                    .collect(),
-                installed_packages: scoop_status
-                    .installed_packages
-                    .into_iter()
-                    .map(|p| BackendInstalledPackageEntry {
-                        name: p.name,
-                        version: p.version,
-                    })
-                    .collect(),
+                buckets: scoop_status.buckets,
+                installed_packages: scoop_status.installed_packages,
             },
             msvc: BackendMsvcSummary {
                 managed_status: msvc_status.managed.status.clone(),

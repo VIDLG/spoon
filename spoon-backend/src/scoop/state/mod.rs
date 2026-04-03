@@ -4,7 +4,7 @@ pub mod store;
 
 pub use model::InstalledPackageState;
 pub use projections::{
-    installed_package_summary, list_all_installed_states, list_installed_states_filtered,
+    InstalledPackageSummary, installed_package_summary, list_all_installed_states, list_installed_states_filtered,
     list_installed_summaries, list_installed_summaries_filtered,
 };
 pub use store::{

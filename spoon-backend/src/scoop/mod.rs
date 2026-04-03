@@ -58,9 +58,8 @@ pub use package_source::{
 pub use planner::{ScoopPackageAction, ScoopPackagePlan, infer_tool_root, plan_package_action};
 pub use ports::{ScoopIntegrationPort, SupplementalShimSpec};
 pub use query::{
-    ScoopBucketEntry, ScoopInstalledPackageEntry, ScoopPaths, ScoopRuntimeStatus, ScoopSearchMatch,
-    ScoopSearchResults, ScoopStatus, installed_package_states, installed_package_states_filtered,
-    runtime_status, search_results,
+    ScoopPaths, ScoopRuntimeStatus, ScoopSearchMatch, ScoopSearchResults, ScoopStatus,
+    installed_package_states, installed_package_states_filtered, runtime_status, search_results,
 };
 pub use host::{
     HookContext, NoopScoopRuntimeHost, ScoopRuntimeHost, apply_package_integrations,

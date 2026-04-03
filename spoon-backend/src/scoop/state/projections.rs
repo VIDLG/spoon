@@ -1,13 +1,18 @@
 use crate::layout::RuntimeLayout;
-use crate::scoop::query::ScoopInstalledPackageEntry;
 
 use super::model::InstalledPackageState;
 use super::store::list_installed_states;
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InstalledPackageSummary {
+    pub name: String,
+    pub version: String,
+}
+
 /// Project a canonical [`InstalledPackageState`] into a lightweight summary
 /// entry suitable for package list / status surfaces.
-pub fn installed_package_summary(state: &InstalledPackageState) -> ScoopInstalledPackageEntry {
-    ScoopInstalledPackageEntry {
+pub fn installed_package_summary(state: &InstalledPackageState) -> InstalledPackageSummary {
+    InstalledPackageSummary {
         name: state.package.clone(),
         version: state.version.trim().to_string(),
     }
@@ -17,9 +22,9 @@ pub fn installed_package_summary(state: &InstalledPackageState) -> ScoopInstalle
 /// each one into a summary entry.
 pub async fn list_installed_summaries(
     layout: &RuntimeLayout,
-) -> Vec<ScoopInstalledPackageEntry> {
+) -> Vec<InstalledPackageSummary> {
     let states = list_installed_states(layout).await;
-    let mut summaries: Vec<ScoopInstalledPackageEntry> =
+    let mut summaries: Vec<InstalledPackageSummary> =
         states.iter().map(installed_package_summary).collect();
     summaries.sort_by(|a, b| a.name.cmp(&b.name));
     summaries
@@ -30,7 +35,7 @@ pub async fn list_installed_summaries(
 pub async fn list_installed_summaries_filtered<F>(
     layout: &RuntimeLayout,
     mut filter: Option<F>,
-) -> Vec<ScoopInstalledPackageEntry>
+) -> Vec<InstalledPackageSummary>
 where
     F: FnMut(&InstalledPackageState) -> bool,
 {

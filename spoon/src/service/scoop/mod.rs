@@ -32,8 +32,8 @@ pub use spoon_backend::scoop::{
 
 pub(crate) use spoon_backend::scoop::{
     ScoopActionPackage, ScoopBucketInventory as BackendScoopBucketInventory,
-    ScoopBucketOperationOutcome, ScoopDoctorDetails, ScoopInstalledPackageEntry,
-    ScoopPackageActionOutcome, ScoopPackageInstallState, ScoopPackageOperationOutcome,
+    ScoopBucketOperationOutcome, ScoopDoctorDetails, ScoopPackageActionOutcome,
+    ScoopPackageInstallState, ScoopPackageOperationOutcome,
     ScoopPackagePlan, add_bucket_to_registry_outcome, infer_tool_root, installed_package_states,
     load_buckets_from_registry,
     remove_bucket_from_registry_outcome, runtime_status, search_results, update_buckets_outcome,

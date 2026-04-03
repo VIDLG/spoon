@@ -1,30 +1,15 @@
 use std::path::Path;
 
-use super::buckets;
+use super::buckets::{self, Bucket};
 use super::manifest::{self, ScoopManifest};
-use super::state::InstalledPackageState;
+use super::state::{InstalledPackageState, InstalledPackageSummary};
 use crate::layout::RuntimeLayout;
 use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct ScoopInstalledPackageEntry {
-    pub name: String,
-    pub version: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ScoopBucketEntry {
-    pub name: String,
-    pub branch: String,
-    pub source: String,
-}
 
 #[derive(Debug, Serialize)]
 pub struct ScoopRuntimeStatus {
     pub root: String,
     pub shims: String,
-    pub bucket_count: usize,
-    pub installed_package_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -40,8 +25,8 @@ pub struct ScoopStatus {
     pub kind: &'static str,
     pub success: bool,
     pub runtime: ScoopRuntimeStatus,
-    pub buckets: Vec<ScoopBucketEntry>,
-    pub installed_packages: Vec<ScoopInstalledPackageEntry>,
+    pub buckets: Vec<Bucket>,
+    pub installed_packages: Vec<InstalledPackageSummary>,
     pub paths: ScoopPaths,
 }
 
@@ -59,7 +44,6 @@ pub struct ScoopSearchResults {
     pub kind: &'static str,
     pub success: bool,
     pub query: Option<String>,
-    pub match_count: usize,
     pub matches: Vec<ScoopSearchMatch>,
 }
 
@@ -132,17 +116,8 @@ pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
         runtime: ScoopRuntimeStatus {
             root: layout.scoop.root.display().to_string(),
             shims: layout.shims.display().to_string(),
-            bucket_count: buckets.len(),
-            installed_package_count: summaries.len(),
         },
-        buckets: buckets
-            .into_iter()
-            .map(|bucket| ScoopBucketEntry {
-                name: bucket.name,
-                branch: bucket.branch,
-                source: bucket.source,
-            })
-            .collect(),
+        buckets,
         installed_packages: summaries,
         paths: ScoopPaths {
             apps: layout.scoop.apps_root.display().to_string(),
@@ -170,7 +145,6 @@ pub async fn search_results(tool_root: &Path, query: Option<&str>) -> ScoopSearc
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToString::to_string),
-        match_count: matches.len(),
         matches: matches
             .into_iter()
             .map(|item| ScoopSearchMatch {

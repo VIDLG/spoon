@@ -662,7 +662,7 @@ async fn run_scoop_command(
                 let packages = scoop::installed_package_states(root)
                     .await
                     .into_iter()
-                    .map(|state| scoop::ScoopInstalledPackageEntry {
+                    .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
                         name: state.package,
                         version: state.version.trim().to_string(),
                     })
