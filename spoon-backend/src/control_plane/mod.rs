@@ -10,10 +10,8 @@
 //!
 //! - [`sqlite`] -- async DB facade ([`ControlPlaneDb`]) and connection
 //!   configuration (WAL mode, foreign keys).
-//! - [`migrations`] -- embedded SQL migration runner.
 //! - [`schema`] -- compiled-in SQL migration files.
 
-pub mod migrations;
 pub mod journal_store;
 pub mod lock_store;
 pub mod doctor_store;

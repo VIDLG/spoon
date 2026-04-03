@@ -2,17 +2,15 @@
 //!
 //! Owns the repo-level tokio boundary over `rusqlite` and exposes async methods
 //! for initialization. All driver-level details (raw SQL, `rusqlite::Connection`,
-//! and `spawn_blocking`) stay inside this module and its sibling
-//! [`migrations`] module; business-rule code in lifecycle, store, or projection
+//! and `spawn_blocking`) stay inside this module; business-rule code in lifecycle, store, or projection
 //! modules must never import them directly.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
+use rusqlite_migration::{M, Migrations};
 use crate::Result;
-
-use super::migrations::run_migrations;
 
 /// Backend-wide control-plane database handle.
 ///
@@ -29,13 +27,6 @@ impl ControlPlaneDb {
     /// Open (or create) the control-plane database at the given path and
     /// run all pending schema migrations.
     pub async fn open(db_path: &std::path::Path) -> Result<Self> {
-        // Ensure the parent directory exists.
-        if let Some(parent) = db_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| crate::BackendError::fs("create", parent, e))?;
-        }
-
         let db_path = db_path.to_path_buf();
         initialize_database(db_path.clone()).await?;
 
@@ -114,6 +105,15 @@ async fn initialize_database(db_path: PathBuf) -> Result<()> {
     })
     .await
     .map_err(|e| crate::BackendError::external("control-plane DB init task join failed", e))?
+}
+
+/// Embedded SQL for the control-plane schema.
+const MIGRATION_0001: &str = include_str!("schema/0001_control_plane.sql");
+const MIGRATION_0002: &str = include_str!("schema/0002_msvc_control_plane.sql");
+
+fn run_migrations(conn: &mut Connection) -> std::result::Result<(), rusqlite_migration::Error> {
+    let migrations = Migrations::new(vec![M::up(MIGRATION_0001), M::up(MIGRATION_0002)]);
+    migrations.to_latest(conn)
 }
 
 #[cfg(test)]
