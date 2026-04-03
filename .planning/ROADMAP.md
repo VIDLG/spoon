@@ -43,7 +43,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 **Success Criteria** (what must be TRUE):
   1. Scoop read models avoid low-value derivable redundancy when it adds no meaningful contract value.
   2. The adjacent shared cleanup touched by the Scoop pass stays aligned with backend-owned contract rules.
-**Plans**: 0 plans
+**Plans**: 4 plans
 
 ### Phase 13: Scoop Cleanup Safety Net Refresh
 **Goal**: protect the Scoop legacy cleanup with focused backend and app-shell regressions.
@@ -60,7 +60,7 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 |-------|----------------|--------|-----------|
 | 10. Scoop Legacy Path and State Cleanup | 4/4 | Complete | 2026-04-01 |
 | 11. Scoop Runtime Host and Helper Consolidation | 4/4 | Complete | 2026-04-03 |
-| 12. Scoop Read Model and Shared Cleanup Refinement | 0/0 | Pending | - |
+| 12. Scoop Read Model and Shared Cleanup Refinement | 0/4 | Planned | - |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
 
 ## Backlog
