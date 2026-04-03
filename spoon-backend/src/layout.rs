@@ -43,6 +43,10 @@ pub struct OfficialMsvcLayout {
 }
 
 impl ScoopLayout {
+    pub fn control_plane_db_path(&self) -> PathBuf {
+        self.state_root.join("control-plane.sqlite3")
+    }
+
     pub fn bucket_root(&self, bucket_name: &str) -> PathBuf {
         self.buckets_root.join(bucket_name)
     }

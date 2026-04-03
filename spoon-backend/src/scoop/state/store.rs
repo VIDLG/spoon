@@ -53,7 +53,7 @@ pub async fn read_installed_state(
     layout: &RuntimeLayout,
     package_name: &str,
 ) -> Option<InstalledPackageState> {
-    let db = ControlPlaneDb::open_for_layout(layout).await.ok()?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await.ok()?;
     let package_name = package_name.to_string();
     let row = db
         .call(move |conn| {
@@ -92,7 +92,7 @@ pub async fn write_installed_state(
     layout: &RuntimeLayout,
     state: &InstalledPackageState,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let package = state.package.clone();
     let version = state.version.clone();
     let bucket = state.bucket.clone();
@@ -123,7 +123,7 @@ pub async fn write_installed_state(
         BackendError::external("failed to serialize installed state post_uninstall", err)
     })?;
 
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "INSERT INTO installed_packages
                 (package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall)
@@ -172,9 +172,9 @@ pub async fn remove_installed_state(
     layout: &RuntimeLayout,
     package_name: &str,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let package_name = package_name.to_string();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "DELETE FROM installed_packages WHERE package = ?1",
             params![package_name],
@@ -188,7 +188,7 @@ pub async fn remove_installed_state(
 ///
 /// Returns all rows that successfully deserialize as [`InstalledPackageState`].
 pub async fn list_installed_states(layout: &RuntimeLayout) -> Vec<InstalledPackageState> {
-    let Ok(db) = ControlPlaneDb::open_for_layout(layout).await else {
+    let Ok(db) = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await else {
         return Vec::new();
     };
 

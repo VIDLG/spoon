@@ -11,27 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 use crate::Result;
-use crate::layout::RuntimeLayout;
 
 use super::migrations::run_migrations;
-
-#[derive(Debug, Clone)]
-enum ControlPlaneLocation {
-    File(PathBuf),
-    EphemeralFile(PathBuf),
-}
-
-impl ControlPlaneLocation {
-    fn path(&self) -> &Path {
-        match self {
-            Self::File(path) | Self::EphemeralFile(path) => path,
-        }
-    }
-}
-
-pub fn db_path_for_layout(layout: &RuntimeLayout) -> PathBuf {
-    layout.scoop.state_root.join("control-plane.sqlite3")
-}
 
 /// Backend-wide control-plane database handle.
 ///
@@ -41,7 +22,7 @@ pub fn db_path_for_layout(layout: &RuntimeLayout) -> PathBuf {
 /// and keeps the blocking bridge inside this module.
 #[derive(Clone)]
 pub struct ControlPlaneDb {
-    location: ControlPlaneLocation,
+    db_path: PathBuf,
 }
 
 impl ControlPlaneDb {
@@ -56,17 +37,11 @@ impl ControlPlaneDb {
         }
 
         let db_path = db_path.to_path_buf();
-        let location = ControlPlaneLocation::File(db_path.clone());
-
-        initialize_database(location.clone()).await?;
+        initialize_database(db_path.clone()).await?;
 
         tracing::info!(db = %db_path.display(), "control-plane DB initialized");
 
-        Ok(Self { location })
-    }
-
-    pub async fn open_for_layout(layout: &RuntimeLayout) -> Result<Self> {
-        Self::open(&db_path_for_layout(layout)).await
+        Ok(Self { db_path })
     }
 
     /// Open an ephemeral control-plane database. Useful for testing.
@@ -83,10 +58,9 @@ impl ControlPlaneDb {
                 .unwrap_or_default()
                 .as_nanos()
         );
-        let path = std::env::temp_dir().join(unique_name);
-        let location = ControlPlaneLocation::EphemeralFile(path);
-        initialize_database(location.clone()).await?;
-        Ok(Self { location })
+        let db_path = std::env::temp_dir().join(unique_name);
+        initialize_database(db_path.clone()).await?;
+        Ok(Self { db_path })
     }
 
     /// Execute a closure on the underlying SQLite connection.
@@ -105,28 +79,13 @@ impl ControlPlaneDb {
             + Send
             + 'static,
     {
-        let location = self.location.clone();
+        let db_path = self.db_path.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = open_connection(&location)?;
+            let mut conn = open_connection(&db_path)?;
             f(&mut conn).map_err(|e| crate::BackendError::external("control-plane DB call failed", e))
         })
         .await
         .map_err(|e| crate::BackendError::external("control-plane DB task join failed", e))?
-    }
-
-    /// Execute a read-write closure on the underlying SQLite connection.
-    ///
-    /// Alias for [`Self::call`] -- the distinction is purely documentary
-    /// at this layer. Transactions should be managed by the caller inside
-    /// the closure.
-    pub async fn call_write<F, T>(&self, f: F) -> Result<T>
-    where
-        T: Send + 'static,
-        F: FnOnce(&mut Connection) -> std::result::Result<T, rusqlite::Error>
-            + Send
-            + 'static,
-    {
-        self.call(f).await
     }
 }
 
@@ -135,22 +94,21 @@ fn configure_connection(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn open_connection(location: &ControlPlaneLocation) -> Result<Connection> {
-    let conn = Connection::open(location.path())
+fn open_connection(db_path: &Path) -> Result<Connection> {
+    let conn = Connection::open(db_path)
         .map_err(|e| crate::BackendError::external("failed to open control-plane DB", e))?;
     configure_connection(&conn)
         .map_err(|e| crate::BackendError::external("failed to configure control-plane DB", e))?;
     Ok(conn)
 }
 
-async fn initialize_database(location: ControlPlaneLocation) -> Result<()> {
-    let db_path = location.path().to_path_buf();
+async fn initialize_database(db_path: PathBuf) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| crate::BackendError::fs("create", parent, e))?;
         }
-        let conn = open_connection(&location)?;
+        let conn = open_connection(&db_path)?;
         run_migrations(&conn)
             .map_err(|e| crate::BackendError::external("control-plane migration failed", e))
     })

@@ -5,7 +5,6 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::CommandStatus;
-use crate::control_plane::sqlite::db_path_for_layout;
 use crate::layout::RuntimeLayout;
 
 use super::manifest;
@@ -312,7 +311,7 @@ where
         None
     };
     let cache_size = installed_state.as_ref().and_then(|state| state.cache_size_bytes);
-    let state_path = db_path_for_layout(&layout);
+    let state_path = layout.scoop.control_plane_db_path();
 
     let manifest_license = manifest
         .as_ref()

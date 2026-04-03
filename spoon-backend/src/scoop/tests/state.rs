@@ -88,7 +88,7 @@ fn canonical_state_persists_only_nonderivable_facts() {
             .await
             .expect("write should succeed");
 
-        let db = ControlPlaneDb::open_for_layout(&layout)
+        let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path())
             .await
             .expect("db should open");
         let json: serde_json::Value = db
@@ -239,7 +239,7 @@ fn sqlite_control_plane_preserves_runtime_layout_derivation() {
             .await
             .expect("write canonical state");
 
-        let db_path = crate::control_plane::sqlite::db_path_for_layout(&layout);
+        let db_path = layout.scoop.control_plane_db_path();
         assert!(db_path.exists(), "control-plane db should exist");
         assert_eq!(db_path.parent(), Some(layout.scoop.state_root.as_path()));
 

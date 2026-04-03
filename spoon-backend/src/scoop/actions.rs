@@ -10,7 +10,6 @@ use crate::{
     SystemPort,
 };
 use crate::control_plane::{acquire_lock, begin_operation, complete_operation, release_lock, set_operation_stage};
-use crate::control_plane::sqlite::db_path_for_layout;
 use crate::event::{LifecycleStage, StageEvent};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{
@@ -316,7 +315,7 @@ async fn install_package_with_dependencies(
         format!("Updated current entry: {}", current_root.display()),
         format!(
             "Installed state written to {}",
-            db_path_for_layout(layout).display()
+            layout.scoop.control_plane_db_path().display()
         ),
     ];
     if !source.env_add_path.is_empty() {

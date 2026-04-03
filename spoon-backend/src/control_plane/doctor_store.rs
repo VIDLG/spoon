@@ -15,8 +15,8 @@ pub struct DoctorIssueRecord {
 }
 
 pub async fn sync_failed_lifecycle_issues(layout: &RuntimeLayout) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
-    db.call_write(move |conn| {
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
+    db.call(move |conn| {
         conn.execute(
             "DELETE FROM doctor_issues WHERE category = 'failed_lifecycle'",
             [],
@@ -61,7 +61,7 @@ pub async fn sync_failed_lifecycle_issues(layout: &RuntimeLayout) -> Result<()> 
 }
 
 pub async fn list_doctor_issues(layout: &RuntimeLayout) -> Result<Vec<DoctorIssueRecord>> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     db.call(|conn| {
         let mut stmt = conn.prepare(
             "SELECT severity, category, description, package, bucket, resolved

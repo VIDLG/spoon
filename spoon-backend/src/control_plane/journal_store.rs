@@ -10,11 +10,11 @@ pub async fn begin_operation(
     package: Option<&str>,
     bucket: Option<&str>,
 ) -> Result<i64> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let operation_type = operation_type.to_string();
     let package = package.map(ToString::to_string);
     let bucket = bucket.map(ToString::to_string);
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "INSERT INTO operation_journal (operation_type, package, bucket, status)
              VALUES (?1, ?2, ?3, 'running')",
@@ -30,9 +30,9 @@ pub async fn set_operation_stage(
     operation_id: i64,
     stage: LifecycleStage,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let stage = stage.as_str().to_string();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "UPDATE operation_journal
              SET details = ?2
@@ -50,10 +50,10 @@ pub async fn complete_operation(
     status: &str,
     details: Option<&str>,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let status = status.to_string();
     let details = details.map(ToString::to_string);
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "UPDATE operation_journal
              SET status = ?2,

@@ -119,7 +119,7 @@ pub fn known_bucket_source(name: &str) -> Option<String> {
 
 pub async fn load_buckets_from_registry(tool_root: &Path) -> Vec<Bucket> {
     let layout = RuntimeLayout::from_root(tool_root);
-    let Ok(db) = ControlPlaneDb::open_for_layout(&layout).await else {
+    let Ok(db) = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await else {
         return Vec::new();
     };
     db.call(|conn| {
@@ -142,11 +142,11 @@ pub async fn load_buckets_from_registry(tool_root: &Path) -> Vec<Bucket> {
 pub async fn upsert_bucket_to_registry(tool_root: &Path, spec: &BucketSpec) -> Result<Vec<Bucket>> {
     let bucket = spec.resolve()?;
     let layout = RuntimeLayout::from_root(tool_root);
-    let db = ControlPlaneDb::open_for_layout(&layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let bucket_name = bucket.name.clone();
     let source = bucket.source.clone();
     let branch = bucket.branch.clone();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "INSERT INTO bucket_registry (name, remote_url, branch)
              VALUES (?1, ?2, ?3)
@@ -166,9 +166,9 @@ pub async fn remove_bucket_from_registry_record(
     name: &str,
 ) -> Result<Vec<Bucket>> {
     let layout = RuntimeLayout::from_root(tool_root);
-    let db = ControlPlaneDb::open_for_layout(&layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let name = name.to_string();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "DELETE FROM bucket_registry WHERE lower(name) = lower(?1)",
             params![name],
@@ -247,7 +247,7 @@ pub async fn resolve_manifest(tool_root: &Path, package_name: &str) -> Option<Re
 
 pub fn resolve_manifest_sync(tool_root: &Path, package_name: &str) -> Option<ResolvedBucket> {
     let layout = RuntimeLayout::from_root(tool_root);
-    let conn = rusqlite::Connection::open(crate::control_plane::sqlite::db_path_for_layout(&layout))
+    let conn = rusqlite::Connection::open(layout.scoop.control_plane_db_path())
         .ok()?;
     let mut stmt = conn
         .prepare("SELECT name, remote_url, branch FROM bucket_registry ORDER BY rowid")

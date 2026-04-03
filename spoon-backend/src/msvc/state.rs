@@ -147,7 +147,7 @@ fn validation_status_label(status: MsvcValidationStatus) -> &'static str {
 }
 
 pub async fn read_canonical_state(layout: &RuntimeLayout) -> Option<MsvcCanonicalState> {
-    let db = ControlPlaneDb::open_for_layout(layout).await.ok()?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await.ok()?;
     let row = db
         .call(|conn| {
             conn.query_row(
@@ -180,7 +180,7 @@ pub async fn write_canonical_state(
     layout: &RuntimeLayout,
     state: &MsvcCanonicalState,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let runtime_kind = runtime_kind_label(state.runtime_kind).to_string();
     let installed = if state.installed { 1_i64 } else { 0_i64 };
     let version = state.version.clone();
@@ -198,7 +198,7 @@ pub async fn write_canonical_state(
     let official_detail = serde_json::to_string(&state.official)
         .map_err(|err| BackendError::external("failed to serialize official MSVC detail", err))?;
 
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "INSERT INTO msvc_runtime_state
                 (singleton_key, runtime_kind, installed, version, sdk_version, last_operation, last_stage, validation_status, validation_message, managed_detail, official_detail)
@@ -234,8 +234,8 @@ pub async fn write_canonical_state(
 }
 
 pub async fn clear_canonical_state(layout: &RuntimeLayout) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
-    db.call_write(|conn| {
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
+    db.call(|conn| {
         conn.execute("DELETE FROM msvc_runtime_state WHERE singleton_key = 'msvc'", [])?;
         Ok(())
     })

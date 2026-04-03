@@ -12,7 +12,6 @@ use crate::scoop::{
 };
 use crate::scoop::{plan_package_action, sync_main_bucket_registry, upsert_bucket_to_registry};
 use crate::scoop::state::{read_installed_state, write_installed_state};
-use crate::control_plane::sqlite::db_path_for_layout;
 use crate::tests::{block_on, temp_dir};
 use crate::{BackendContext, Result, SystemPort};
 use serde_json::json;
@@ -193,7 +192,7 @@ fn runtime_writes_canonical_scoop_state() {
         assert_eq!(loaded.post_uninstall, vec!["cleanup.ps1".to_string()]);
 
         // Verify the persisted control-plane row contains canonical fields
-        let db = crate::control_plane::ControlPlaneDb::open_for_layout(&layout)
+        let db = crate::control_plane::ControlPlaneDb::open(&layout.scoop.control_plane_db_path())
             .await
             .expect("open control plane db");
         let persisted: (String, String, String, Option<String>, String, String, String, String) = db
@@ -240,7 +239,7 @@ fn runtime_writes_canonical_scoop_state() {
             serde_json::json!([{ "relative_path": "data", "store_name": "data" }])
         );
 
-        let db_path = db_path_for_layout(&layout);
+        let db_path = layout.scoop.control_plane_db_path();
         assert!(db_path.exists(), "control-plane DB should exist");
         assert!(
             !layout.scoop.state_root.join("packages").join("test-pkg.json").exists(),

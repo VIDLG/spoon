@@ -8,10 +8,10 @@ pub async fn acquire_lock(
     lock_key: &str,
     operation_type: &str,
 ) -> Result<bool> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let lock_key = lock_key.to_string();
     let operation_type = operation_type.to_string();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         match conn.execute(
             "INSERT INTO operation_locks (lock_key, operation_type)
              VALUES (?1, ?2)",
@@ -30,9 +30,9 @@ pub async fn acquire_lock(
 }
 
 pub async fn release_lock(layout: &RuntimeLayout, lock_key: &str) -> Result<()> {
-    let db = ControlPlaneDb::open_for_layout(layout).await?;
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
     let lock_key = lock_key.to_string();
-    db.call_write(move |conn| {
+    db.call(move |conn| {
         conn.execute(
             "DELETE FROM operation_locks WHERE lock_key = ?1",
             params![lock_key],
