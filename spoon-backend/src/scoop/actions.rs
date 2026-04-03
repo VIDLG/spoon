@@ -32,15 +32,14 @@ use super::lifecycle::acquire::acquire_payloads;
 use super::lifecycle::integrate::run_integrations;
 use super::lifecycle::materialize::materialize_payloads;
 use super::lifecycle::persist::{restore_persist_entries, sync_persist_entries};
-use super::lifecycle::planner::plan_package_lifecycle;
 use super::lifecycle::reapply::reapply as reapply_lifecycle;
-use super::lifecycle::state::{commit_installed_state, remove_installed_state as remove_lifecycle_state};
 use super::lifecycle::surface::{apply_install_surface, remove_surface};
 use super::lifecycle::uninstall::uninstall as uninstall_lifecycle;
 use super::package_source::{dependency_lookup_key, selected_architecture_key};
 use super::ports::ScoopIntegrationPort;
-use super::planner::{ScoopPackageAction, ScoopPackagePlan};
+use super::planner::{ScoopPackageAction, ScoopPackagePlan, plan_package_lifecycle};
 use super::{ScoopPackageOperationOutcome, package_operation_outcome};
+use super::state::{commit_installed_state, remove_canonical_installed_state};
 
 fn emit_stage(emit: &mut dyn FnMut(BackendEvent), stage: LifecycleStage) {
     let event = if matches!(stage, LifecycleStage::Completed) {
@@ -445,7 +444,7 @@ pub(crate) async fn uninstall_package(
     }
     set_operation_stage(layout, operation_id, LifecycleStage::StateRemoving).await?;
     emit_stage(emit, LifecycleStage::StateRemoving);
-    remove_lifecycle_state(layout, package_name).await?;
+    remove_canonical_installed_state(layout, package_name).await?;
     if let Some(state) = &state {
         let current_root = layout.scoop.package_current_root(package_name);
         let persist_root = layout.scoop.package_persist_root(package_name);

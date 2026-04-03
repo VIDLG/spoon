@@ -510,9 +510,9 @@ fn install_update_share_front_half_lifecycle_modules() {
     let install_plan: ScoopPackagePlan = plan_package_action("install", "demo", "demo", Some(&root));
     let update_plan: ScoopPackagePlan = plan_package_action("update", "demo", "demo", Some(&root));
 
-    let install_planned = block_on(crate::scoop::lifecycle::planner::plan_package_lifecycle(&root, &install_plan))
+    let install_planned = block_on(crate::scoop::planner::plan_package_lifecycle(&root, &install_plan))
         .expect("install lifecycle plan");
-    let update_planned = block_on(crate::scoop::lifecycle::planner::plan_package_lifecycle(&root, &update_plan))
+    let update_planned = block_on(crate::scoop::planner::plan_package_lifecycle(&root, &update_plan))
         .expect("update lifecycle plan");
 
     assert_eq!(install_planned.source.version, "1.0.0");

@@ -1,6 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use super::buckets::{ResolvedBucket, resolve_manifest_sync};
+use crate::{BackendError, Result};
+
+use super::buckets::{ResolvedBucket, resolve_manifest, resolve_manifest_sync};
+use super::host::load_manifest_value;
+use super::package_source::{SelectedPackageSource, parse_selected_source};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoopPackageAction {
@@ -18,6 +22,12 @@ pub struct ScoopPackagePlan {
     pub package_name: String,
     pub args: Vec<String>,
     pub resolved_manifest: Option<ResolvedBucket>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PlannedPackageLifecycle {
+    pub resolved: ResolvedBucket,
+    pub source: SelectedPackageSource,
 }
 
 impl ScoopPackagePlan {
@@ -103,6 +113,21 @@ pub fn plan_package_action(
         args: action_kind.build_args(package_name, action),
         resolved_manifest,
     }
+}
+
+pub(crate) async fn plan_package_lifecycle(
+    tool_root: &Path,
+    plan: &ScoopPackagePlan,
+) -> Result<PlannedPackageLifecycle> {
+    let resolved = match plan.resolved_manifest.clone() {
+        Some(resolved) => resolved,
+        None => resolve_manifest(tool_root, &plan.package_name)
+            .await
+            .ok_or(BackendError::ManifestUnavailable)?,
+    };
+    let manifest = load_manifest_value(&resolved.manifest_path).await?;
+    let source = parse_selected_source(&manifest)?;
+    Ok(PlannedPackageLifecycle { resolved, source })
 }
 
 pub fn infer_tool_root(explicit_root: Option<&Path>, config_root: Option<&str>) -> Option<PathBuf> {
