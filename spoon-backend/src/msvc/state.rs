@@ -1,5 +1,6 @@
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
@@ -63,25 +64,28 @@ struct StoredMsvcStateRow {
     official_detail: String,
 }
 
-impl StoredMsvcStateRow {
-    fn into_state(self) -> Option<MsvcCanonicalState> {
-        Some(MsvcCanonicalState {
-            runtime_kind: serde_json::from_str(&format!("\"{}\"", self.runtime_kind)).ok()?,
-            installed: self.installed != 0,
-            version: self.version,
-            sdk_version: self.sdk_version,
-            last_operation: self
+impl TryFrom<StoredMsvcStateRow> for MsvcCanonicalState {
+    type Error = ();
+
+    fn try_from(row: StoredMsvcStateRow) -> std::result::Result<Self, Self::Error> {
+        Ok(MsvcCanonicalState {
+            runtime_kind: serde_json::from_str(&format!("\"{}\"", row.runtime_kind))
+                .map_err(|_| ())?,
+            installed: row.installed != 0,
+            version: row.version,
+            sdk_version: row.sdk_version,
+            last_operation: row
                 .last_operation
                 .as_deref()
                 .and_then(parse_operation_kind),
-            last_stage: self.last_stage.as_deref().and_then(parse_lifecycle_stage),
-            validation_status: self
+            last_stage: row.last_stage.as_deref().and_then(parse_lifecycle_stage),
+            validation_status: row
                 .validation_status
                 .as_deref()
                 .and_then(parse_validation_status),
-            validation_message: self.validation_message,
-            managed: serde_json::from_str(&self.managed_detail).ok()?,
-            official: serde_json::from_str(&self.official_detail).ok()?,
+            validation_message: row.validation_message,
+            managed: serde_json::from_str(&row.managed_detail).map_err(|_| ())?,
+            official: serde_json::from_str(&row.official_detail).map_err(|_| ())?,
         })
     }
 }
@@ -169,7 +173,7 @@ pub async fn read_canonical_state(layout: &RuntimeLayout) -> Option<MsvcCanonica
         })
         .await
         .ok()?;
-    row.and_then(StoredMsvcStateRow::into_state)
+    row.and_then(|row| MsvcCanonicalState::try_from(row).ok())
 }
 
 pub async fn write_canonical_state(

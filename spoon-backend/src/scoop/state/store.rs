@@ -3,6 +3,7 @@ use crate::control_plane::ControlPlaneDb;
 use crate::layout::RuntimeLayout;
 use crate::{BackendError, Result};
 use rusqlite::{OptionalExtension, params};
+use std::convert::TryFrom;
 
 #[derive(Debug)]
 struct StoredInstalledPackageRow {
@@ -22,23 +23,25 @@ struct StoredInstalledPackageRow {
     post_uninstall: String,
 }
 
-impl StoredInstalledPackageRow {
-    fn into_state(self) -> Option<InstalledPackageState> {
-        Some(InstalledPackageState {
-            package: self.package,
-            version: self.version,
-            bucket: self.bucket,
-            architecture: self.architecture,
-            cache_size_bytes: self.cache_size_bytes.and_then(|value| u64::try_from(value).ok()),
-            bins: serde_json::from_str(&self.bins).ok()?,
-            shortcuts: serde_json::from_str(&self.shortcuts).ok()?,
-            env_add_path: serde_json::from_str(&self.env_add_path).ok()?,
-            env_set: serde_json::from_str(&self.env_set).ok()?,
-            persist: serde_json::from_str(&self.persist).ok()?,
-            integrations: serde_json::from_str(&self.integrations).ok()?,
-            pre_uninstall: serde_json::from_str(&self.pre_uninstall).ok()?,
-            uninstaller_script: serde_json::from_str(&self.uninstaller_script).ok()?,
-            post_uninstall: serde_json::from_str(&self.post_uninstall).ok()?,
+impl TryFrom<StoredInstalledPackageRow> for InstalledPackageState {
+    type Error = ();
+
+    fn try_from(row: StoredInstalledPackageRow) -> std::result::Result<Self, Self::Error> {
+        Ok(InstalledPackageState {
+            package: row.package,
+            version: row.version,
+            bucket: row.bucket,
+            architecture: row.architecture,
+            cache_size_bytes: row.cache_size_bytes.and_then(|value| u64::try_from(value).ok()),
+            bins: serde_json::from_str(&row.bins).map_err(|_| ())?,
+            shortcuts: serde_json::from_str(&row.shortcuts).map_err(|_| ())?,
+            env_add_path: serde_json::from_str(&row.env_add_path).map_err(|_| ())?,
+            env_set: serde_json::from_str(&row.env_set).map_err(|_| ())?,
+            persist: serde_json::from_str(&row.persist).map_err(|_| ())?,
+            integrations: serde_json::from_str(&row.integrations).map_err(|_| ())?,
+            pre_uninstall: serde_json::from_str(&row.pre_uninstall).map_err(|_| ())?,
+            uninstaller_script: serde_json::from_str(&row.uninstaller_script).map_err(|_| ())?,
+            post_uninstall: serde_json::from_str(&row.post_uninstall).map_err(|_| ())?,
         })
     }
 }
@@ -81,7 +84,7 @@ pub async fn read_installed_state(
         })
         .await
         .ok()?;
-    row.and_then(StoredInstalledPackageRow::into_state)
+    row.and_then(|row| InstalledPackageState::try_from(row).ok())
 }
 
 /// Write (create or update) a canonical installed-package state row.
@@ -219,6 +222,6 @@ pub async fn list_installed_states(layout: &RuntimeLayout) -> Vec<InstalledPacka
         .unwrap_or_default();
 
     rows.into_iter()
-        .filter_map(StoredInstalledPackageRow::into_state)
+        .filter_map(|row| InstalledPackageState::try_from(row).ok())
         .collect()
 }

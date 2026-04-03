@@ -14,7 +14,7 @@ use crate::control_plane::sqlite::db_path_for_layout;
 use crate::event::{LifecycleStage, StageEvent};
 use crate::layout::RuntimeLayout;
 use crate::scoop::state::{
-    InstalledPackageState, read_installed_state,
+    InstalledPackageState, read_installed_state, remove_installed_state, write_installed_state,
 };
 
 use super::buckets;
@@ -39,7 +39,6 @@ use super::package_source::{dependency_lookup_key, selected_architecture_key};
 use super::ports::ScoopIntegrationPort;
 use super::planner::{ScoopPackageAction, ScoopPackagePlan, plan_package_lifecycle};
 use super::{ScoopPackageOperationOutcome, package_operation_outcome};
-use super::state::{commit_installed_state, remove_canonical_installed_state};
 
 fn emit_stage(emit: &mut dyn FnMut(BackendEvent), stage: LifecycleStage) {
     let event = if matches!(stage, LifecycleStage::Completed) {
@@ -288,7 +287,7 @@ async fn install_package_with_dependencies(
     let architecture = selected_architecture_key();
     set_operation_stage(layout, operation_id, LifecycleStage::StateCommitting).await?;
     emit_stage(emit, LifecycleStage::StateCommitting);
-    commit_installed_state(
+    write_installed_state(
         &layout,
         &InstalledPackageState {
             package: plan.package_name.clone(),
@@ -444,7 +443,7 @@ pub(crate) async fn uninstall_package(
     }
     set_operation_stage(layout, operation_id, LifecycleStage::StateRemoving).await?;
     emit_stage(emit, LifecycleStage::StateRemoving);
-    remove_canonical_installed_state(layout, package_name).await?;
+    remove_installed_state(layout, package_name).await?;
     if let Some(state) = &state {
         let current_root = layout.scoop.package_current_root(package_name);
         let persist_root = layout.scoop.package_persist_root(package_name);

@@ -13,19 +13,22 @@ That goal was met through three linked changes:
 1. pass-through DTO wrappers were removed
 2. low-value derived/count fields were removed from read models
 3. `projection.rs` was demoted further while a narrow `schemars` trial hardened the surviving outward contracts
+4. additional thin read-model/state forwarding wrappers were inlined or removed after the initial cleanup pass
 
 ## Key Evidence
 
 ### Core Code Changes
 
 - [`query.rs`](/d:/projects/spoon/spoon-backend/src/scoop/query.rs)
-- [`state/projections.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/projections.rs)
+- [`state/model.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/model.rs)
+- [`state/store.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/store.rs)
 - [`status.rs`](/d:/projects/spoon/spoon-backend/src/status.rs)
 - [`projection.rs`](/d:/projects/spoon/spoon-backend/src/scoop/projection.rs)
 - [`buckets.rs`](/d:/projects/spoon/spoon-backend/src/scoop/buckets.rs)
 - [`report.rs`](/d:/projects/spoon/spoon/src/service/scoop/report.rs)
 - [`run.rs`](/d:/projects/spoon/spoon/src/cli/run.rs)
 - [`Cargo.toml`](/d:/projects/spoon/spoon-backend/Cargo.toml)
+- [`state.rs`](/d:/projects/spoon/spoon-backend/src/msvc/state.rs)
 
 ### Completed Plan Summaries
 
@@ -44,7 +47,7 @@ That goal was met through three linked changes:
 ## Residual Risk
 
 - Some outward contract questions remain subjective even with `schemars`; schema derivation helps identify true contract structs but does not replace architectural judgment.
-- `projection.rs` is now thinner, but additional helper simplification can still happen opportunistically in later work if more dead code is exposed.
+- `projection.rs` is now much less central, but additional helper simplification can still happen opportunistically in later work if more dead code is exposed.
 
 ## Conclusion
 
