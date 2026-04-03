@@ -1,18 +1,19 @@
 use std::path::Path;
 
+use schemars::JsonSchema;
 use super::buckets::{self, Bucket};
 use super::manifest::{self, ScoopManifest};
 use super::state::{InstalledPackageState, InstalledPackageSummary};
 use crate::layout::RuntimeLayout;
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ScoopRuntimeStatus {
     pub root: String,
     pub shims: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ScoopPaths {
     pub apps: String,
     pub cache: String,
@@ -20,7 +21,7 @@ pub struct ScoopPaths {
     pub state: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ScoopStatus {
     pub kind: &'static str,
     pub success: bool,
@@ -30,7 +31,7 @@ pub struct ScoopStatus {
     pub paths: ScoopPaths,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ScoopSearchMatch {
     pub package_name: String,
     pub bucket: String,
@@ -39,7 +40,7 @@ pub struct ScoopSearchMatch {
     pub homepage: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema)]
 pub struct ScoopSearchResults {
     pub kind: &'static str,
     pub success: bool,

@@ -200,7 +200,7 @@ fn runtime_status_uses_canonical_installed_state() {
         let status = runtime_status(&tmp).await;
         assert_eq!(status.kind, "scoop_status");
         assert!(status.success);
-        assert_eq!(status.runtime.installed_package_count, 2);
+        assert_eq!(status.installed_packages.len(), 2);
 
         // Packages should be sorted by name
         assert_eq!(status.installed_packages.len(), 2);

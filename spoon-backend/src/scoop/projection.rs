@@ -144,22 +144,6 @@ pub fn manifest_value_owned(doc: &manifest::ScoopManifest, key: &str) -> Option<
     manifest_value(doc, key)
 }
 
-pub fn url_lines(label: &str, value: Option<Value>, include_hash_urls: bool) -> Vec<String> {
-    let Some(value) = value else {
-        return Vec::new();
-    };
-    let urls = collect_urls_vec(&value, include_hash_urls);
-    if urls.is_empty() {
-        Vec::new()
-    } else if urls.len() == 1 {
-        vec![format!("{label}: {}", urls[0])]
-    } else {
-        let mut lines = vec![format!("{label}:")];
-        lines.extend(urls.into_iter().map(|item| format!("  - {item}")));
-        lines
-    }
-}
-
 fn bin_item_display(value: &Value) -> Option<String> {
     match value {
         Value::String(text) => {
@@ -189,30 +173,6 @@ pub fn collect_bin_items(value: &Value) -> Vec<String> {
     match value {
         Value::Array(items) => items.iter().filter_map(bin_item_display).collect(),
         _ => bin_item_display(value).into_iter().collect(),
-    }
-}
-
-pub fn bin_lines(label: &str, value: Option<Value>) -> Vec<String> {
-    let Some(ref value) = value else {
-        return Vec::new();
-    };
-    let Value::Array(items) = value else {
-        return bin_item_display(value)
-            .map(|value| vec![format!("{label}: {value}")])
-            .unwrap_or_default();
-    };
-    let rendered = items
-        .iter()
-        .filter_map(bin_item_display)
-        .collect::<Vec<_>>();
-    if rendered.is_empty() {
-        Vec::new()
-    } else if rendered.len() == 1 {
-        vec![format!("{label}: {}", rendered[0])]
-    } else {
-        let mut lines = vec![format!("{label}:")];
-        lines.extend(rendered.into_iter().map(|item| format!("  - {item}")));
-        lines
     }
 }
 
@@ -273,74 +233,6 @@ pub fn collect_shortcut_items(value: &Value) -> Vec<String> {
     match value {
         Value::Array(items) => items.iter().filter_map(shortcut_item_display).collect(),
         _ => shortcut_item_display(value).into_iter().collect(),
-    }
-}
-
-pub fn shortcut_lines(label: &str, value: Option<Value>) -> Vec<String> {
-    let Some(ref value) = value else {
-        return Vec::new();
-    };
-    let Value::Array(items) = value else {
-        return shortcut_item_display(value)
-            .map(|value| vec![format!("{label}: {value}")])
-            .unwrap_or_default();
-    };
-    let rendered = items
-        .iter()
-        .filter_map(shortcut_item_display)
-        .collect::<Vec<_>>();
-    if rendered.is_empty() {
-        Vec::new()
-    } else if rendered.len() == 1 {
-        vec![format!("{label}: {}", rendered[0])]
-    } else {
-        let mut lines = vec![format!("{label}:")];
-        lines.extend(rendered.into_iter().map(|item| format!("  - {item}")));
-        lines
-    }
-}
-
-pub fn notes_lines(value: Option<Value>) -> Vec<String> {
-    let Some(ref value) = value else {
-        return Vec::new();
-    };
-    match value {
-        Value::String(text) => {
-            let text = text.trim();
-            if text.is_empty() {
-                Vec::new()
-            } else {
-                vec![format!("Notes: {text}")]
-            }
-        }
-        Value::Array(items) => {
-            let mut lines = Vec::new();
-            for (index, item) in items.iter().enumerate() {
-                let rendered = match item {
-                    Value::String(text) => Some(text.to_string()),
-                    _ => value_to_display(item),
-                };
-                let Some(rendered) = rendered else {
-                    continue;
-                };
-                if index == 0 {
-                    lines.push("Notes:".to_string());
-                }
-                if rendered.trim().is_empty() {
-                    lines.push(String::new());
-                } else {
-                    lines.push(format!("  {rendered}"));
-                }
-            }
-            if lines == ["Notes:"] {
-                Vec::new()
-            } else {
-                lines
-            }
-        }
-        _ => value_to_display(value)
-            .map(|rendered| vec![format!("Notes: {rendered}")])
-            .unwrap_or_default(),
     }
 }
 
@@ -423,33 +315,6 @@ pub fn resolve_env_map(
             )
         })
         .collect()
-}
-
-pub fn value_field(label: &str, value: Option<Value>) -> Option<String> {
-    value
-        .as_ref()
-        .and_then(value_to_display)
-        .map(|value| format!("{label}: {value}"))
-}
-
-pub fn license_field(value: Option<Value>) -> Option<String> {
-    let value_ref = value.as_ref()?;
-    match value_ref {
-        Value::String(text) => {
-            let text = text.trim();
-            if text.is_empty() {
-                None
-            } else {
-                Some(format!("License: {text}"))
-            }
-        }
-        Value::Object(map) => map
-            .get("identifier")
-            .or_else(|| map.get("name"))
-            .and_then(value_to_display)
-            .map(|value| format!("License: {value}")),
-        _ => value_to_display(value_ref).map(|value| format!("License: {value}")),
-    }
 }
 
 pub fn directory_size(path: &Path) -> u64 {

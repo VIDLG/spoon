@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::scoop::Bucket;
@@ -11,7 +12,7 @@ use crate::layout::RuntimeLayout;
 /// Centralizes runtime roots and backend state facts so that the app shell
 /// renders status, JSON output, and TUI background refresh from one source
 /// instead of re-reading backend state files locally.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct BackendStatusSnapshot {
     pub kind: &'static str,
     pub scoop: BackendScoopSummary,
@@ -20,7 +21,7 @@ pub struct BackendStatusSnapshot {
 }
 
 /// Derives Scoop runtime summary from the backend query surface.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct BackendScoopSummary {
     pub installed: bool,
     pub root: String,
@@ -30,7 +31,7 @@ pub struct BackendScoopSummary {
 }
 
 /// Minimal MSVC summary for status display.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct BackendMsvcSummary {
     pub managed_status: String,
     pub managed_version: Option<String>,
@@ -41,7 +42,7 @@ pub struct BackendMsvcSummary {
 }
 
 /// Runtime root paths derived from the backend layout.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct BackendRuntimeRoots {
     pub root: String,
     pub scoop: String,

@@ -1,9 +1,11 @@
+use schemars::JsonSchema;
+
 use crate::layout::RuntimeLayout;
 
 use super::model::InstalledPackageState;
 use super::store::list_installed_states;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, JsonSchema)]
 pub struct InstalledPackageSummary {
     pub name: String,
     pub version: String,

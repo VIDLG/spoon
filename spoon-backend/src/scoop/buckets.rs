@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use rusqlite::params;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -9,7 +10,7 @@ use crate::layout::RuntimeLayout;
 use crate::BackendContext;
 use crate::{BackendError, BackendEvent, CommandStatus, Result, clone_repo, fsx};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Bucket {
     pub name: String,
     pub source: String,
