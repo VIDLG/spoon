@@ -18,7 +18,7 @@ async fn sqlite_control_plane_roundtrips_installed_state() {
         .expect("in-memory DB should open");
 
     // Seed a row.
-    db.call_write(|conn| {
+    db.call(|conn| {
         conn.execute(
             "INSERT INTO installed_packages
                 (package, version, bucket, architecture, bins)
@@ -55,7 +55,7 @@ async fn sqlite_control_plane_records_operation_journal() {
         .expect("in-memory DB should open");
 
     // Insert a journal entry.
-    db.call_write(|conn| {
+    db.call(|conn| {
         conn.execute(
             "INSERT INTO operation_journal (operation_type, package, status)
              VALUES (?1, ?2, ?3)",
@@ -136,7 +136,7 @@ async fn lock_conflict_and_journal_stop_points_are_diagnosable() {
         .await
         .expect("complete failed operation");
 
-    let db = ControlPlaneDb::open_for_layout(&layout)
+    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path())
         .await
         .expect("open db");
     let (status, details, lock_count): (String, String, i64) = db

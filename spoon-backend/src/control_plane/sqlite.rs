@@ -108,8 +108,8 @@ async fn initialize_database(db_path: PathBuf) -> Result<()> {
             std::fs::create_dir_all(parent)
                 .map_err(|e| crate::BackendError::fs("create", parent, e))?;
         }
-        let conn = open_connection(&db_path)?;
-        run_migrations(&conn)
+        let mut conn = open_connection(&db_path)?;
+        run_migrations(&mut conn)
             .map_err(|e| crate::BackendError::external("control-plane migration failed", e))
     })
     .await
@@ -126,12 +126,12 @@ mod tests {
             .await
             .expect("in-memory DB should open");
 
-        // Verify the schema_metadata table was seeded.
+        // Verify the migration version was advanced.
         let version: i64 = db
             .call(|conn| {
                 Ok(conn
                     .query_row(
-                        "SELECT MAX(version) FROM schema_metadata",
+                        "PRAGMA user_version",
                         [],
                         |row| row.get(0),
                     )

@@ -16,6 +16,3 @@ CREATE TABLE IF NOT EXISTS msvc_runtime_state (
     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
 );
-
-INSERT OR IGNORE INTO schema_metadata (version, description)
-VALUES (2, 'msvc canonical control-plane state');

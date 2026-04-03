@@ -7,7 +7,6 @@
 --   bucket_registry     - bucket metadata (name, remote, local path)
 --   doctor_issues       - doctor-detected repair items
 --   operation_locks     - in-flight operation mutual exclusion
---   schema_metadata     - migration tracking
 
 CREATE TABLE IF NOT EXISTS installed_packages (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,13 +66,3 @@ CREATE TABLE IF NOT EXISTS operation_locks (
     acquired_at     TEXT    NOT NULL DEFAULT (datetime('now')),
     expires_at      TEXT
 );
-
-CREATE TABLE IF NOT EXISTS schema_metadata (
-    version         INTEGER PRIMARY KEY,
-    applied_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    description     TEXT
-);
-
--- Seed the baseline migration record.
-INSERT OR IGNORE INTO schema_metadata (version, description)
-VALUES (1, 'initial control-plane schema');
