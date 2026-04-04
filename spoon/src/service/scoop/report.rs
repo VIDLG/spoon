@@ -37,8 +37,8 @@ pub async fn package_list_report(tool_root: &Path) -> CommandResult {
         .await
         .into_iter()
         .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
-            name: state.package,
-            version: state.version.trim().to_string(),
+            name: state.identity.package,
+            version: state.identity.version.trim().to_string(),
         })
         .collect::<Vec<_>>();
     let output = lines_or_default(

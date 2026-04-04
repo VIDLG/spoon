@@ -1,11 +1,9 @@
-use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::Path;
-use std::pin::Pin;
 
+use async_trait::async_trait;
 use crate::scoop::{
-    BucketUpdateSummary, execute_package_action_streaming_with_context, plan_package_action,
-    update_buckets_streaming_with_context, ScoopIntegrationPort, SupplementalShimSpec,
+    AppliedIntegration, BucketUpdateSummary, ScoopIntegrationPort, SupplementalShimSpec,
+    execute_package_action_streaming_with_context, plan_package_action, update_buckets_streaming_with_context,
 };
 use crate::tests::{block_on, temp_dir};
 use crate::{BackendContext, BackendEvent, Result, SystemPort};
@@ -26,6 +24,7 @@ impl SystemPort for TestPorts {
     fn remove_process_path_entry(&self, _path: &Path) {}
 }
 
+#[async_trait(?Send)]
 impl ScoopIntegrationPort for TestPorts {
     fn supplemental_shims(
         &self,
@@ -35,14 +34,14 @@ impl ScoopIntegrationPort for TestPorts {
         Vec::new()
     }
 
-    fn apply_integrations<'a>(
-        &'a self,
-        _package_name: &'a str,
-        _current_root: &'a Path,
-        _persist_root: &'a Path,
-        _emit: &'a mut dyn FnMut(BackendEvent),
-    ) -> Pin<Box<dyn Future<Output = Result<BTreeMap<String, String>>> + 'a>> {
-        Box::pin(async { Ok(BTreeMap::new()) })
+    async fn apply_integrations(
+        &self,
+        _package_name: &str,
+        _current_root: &Path,
+        _persist_root: &Path,
+        _emit: &mut dyn FnMut(BackendEvent),
+    ) -> Result<Vec<AppliedIntegration>> {
+        Ok(Vec::new())
     }
 }
 

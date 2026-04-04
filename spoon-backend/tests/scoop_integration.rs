@@ -3,10 +3,15 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::{block_on, temp_dir};
+use spoon_backend::Db;
 use spoon_backend::layout::RuntimeLayout;
 use spoon_backend::scoop::{
-    InstalledPackageState, PersistEntry, ScoopPackageDetailsOutcome, ShortcutEntry, package_info,
-    package_operation_outcome, sync_main_bucket_registry, write_installed_state,
+    AppliedIntegration, InstalledPackageState, PersistEntry, ScoopPackageDetailsOutcome,
+    ShortcutEntry, package_info, package_operation_outcome, sync_main_bucket_registry,
+    write_installed_state,
+};
+use spoon_backend::scoop::state::{
+    InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageUninstall,
 };
 
 use spoon_backend::CommandStatus;
@@ -62,37 +67,40 @@ fn scoop_package_info_reads_canonical_state() {
     std::fs::write(current_root.join("rg.exe"), b"rg").unwrap();
 
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path())).unwrap();
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "ripgrep".to_string(),
-            version: "14.1.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            bins: vec!["rg".to_string()],
-            cache_size_bytes: Some(2048),
-            shortcuts: vec![ShortcutEntry {
-                target_path: "rg.exe".to_string(),
-                name: "ripgrep".to_string(),
-                args: None,
-                icon_path: None,
+            identity: InstalledPackageIdentity {
+                package: "ripgrep".to_string(),
+                version: "14.1.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: Some(2048),
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["rg".to_string()],
+                shortcuts: vec![ShortcutEntry {
+                    target_path: "rg.exe".to_string(),
+                    name: "ripgrep".to_string(),
+                    args: None,
+                    icon_path: None,
+                }],
+                env_add_path: vec![".".to_string()],
+                env_set: BTreeMap::from([(
+                    "RIPGREP_CONFIG_PATH".to_string(),
+                    "$dir\\config".to_string(),
+                )]),
+                persist: vec![PersistEntry {
+                    relative_path: "config".to_string(),
+                    store_name: "config".to_string(),
+                }],
+            },
+            integrations: vec![AppliedIntegration {
+                key: "ripgrep.shell_completions".to_string(),
+                value: root.join("completions").display().to_string(),
             }],
-            env_add_path: vec![".".to_string()],
-            env_set: BTreeMap::from([(
-                "RIPGREP_CONFIG_PATH".to_string(),
-                "$dir\\config".to_string(),
-            )]),
-            persist: vec![PersistEntry {
-                relative_path: "config".to_string(),
-                store_name: "config".to_string(),
-            }],
-            integrations: BTreeMap::from([(
-                "ripgrep.shell_completions".to_string(),
-                root.join("completions").display().to_string(),
-            )]),
-            pre_uninstall: Vec::new(),
-            uninstaller_script: Vec::new(),
-            post_uninstall: Vec::new(),
+            uninstall: InstalledPackageUninstall::default(),
         },
     ))
     .unwrap();
@@ -202,29 +210,32 @@ fn scoop_package_info_integrates_manifest_and_installed_state() {
     std::fs::write(current_root.join("Scripts").join("pip.exe"), b"pip").unwrap();
 
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path())).unwrap();
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "python".to_string(),
-            version: "3.12.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: None,
-            bins: vec!["python".to_string(), "pip".to_string()],
-            cache_size_bytes: None,
-            shortcuts: Vec::<ShortcutEntry>::new(),
-            env_add_path: vec!["Scripts".to_string()],
-            env_set: BTreeMap::from([("PYTHONHOME".to_string(), "$dir".to_string())]),
-            persist: vec![PersistEntry {
-                relative_path: "Lib\\site-packages".to_string(),
-                store_name: "Lib\\site-packages".to_string(),
+            identity: InstalledPackageIdentity {
+                package: "python".to_string(),
+                version: "3.12.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: None,
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["python".to_string(), "pip".to_string()],
+                shortcuts: Vec::<ShortcutEntry>::new(),
+                env_add_path: vec!["Scripts".to_string()],
+                env_set: BTreeMap::from([("PYTHONHOME".to_string(), "$dir".to_string())]),
+                persist: vec![PersistEntry {
+                    relative_path: "Lib\\site-packages".to_string(),
+                    store_name: "Lib\\site-packages".to_string(),
+                }],
+            },
+            integrations: vec![AppliedIntegration {
+                key: "python.pip_config".to_string(),
+                value: root.join("pip").display().to_string(),
             }],
-            integrations: BTreeMap::from([(
-                "python.pip_config".to_string(),
-                root.join("pip").display().to_string(),
-            )]),
-            pre_uninstall: Vec::new(),
-            uninstaller_script: Vec::new(),
-            post_uninstall: Vec::new(),
+            uninstall: InstalledPackageUninstall::default(),
         },
     ))
     .unwrap();

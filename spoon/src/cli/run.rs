@@ -663,8 +663,8 @@ async fn run_scoop_command(
                     .await
                     .into_iter()
                     .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
-                        name: state.package,
-                        version: state.version.trim().to_string(),
+                        name: state.identity.package,
+                        version: state.identity.version.trim().to_string(),
                     })
                     .collect::<Vec<_>>();
                 output::print_json_value(&json!({

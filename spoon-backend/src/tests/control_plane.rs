@@ -1,37 +1,48 @@
 //! Focused bootstrap tests for the SQLite control-plane initialization.
 
 use crate::control_plane::{
-    ControlPlaneDb, acquire_lock, begin_operation, complete_operation, list_doctor_issues,
-    release_lock, set_operation_stage,
+    acquire_lock, begin_operation, complete_operation, list_doctor_issues, release_lock,
+    set_operation_stage,
 };
+use crate::db::Db;
 use crate::event::LifecycleStage;
 use crate::layout::RuntimeLayout;
-use crate::scoop::{NoopScoopRuntimeHost, doctor_with_host};
+use crate::scoop::state::{
+    InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState,
+    write_installed_state,
+};
+use crate::scoop::{NoopPorts, doctor_with_host};
 use crate::tests::temp_dir;
 
 /// Verify that a seeded installed-package row can be inserted and read back
 /// through the control-plane DB facade.
 #[tokio::test]
 async fn sqlite_control_plane_roundtrips_installed_state() {
-    let db = ControlPlaneDb::open_in_memory()
+    let db = Db::open_in_memory()
         .await
         .expect("in-memory DB should open");
 
-    // Seed a row.
-    db.call(|conn| {
-        conn.execute(
-            "INSERT INTO installed_packages
-                (package, version, bucket, architecture, bins)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params!["ripgrep", "14.1.0", "main", "x64", "[\"rg.exe\"]"],
-        )?;
-        Ok(())
-    })
+    write_installed_state(
+        &db,
+        &InstalledPackageState {
+            identity: InstalledPackageIdentity {
+                package: "ripgrep".to_string(),
+                version: "14.1.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["rg.exe".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
     .await
-    .expect("insert should succeed");
+    .expect("write should succeed");
 
-    // Read it back.
-    let (package, version, bucket): (String, String, String) = db
+    let package: (String, String, String) = db
         .call(|conn| {
             Ok(conn.query_row(
                 "SELECT package, version, bucket FROM installed_packages WHERE package = ?1",
@@ -42,15 +53,27 @@ async fn sqlite_control_plane_roundtrips_installed_state() {
         .await
         .expect("query should succeed");
 
-    assert_eq!(package, "ripgrep");
-    assert_eq!(version, "14.1.0");
-    assert_eq!(bucket, "main");
+    assert_eq!(package.0, "ripgrep");
+    assert_eq!(package.1, "14.1.0");
+    assert_eq!(package.2, "main");
+
+    let bins: String = db
+        .call(|conn| {
+            Ok(conn.query_row(
+                "SELECT bins FROM installed_package_command_surface WHERE package = ?1",
+                rusqlite::params!["ripgrep"],
+                |row| row.get(0),
+            )?)
+        })
+        .await
+        .expect("surface query should succeed");
+    assert_eq!(bins, "[\"rg.exe\"]");
 }
 
 /// Verify that the schema can record at least one operation journal row.
 #[tokio::test]
 async fn sqlite_control_plane_records_operation_journal() {
-    let db = ControlPlaneDb::open_in_memory()
+    let db = Db::open_in_memory()
         .await
         .expect("in-memory DB should open");
 
@@ -88,26 +111,29 @@ async fn sqlite_store_facade_hides_driver_details() {
     let root = temp_dir("control-plane-facade");
     std::fs::create_dir_all(&root).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = Db::open(&layout.scoop.db_path())
+        .await
+        .expect("open db");
 
-    let op_id = begin_operation(&layout, "install", Some("jq"), Some("main"))
+    let op_id = begin_operation(&db, "install", Some("jq"), Some("main"))
         .await
         .expect("begin operation");
-    set_operation_stage(&layout, op_id, LifecycleStage::Materializing)
+    set_operation_stage(&db, op_id, LifecycleStage::Materializing)
         .await
         .expect("set stage");
-    complete_operation(&layout, op_id, "completed", Some("done"))
+    complete_operation(&db, op_id, "completed", Some("done"))
         .await
         .expect("complete operation");
 
-    let acquired = acquire_lock(&layout, "scoop:install:jq", "install")
+    let acquired = acquire_lock(&db, "scoop:install:jq", "install")
         .await
         .expect("acquire lock");
     assert!(acquired);
-    release_lock(&layout, "scoop:install:jq")
+    release_lock(&db, "scoop:install:jq")
         .await
         .expect("release lock");
 
-    let issues = list_doctor_issues(&layout).await.expect("list issues");
+    let issues = list_doctor_issues(&db).await.expect("list issues");
     assert!(issues.is_empty(), "fresh control plane should have no doctor issues");
 }
 
@@ -116,27 +142,30 @@ async fn lock_conflict_and_journal_stop_points_are_diagnosable() {
     let root = temp_dir("control-plane-stop-points");
     std::fs::create_dir_all(&root).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = Db::open(&layout.scoop.db_path())
+        .await
+        .expect("open db");
 
-    let first = acquire_lock(&layout, "scoop:install:demo", "install")
+    let first = acquire_lock(&db, "scoop:install:demo", "install")
         .await
         .expect("first lock acquisition");
-    let second = acquire_lock(&layout, "scoop:install:demo", "install")
+    let second = acquire_lock(&db, "scoop:install:demo", "install")
         .await
         .expect("second lock acquisition");
     assert!(first);
     assert!(!second, "second acquisition should surface lock conflict");
 
-    let op_id = begin_operation(&layout, "install", Some("demo"), Some("main"))
+    let op_id = begin_operation(&db, "install", Some("demo"), Some("main"))
         .await
         .expect("begin operation");
-    set_operation_stage(&layout, op_id, LifecycleStage::PostInstallHooks)
+    set_operation_stage(&db, op_id, LifecycleStage::PostInstallHooks)
         .await
         .expect("set stage");
-    complete_operation(&layout, op_id, "failed", Some("hook failed"))
+    complete_operation(&db, op_id, "failed", Some("hook failed"))
         .await
         .expect("complete failed operation");
 
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path())
+    let db = Db::open(&layout.scoop.db_path())
         .await
         .expect("open db");
     let (status, details, lock_count): (String, String, i64) = db
@@ -167,7 +196,7 @@ async fn lock_conflict_and_journal_stop_points_are_diagnosable() {
     );
     assert_eq!(lock_count, 1, "held lock should stay visible in control plane");
 
-    release_lock(&layout, "scoop:install:demo")
+    release_lock(&db, "scoop:install:demo")
         .await
         .expect("release lock");
 }
@@ -178,18 +207,21 @@ async fn doctor_reports_failed_lifecycle_residue() {
     std::fs::create_dir_all(root.join("scoop").join("buckets").join("main"))
         .expect("create main bucket dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = Db::open(&layout.scoop.db_path())
+        .await
+        .expect("open db");
 
-    let op_id = begin_operation(&layout, "update", Some("demo"), Some("main"))
+    let op_id = begin_operation(&db, "update", Some("demo"), Some("main"))
         .await
         .expect("begin operation");
-    set_operation_stage(&layout, op_id, LifecycleStage::Integrating)
+    set_operation_stage(&db, op_id, LifecycleStage::Integrating)
         .await
         .expect("set stage");
-    complete_operation(&layout, op_id, "failed", Some("integration failed"))
+    complete_operation(&db, op_id, "failed", Some("integration failed"))
         .await
         .expect("complete failed operation");
 
-    let host = NoopScoopRuntimeHost;
+    let host = NoopPorts;
     let details = doctor_with_host(&root, "", &host)
         .await
         .expect("doctor details");

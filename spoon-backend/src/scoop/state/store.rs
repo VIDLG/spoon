@@ -1,44 +1,78 @@
-use super::model::InstalledPackageState;
-use crate::control_plane::ControlPlaneDb;
-use crate::layout::RuntimeLayout;
-use crate::{BackendError, Result};
-use rusqlite::{OptionalExtension, params};
 use std::convert::TryFrom;
 
+use rusqlite::{OptionalExtension, params};
+
+use crate::db::Db;
+use crate::{BackendError, Result};
+
+use super::super::AppliedIntegration;
+use super::model::{
+    InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState,
+    InstalledPackageUninstall,
+};
+
 #[derive(Debug)]
-struct StoredInstalledPackageRow {
+struct StoredInstalledPackageIdentityRow {
     package: String,
     version: String,
     bucket: String,
     architecture: Option<String>,
     cache_size_bytes: Option<i64>,
+}
+
+#[derive(Debug)]
+struct StoredInstalledPackageCommandSurfaceRow {
     bins: String,
     shortcuts: String,
     env_add_path: String,
     env_set: String,
     persist: String,
-    integrations: String,
+}
+
+#[derive(Debug)]
+struct StoredInstalledPackageUninstallRow {
     pre_uninstall: String,
     uninstaller_script: String,
     post_uninstall: String,
 }
 
-impl TryFrom<StoredInstalledPackageRow> for InstalledPackageState {
+impl TryFrom<StoredInstalledPackageIdentityRow> for InstalledPackageIdentity {
     type Error = ();
 
-    fn try_from(row: StoredInstalledPackageRow) -> std::result::Result<Self, Self::Error> {
-        Ok(InstalledPackageState {
+    fn try_from(row: StoredInstalledPackageIdentityRow) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
             package: row.package,
             version: row.version,
             bucket: row.bucket,
             architecture: row.architecture,
             cache_size_bytes: row.cache_size_bytes.and_then(|value| u64::try_from(value).ok()),
+        })
+    }
+}
+
+impl TryFrom<StoredInstalledPackageCommandSurfaceRow> for InstalledPackageCommandSurface {
+    type Error = ();
+
+    fn try_from(
+        row: StoredInstalledPackageCommandSurfaceRow,
+    ) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
             bins: serde_json::from_str(&row.bins).map_err(|_| ())?,
             shortcuts: serde_json::from_str(&row.shortcuts).map_err(|_| ())?,
             env_add_path: serde_json::from_str(&row.env_add_path).map_err(|_| ())?,
             env_set: serde_json::from_str(&row.env_set).map_err(|_| ())?,
             persist: serde_json::from_str(&row.persist).map_err(|_| ())?,
-            integrations: serde_json::from_str(&row.integrations).map_err(|_| ())?,
+        })
+    }
+}
+
+impl TryFrom<StoredInstalledPackageUninstallRow> for InstalledPackageUninstall {
+    type Error = ();
+
+    fn try_from(
+        row: StoredInstalledPackageUninstallRow,
+    ) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
             pre_uninstall: serde_json::from_str(&row.pre_uninstall).map_err(|_| ())?,
             uninstaller_script: serde_json::from_str(&row.uninstaller_script).map_err(|_| ())?,
             post_uninstall: serde_json::from_str(&row.post_uninstall).map_err(|_| ())?,
@@ -46,133 +80,203 @@ impl TryFrom<StoredInstalledPackageRow> for InstalledPackageState {
     }
 }
 
-/// Read a single canonical installed-package state.
-///
-/// Returns `None` if the state row does not exist or cannot be parsed.
-pub async fn read_installed_state(
-    layout: &RuntimeLayout,
-    package_name: &str,
-) -> Option<InstalledPackageState> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await.ok()?;
+pub async fn read_installed_state(db: &Db, package_name: &str) -> Option<InstalledPackageState> {
     let package_name = package_name.to_string();
-    let row = db
+    let identity_row = db
         .call(move |conn| {
             conn.query_row(
-                "SELECT package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall
+                "SELECT package, version, bucket, architecture, cache_size_bytes
                  FROM installed_packages WHERE package = ?1",
                 params![package_name],
                 |row| {
-                    Ok(StoredInstalledPackageRow {
+                    Ok(StoredInstalledPackageIdentityRow {
                         package: row.get(0)?,
                         version: row.get(1)?,
                         bucket: row.get(2)?,
                         architecture: row.get(3)?,
                         cache_size_bytes: row.get(4)?,
-                        bins: row.get(5)?,
-                        shortcuts: row.get(6)?,
-                        env_add_path: row.get(7)?,
-                        env_set: row.get(8)?,
-                        persist: row.get(9)?,
-                        integrations: row.get(10)?,
-                        pre_uninstall: row.get(11)?,
-                        uninstaller_script: row.get(12)?,
-                        post_uninstall: row.get(13)?,
                     })
                 },
             )
             .optional()
         })
         .await
-        .ok()?;
-    row.and_then(|row| InstalledPackageState::try_from(row).ok())
+        .ok()??;
+
+    let package = identity_row.package.clone();
+    let command_surface_row = db
+        .call(move |conn| {
+            conn.query_row(
+                "SELECT bins, shortcuts, env_add_path, env_set, persist
+                 FROM installed_package_command_surface WHERE package = ?1",
+                params![package],
+                |row| {
+                    Ok(StoredInstalledPackageCommandSurfaceRow {
+                        bins: row.get(0)?,
+                        shortcuts: row.get(1)?,
+                        env_add_path: row.get(2)?,
+                        env_set: row.get(3)?,
+                        persist: row.get(4)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
+        .ok()
+        .flatten();
+
+    let package = identity_row.package.clone();
+    let uninstall_row = db
+        .call(move |conn| {
+            conn.query_row(
+                "SELECT pre_uninstall, uninstaller_script, post_uninstall
+                 FROM installed_package_uninstall WHERE package = ?1",
+                params![package],
+                |row| {
+                    Ok(StoredInstalledPackageUninstallRow {
+                        pre_uninstall: row.get(0)?,
+                        uninstaller_script: row.get(1)?,
+                        post_uninstall: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+        })
+        .await
+        .ok()
+        .flatten();
+
+    let package = identity_row.package.clone();
+    let integrations = db
+        .call(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT integration_key, integration_value
+                 FROM installed_package_integrations
+                 WHERE package = ?1
+                 ORDER BY integration_key",
+            )?;
+            let rows = stmt.query_map(params![package], |row| {
+                Ok(AppliedIntegration {
+                    key: row.get(0)?,
+                    value: row.get(1)?,
+                })
+            })?;
+            Ok(rows.filter_map(|row| row.ok()).collect::<Vec<_>>())
+        })
+        .await
+        .ok()
+        .unwrap_or_default();
+
+    Some(InstalledPackageState {
+        identity: InstalledPackageIdentity::try_from(identity_row).ok()?,
+        command_surface: match command_surface_row {
+            Some(row) => InstalledPackageCommandSurface::try_from(row).ok()?,
+            None => InstalledPackageCommandSurface::default(),
+        },
+        integrations,
+        uninstall: match uninstall_row {
+            Some(row) => InstalledPackageUninstall::try_from(row).ok()?,
+            None => InstalledPackageUninstall::default(),
+        },
+    })
 }
 
-/// Write (create or update) a canonical installed-package state row.
-pub async fn write_installed_state(
-    layout: &RuntimeLayout,
-    state: &InstalledPackageState,
-) -> Result<()> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
-    let package = state.package.clone();
-    let version = state.version.clone();
-    let bucket = state.bucket.clone();
-    let architecture = state.architecture.clone();
-    let cache_size_bytes = state.cache_size_bytes.and_then(|value| i64::try_from(value).ok());
-    let bins = serde_json::to_string(&state.bins)
+pub async fn write_installed_state(db: &Db, state: &InstalledPackageState) -> Result<()> {
+    let package = state.identity.package.clone();
+    let version = state.identity.version.clone();
+    let bucket = state.identity.bucket.clone();
+    let architecture = state.identity.architecture.clone();
+    let cache_size_bytes = state
+        .identity
+        .cache_size_bytes
+        .and_then(|value| i64::try_from(value).ok());
+    let bins = serde_json::to_string(&state.command_surface.bins)
         .map_err(|err| BackendError::external("failed to serialize installed state bins", err))?;
-    let shortcuts = serde_json::to_string(&state.shortcuts).map_err(|err| {
+    let shortcuts = serde_json::to_string(&state.command_surface.shortcuts).map_err(|err| {
         BackendError::external("failed to serialize installed state shortcuts", err)
     })?;
-    let env_add_path = serde_json::to_string(&state.env_add_path).map_err(|err| {
+    let env_add_path = serde_json::to_string(&state.command_surface.env_add_path).map_err(|err| {
         BackendError::external("failed to serialize installed state env_add_path", err)
     })?;
-    let env_set = serde_json::to_string(&state.env_set)
+    let env_set = serde_json::to_string(&state.command_surface.env_set)
         .map_err(|err| BackendError::external("failed to serialize installed state env_set", err))?;
-    let persist = serde_json::to_string(&state.persist)
+    let persist = serde_json::to_string(&state.command_surface.persist)
         .map_err(|err| BackendError::external("failed to serialize installed state persist", err))?;
-    let integrations = serde_json::to_string(&state.integrations).map_err(|err| {
-        BackendError::external("failed to serialize installed state integrations", err)
-    })?;
-    let pre_uninstall = serde_json::to_string(&state.pre_uninstall).map_err(|err| {
+    let pre_uninstall = serde_json::to_string(&state.uninstall.pre_uninstall).map_err(|err| {
         BackendError::external("failed to serialize installed state pre_uninstall", err)
     })?;
-    let uninstaller_script = serde_json::to_string(&state.uninstaller_script).map_err(|err| {
-        BackendError::external("failed to serialize installed state uninstaller_script", err)
-    })?;
-    let post_uninstall = serde_json::to_string(&state.post_uninstall).map_err(|err| {
+    let uninstaller_script =
+        serde_json::to_string(&state.uninstall.uninstaller_script).map_err(|err| {
+            BackendError::external("failed to serialize installed state uninstaller_script", err)
+        })?;
+    let post_uninstall = serde_json::to_string(&state.uninstall.post_uninstall).map_err(|err| {
         BackendError::external("failed to serialize installed state post_uninstall", err)
     })?;
+    let integrations = state.integrations.clone();
 
     db.call(move |conn| {
-        conn.execute(
+        let tx = conn.transaction()?;
+        tx.execute(
             "INSERT INTO installed_packages
-                (package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                (package, version, bucket, architecture, cache_size_bytes)
+             VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(package) DO UPDATE SET
                 version = excluded.version,
                 bucket = excluded.bucket,
                 architecture = excluded.architecture,
                 cache_size_bytes = excluded.cache_size_bytes,
+                updated_at = datetime('now')",
+            params![package, version, bucket, architecture, cache_size_bytes],
+        )?;
+        tx.execute(
+            "INSERT INTO installed_package_command_surface
+                (package, bins, shortcuts, env_add_path, env_set, persist)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(package) DO UPDATE SET
                 bins = excluded.bins,
                 shortcuts = excluded.shortcuts,
                 env_add_path = excluded.env_add_path,
                 env_set = excluded.env_set,
-                persist = excluded.persist,
-                integrations = excluded.integrations,
-                pre_uninstall = excluded.pre_uninstall,
-                uninstaller_script = excluded.uninstaller_script,
-                post_uninstall = excluded.post_uninstall,
-                updated_at = datetime('now')",
+                persist = excluded.persist",
             params![
                 package,
-                version,
-                bucket,
-                architecture,
-                cache_size_bytes,
                 bins,
                 shortcuts,
                 env_add_path,
                 env_set,
                 persist,
-                integrations,
-                pre_uninstall,
-                uninstaller_script,
-                post_uninstall,
             ],
         )?;
+        tx.execute(
+            "INSERT INTO installed_package_uninstall
+                (package, pre_uninstall, uninstaller_script, post_uninstall)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(package) DO UPDATE SET
+                pre_uninstall = excluded.pre_uninstall,
+                uninstaller_script = excluded.uninstaller_script,
+                post_uninstall = excluded.post_uninstall",
+            params![package, pre_uninstall, uninstaller_script, post_uninstall],
+        )?;
+        tx.execute(
+            "DELETE FROM installed_package_integrations WHERE package = ?1",
+            params![package],
+        )?;
+        for integration in integrations {
+            tx.execute(
+                "INSERT INTO installed_package_integrations
+                    (package, integration_key, integration_value)
+                 VALUES (?1, ?2, ?3)",
+                params![package, integration.key, integration.value],
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     })
     .await
 }
 
-/// Remove a canonical installed-package state row.
-///
-/// Silently succeeds if the row does not exist.
-pub async fn remove_installed_state(
-    layout: &RuntimeLayout,
-    package_name: &str,
-) -> Result<()> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
+pub async fn remove_installed_state(db: &Db, package_name: &str) -> Result<()> {
     let package_name = package_name.to_string();
     db.call(move |conn| {
         conn.execute(
@@ -184,44 +288,21 @@ pub async fn remove_installed_state(
     .await
 }
 
-/// Enumerate all canonical installed-package states from SQLite.
-///
-/// Returns all rows that successfully deserialize as [`InstalledPackageState`].
-pub async fn list_installed_states(layout: &RuntimeLayout) -> Vec<InstalledPackageState> {
-    let Ok(db) = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await else {
-        return Vec::new();
-    };
-
-    let rows = db
+pub async fn list_installed_states(db: &Db) -> Vec<InstalledPackageState> {
+    let packages = db
         .call(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT package, version, bucket, architecture, cache_size_bytes, bins, shortcuts, env_add_path, env_set, persist, integrations, pre_uninstall, uninstaller_script, post_uninstall
-                 FROM installed_packages",
-            )?;
-            let mapped = stmt.query_map([], |row| {
-                Ok(StoredInstalledPackageRow {
-                    package: row.get(0)?,
-                    version: row.get(1)?,
-                    bucket: row.get(2)?,
-                    architecture: row.get(3)?,
-                    cache_size_bytes: row.get(4)?,
-                    bins: row.get(5)?,
-                    shortcuts: row.get(6)?,
-                    env_add_path: row.get(7)?,
-                    env_set: row.get(8)?,
-                    persist: row.get(9)?,
-                    integrations: row.get(10)?,
-                    pre_uninstall: row.get(11)?,
-                    uninstaller_script: row.get(12)?,
-                    post_uninstall: row.get(13)?,
-                })
-            })?;
-            Ok(mapped.filter_map(|row| row.ok()).collect::<Vec<_>>())
+            let mut stmt = conn.prepare("SELECT package FROM installed_packages ORDER BY package")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            Ok(rows.filter_map(|row| row.ok()).collect::<Vec<_>>())
         })
         .await
         .unwrap_or_default();
 
-    rows.into_iter()
-        .filter_map(|row| InstalledPackageState::try_from(row).ok())
-        .collect()
+    let mut states = Vec::new();
+    for package in packages {
+        if let Some(state) = read_installed_state(db, &package).await {
+            states.push(state);
+        }
+    }
+    states
 }

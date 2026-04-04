@@ -32,13 +32,15 @@ pub(crate) async fn reapply_package_integrations_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::reapply_package_integrations_streaming_with_context(
-            &context,
+        spoon_backend::scoop::reapply_package_integrations(
+            &context.root,
             package_name,
+            &context,
             &mut backend_emit,
         )
         .await,
-    )
+    )?;
+    Ok(vec![format!("Reapplied integrations for '{}'.", package_name)])
 }
 
 pub(crate) async fn reapply_package_command_surface_streaming(
@@ -53,13 +55,15 @@ pub(crate) async fn reapply_package_command_surface_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::reapply_package_command_surface_streaming_with_context(
-            &context,
+        spoon_backend::scoop::reapply_package_command_surface(
+            &context.root,
             package_name,
+            &context,
             &mut backend_emit,
         )
         .await,
-    )
+    )?;
+    Ok(vec![format!("Reapplied command surface for '{}'.", package_name)])
 }
 
 pub(crate) async fn execute_package_action_outcome_streaming(

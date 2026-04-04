@@ -1,17 +1,21 @@
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
+use async_trait::async_trait;
+use crate::db::Db;
 use crate::event::{BackendEvent, LifecycleStage};
 use crate::layout::RuntimeLayout;
 use crate::scoop::{
-    BucketSpec, InstalledPackageState, NoopScoopRuntimeHost, PersistEntry, ScoopIntegrationPort,
-    ScoopPackagePlan, ShortcutEntry, execute_package_action_outcome_streaming_with_context,
-    expanded_shim_targets, parse_selected_source,
+    AppliedIntegration, BucketSpec, InstalledPackageState, NoopPorts, PersistEntry,
+    ScoopIntegrationPort, ScoopPackagePlan, ShortcutEntry,
+    execute_package_action_outcome_streaming_with_context, expanded_shim_targets,
+    resolve_package_source,
 };
 use crate::scoop::{plan_package_action, sync_main_bucket_registry, upsert_bucket_to_registry};
-use crate::scoop::state::{read_installed_state, write_installed_state};
+use crate::scoop::state::{
+    InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageUninstall,
+    read_installed_state, write_installed_state,
+};
 use crate::tests::{block_on, temp_dir};
 use crate::{BackendContext, Result, SystemPort};
 use serde_json::json;
@@ -34,6 +38,7 @@ impl SystemPort for TestPorts {
     fn remove_process_path_entry(&self, _path: &Path) {}
 }
 
+#[async_trait(?Send)]
 impl ScoopIntegrationPort for TestPorts {
     fn supplemental_shims(
         &self,
@@ -43,14 +48,14 @@ impl ScoopIntegrationPort for TestPorts {
         Vec::new()
     }
 
-    fn apply_integrations<'a>(
-        &'a self,
-        _package_name: &'a str,
-        _current_root: &'a Path,
-        _persist_root: &'a Path,
-        _emit: &'a mut dyn FnMut(BackendEvent),
-    ) -> Pin<Box<dyn Future<Output = Result<BTreeMap<String, String>>> + 'a>> {
-        Box::pin(async { Ok(BTreeMap::new()) })
+    async fn apply_integrations(
+        &self,
+        _package_name: &str,
+        _current_root: &Path,
+        _persist_root: &Path,
+        _emit: &mut dyn FnMut(BackendEvent),
+    ) -> Result<Vec<AppliedIntegration>> {
+        Ok(Vec::new())
     }
 }
 
@@ -86,7 +91,7 @@ fn collect_stages(events: &[BackendEvent]) -> Vec<LifecycleStage> {
 }
 
 #[test]
-fn parse_selected_source_reads_common_manifest_fields() {
+fn resolve_package_source_reads_common_manifest_fields() {
     let manifest = json!({
         "version": "3.12.1",
         "url": "https://example.invalid/python.zip",
@@ -96,9 +101,9 @@ fn parse_selected_source_reads_common_manifest_fields() {
         "env_set": { "PYTHONHOME": "$dir" }
     });
 
-    let source = parse_selected_source(&manifest).expect("manifest should parse");
+    let source = resolve_package_source(&manifest).expect("manifest should parse");
     assert_eq!(source.version, "3.12.1");
-    assert_eq!(source.payloads.len(), 1);
+    assert_eq!(source.assets.len(), 1);
     assert_eq!(source.bins.len(), 1);
     assert_eq!(source.bins[0].alias, "python");
     assert_eq!(
@@ -119,9 +124,9 @@ fn expanded_shim_targets_adds_cmd_and_bat_aliases() {
         "hash": "sha256:deadbeef",
         "bin": "python.exe"
     });
-    let source = parse_selected_source(&manifest).expect("manifest should parse");
+    let source = resolve_package_source(&manifest).expect("manifest should parse");
     let current_root = temp_dir("runtime-expanded-shims");
-    let host = NoopScoopRuntimeHost;
+    let host = NoopPorts;
     let targets = expanded_shim_targets("python", &current_root, &source, &host);
     let aliases = targets
         .into_iter()
@@ -139,66 +144,79 @@ fn runtime_writes_canonical_scoop_state() {
     let layout = RuntimeLayout::from_root(&tmp);
 
     let state = InstalledPackageState {
-        package: "test-pkg".to_string(),
-        version: "1.0.0".to_string(),
-        bucket: "extras".to_string(),
-        architecture: Some("64bit".to_string()),
-        cache_size_bytes: Some(2048),
-        bins: vec!["bin/app.exe".to_string()],
-        shortcuts: vec![ShortcutEntry {
-            target_path: "bin/app.exe".to_string(),
-            name: "Test App".to_string(),
-            args: None,
-            icon_path: None,
+        identity: InstalledPackageIdentity {
+            package: "test-pkg".to_string(),
+            version: "1.0.0".to_string(),
+            bucket: "extras".to_string(),
+            architecture: Some("64bit".to_string()),
+            cache_size_bytes: Some(2048),
+        },
+        command_surface: InstalledPackageCommandSurface {
+            bins: vec!["bin/app.exe".to_string()],
+            shortcuts: vec![ShortcutEntry {
+                target_path: "bin/app.exe".to_string(),
+                name: "Test App".to_string(),
+                args: None,
+                icon_path: None,
+            }],
+            env_add_path: vec!["bin".to_string()],
+            env_set: BTreeMap::from([("APP_HOME".to_string(), "$dir".to_string())]),
+            persist: vec![PersistEntry {
+                relative_path: "data".to_string(),
+                store_name: "data".to_string(),
+            }],
+        },
+        integrations: vec![AppliedIntegration {
+            key: "app.config".to_string(),
+            value: "/path/to/config".to_string(),
         }],
-        env_add_path: vec!["bin".to_string()],
-        env_set: BTreeMap::from([("APP_HOME".to_string(), "$dir".to_string())]),
-        persist: vec![PersistEntry {
-            relative_path: "data".to_string(),
-            store_name: "data".to_string(),
-        }],
-        integrations: BTreeMap::from([(
-            "app.config".to_string(),
-            "/path/to/config".to_string(),
-        )]),
-        pre_uninstall: vec!["stop-service.ps1".to_string()],
-        uninstaller_script: vec!["uninstall.exe /S".to_string()],
-        post_uninstall: vec!["cleanup.ps1".to_string()],
+        uninstall: InstalledPackageUninstall {
+            pre_uninstall: vec!["stop-service.ps1".to_string()],
+            uninstaller_script: vec!["uninstall.exe /S".to_string()],
+            post_uninstall: vec!["cleanup.ps1".to_string()],
+        },
     };
 
     block_on(async {
-        write_installed_state(&layout, &state)
+        let db = Db::open(&layout.scoop.db_path())
+            .await
+            .expect("open control plane db");
+        write_installed_state(&db, &state)
             .await
             .expect("canonical write should succeed");
 
         // Read back via canonical store and verify bucket + architecture
-        let loaded = read_installed_state(&layout, "test-pkg")
+        let loaded = read_installed_state(&db, "test-pkg")
             .await
             .expect("canonical state should exist after write");
 
-        assert_eq!(loaded.package, "test-pkg");
-        assert_eq!(loaded.version, "1.0.0");
-        assert_eq!(loaded.bucket, "extras");
-        assert_eq!(loaded.architecture, Some("64bit".to_string()));
-        assert_eq!(loaded.cache_size_bytes, Some(2048));
-        assert_eq!(loaded.bins, vec!["bin/app.exe".to_string()]);
-        assert_eq!(loaded.shortcuts.len(), 1);
-        assert_eq!(loaded.env_add_path, vec!["bin".to_string()]);
-        assert_eq!(loaded.env_set.get("APP_HOME").unwrap(), "$dir");
-        assert_eq!(loaded.persist.len(), 1);
-        assert_eq!(loaded.integrations.get("app.config").unwrap(), "/path/to/config");
-        assert_eq!(loaded.pre_uninstall, vec!["stop-service.ps1".to_string()]);
-        assert_eq!(loaded.uninstaller_script, vec!["uninstall.exe /S".to_string()]);
-        assert_eq!(loaded.post_uninstall, vec!["cleanup.ps1".to_string()]);
+        assert_eq!(loaded.package(), "test-pkg");
+        assert_eq!(loaded.version(), "1.0.0");
+        assert_eq!(loaded.bucket(), "extras");
+        assert_eq!(loaded.identity.architecture, Some("64bit".to_string()));
+        assert_eq!(loaded.identity.cache_size_bytes, Some(2048));
+        assert_eq!(loaded.command_surface.bins, vec!["bin/app.exe".to_string()]);
+        assert_eq!(loaded.command_surface.shortcuts.len(), 1);
+        assert_eq!(loaded.command_surface.env_add_path, vec!["bin".to_string()]);
+        assert_eq!(loaded.command_surface.env_set.get("APP_HOME").unwrap(), "$dir");
+        assert_eq!(loaded.command_surface.persist.len(), 1);
+        assert_eq!(loaded.integrations[0].key, "app.config");
+        assert_eq!(loaded.integrations[0].value, "/path/to/config");
+        assert_eq!(loaded.uninstall.pre_uninstall, vec!["stop-service.ps1".to_string()]);
+        assert_eq!(
+            loaded.uninstall.uninstaller_script,
+            vec!["uninstall.exe /S".to_string()]
+        );
+        assert_eq!(loaded.uninstall.post_uninstall, vec!["cleanup.ps1".to_string()]);
 
         // Verify the persisted control-plane row contains canonical fields
-        let db = crate::control_plane::ControlPlaneDb::open(&layout.scoop.control_plane_db_path())
+        let db = crate::db::Db::open(&layout.scoop.db_path())
             .await
             .expect("open control plane db");
-        let persisted: (String, String, String, Option<String>, String, String, String, String) = db
+        let persisted: (String, String, String, Option<String>) = db
             .call(|conn| {
                 conn.query_row(
-                    "SELECT package, version, bucket, architecture, bins, env_add_path, env_set, persist
+                    "SELECT package, version, bucket, architecture
                      FROM installed_packages WHERE package = ?1",
                     rusqlite::params!["test-pkg"],
                     |row| {
@@ -207,10 +225,6 @@ fn runtime_writes_canonical_scoop_state() {
                             row.get(1)?,
                             row.get(2)?,
                             row.get(3)?,
-                            row.get(4)?,
-                            row.get(5)?,
-                            row.get(6)?,
-                            row.get(7)?,
                         ))
                     },
                 )
@@ -222,24 +236,29 @@ fn runtime_writes_canonical_scoop_state() {
         assert_eq!(persisted.2, "extras");
         assert_eq!(persisted.3.as_deref(), Some("64bit"));
 
-        let bins_json: serde_json::Value =
-            serde_json::from_str(&persisted.4).expect("bins JSON should parse");
+        let surface: (String, String, String, String) = db
+            .call(|conn| {
+                conn.query_row(
+                    "SELECT bins, env_add_path, env_set, persist
+                     FROM installed_package_command_surface WHERE package = ?1",
+                    rusqlite::params!["test-pkg"],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+            })
+            .await
+            .expect("query command surface row");
+        let bins_json: serde_json::Value = serde_json::from_str(&surface.0).expect("bins JSON");
         let env_add_path_json: serde_json::Value =
-            serde_json::from_str(&persisted.5).expect("env_add_path JSON should parse");
-        let env_set_json: serde_json::Value =
-            serde_json::from_str(&persisted.6).expect("env_set JSON should parse");
-        let persist_json: serde_json::Value =
-            serde_json::from_str(&persisted.7).expect("persist JSON should parse");
+            serde_json::from_str(&surface.1).expect("env_add_path JSON");
+        let env_set_json: serde_json::Value = serde_json::from_str(&surface.2).expect("env_set JSON");
+        let persist_json: serde_json::Value = serde_json::from_str(&surface.3).expect("persist JSON");
 
         assert_eq!(bins_json, serde_json::json!(["bin/app.exe"]));
         assert_eq!(env_add_path_json, serde_json::json!(["bin"]));
         assert_eq!(env_set_json, serde_json::json!({"APP_HOME":"$dir"}));
-        assert_eq!(
-            persist_json,
-            serde_json::json!([{ "relative_path": "data", "store_name": "data" }])
-        );
+        assert_eq!(persist_json, serde_json::json!([{ "relative_path": "data", "store_name": "data" }]));
 
-        let db_path = layout.scoop.control_plane_db_path();
+        let db_path = layout.scoop.db_path();
         assert!(db_path.exists(), "control-plane DB should exist");
         assert!(
             !layout.scoop.state_root.join("packages").join("test-pkg.json").exists(),
@@ -262,106 +281,115 @@ fn reapply_inputs_come_from_canonical_state() {
     // Seed a canonical installed-state record that mirrors what
     // actions.rs writes during install, with all operational fields.
     let seeded = InstalledPackageState {
-        package: "reapply-pkg".to_string(),
-        version: "2.5.0".to_string(),
-        bucket: "main".to_string(),
-        architecture: Some("64bit".to_string()),
-        cache_size_bytes: Some(4096),
-        bins: vec!["tool.exe".to_string(), "tool-cli.exe".to_string()],
-        shortcuts: vec![ShortcutEntry {
-            target_path: "tool.exe".to_string(),
-            name: "My Tool".to_string(),
-            args: Some("--fast".to_string()),
-            icon_path: None,
+        identity: InstalledPackageIdentity {
+            package: "reapply-pkg".to_string(),
+            version: "2.5.0".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("64bit".to_string()),
+            cache_size_bytes: Some(4096),
+        },
+        command_surface: InstalledPackageCommandSurface {
+            bins: vec!["tool.exe".to_string(), "tool-cli.exe".to_string()],
+            shortcuts: vec![ShortcutEntry {
+                target_path: "tool.exe".to_string(),
+                name: "My Tool".to_string(),
+                args: Some("--fast".to_string()),
+                icon_path: None,
+            }],
+            env_add_path: vec!["bin".to_string(), "scripts".to_string()],
+            env_set: BTreeMap::from([
+                ("TOOL_HOME".to_string(), "$dir".to_string()),
+                ("TOOL_CFG".to_string(), "$persist_dir\\config".to_string()),
+            ]),
+            persist: vec![
+                PersistEntry {
+                    relative_path: "config".to_string(),
+                    store_name: "config".to_string(),
+                },
+                PersistEntry {
+                    relative_path: "data\\db".to_string(),
+                    store_name: "data-db".to_string(),
+                },
+            ],
+        },
+        integrations: vec![AppliedIntegration {
+            key: "tool.settings".to_string(),
+            value: "/custom/settings/path".to_string(),
         }],
-        env_add_path: vec!["bin".to_string(), "scripts".to_string()],
-        env_set: BTreeMap::from([
-            ("TOOL_HOME".to_string(), "$dir".to_string()),
-            ("TOOL_CFG".to_string(), "$persist_dir\\config".to_string()),
-        ]),
-        persist: vec![
-            PersistEntry {
-                relative_path: "config".to_string(),
-                store_name: "config".to_string(),
-            },
-            PersistEntry {
-                relative_path: "data\\db".to_string(),
-                store_name: "data-db".to_string(),
-            },
-        ],
-        integrations: BTreeMap::from([(
-            "tool.settings".to_string(),
-            "/custom/settings/path".to_string(),
-        )]),
-        pre_uninstall: vec!["pre-uninstall.ps1".to_string()],
-        uninstaller_script: vec!["uninstaller.exe /quiet".to_string()],
-        post_uninstall: vec!["post-cleanup.ps1".to_string()],
+        uninstall: InstalledPackageUninstall {
+            pre_uninstall: vec!["pre-uninstall.ps1".to_string()],
+            uninstaller_script: vec!["uninstaller.exe /quiet".to_string()],
+            post_uninstall: vec!["post-cleanup.ps1".to_string()],
+        },
     };
 
     block_on(async {
         // Write via canonical store
-        write_installed_state(&layout, &seeded)
+        let db = Db::open(&layout.scoop.db_path())
+            .await
+            .expect("open control plane db");
+        write_installed_state(&db, &seeded)
             .await
             .expect("canonical write should succeed");
 
         // Read back via canonical store and verify ALL operational fields
-        let loaded = read_installed_state(&layout, "reapply-pkg")
+        let loaded = read_installed_state(&db, "reapply-pkg")
             .await
             .expect("canonical state should be readable for reapply");
 
         // These fields drive uninstall behavior
-        assert_eq!(loaded.package, "reapply-pkg");
-        assert_eq!(loaded.version, "2.5.0");
-        assert_eq!(loaded.bucket, "main");
-        assert_eq!(loaded.architecture, Some("64bit".to_string()));
+        assert_eq!(loaded.package(), "reapply-pkg");
+        assert_eq!(loaded.version(), "2.5.0");
+        assert_eq!(loaded.bucket(), "main");
+        assert_eq!(loaded.identity.architecture, Some("64bit".to_string()));
         assert_eq!(
-            loaded.bins,
+            loaded.command_surface.bins,
             vec!["tool.exe".to_string(), "tool-cli.exe".to_string()],
             "bins must match for shim removal during uninstall"
         );
-        assert_eq!(loaded.shortcuts.len(), 1, "shortcuts must match for removal");
-        assert_eq!(loaded.shortcuts[0].name, "My Tool");
+        assert_eq!(loaded.command_surface.shortcuts.len(), 1, "shortcuts must match for removal");
+        assert_eq!(loaded.command_surface.shortcuts[0].name, "My Tool");
         assert_eq!(
-            loaded.env_add_path,
+            loaded.command_surface.env_add_path,
             vec!["bin".to_string(), "scripts".to_string()],
             "env_add_path must match for reapply"
         );
         assert_eq!(
-            loaded.env_set.get("TOOL_HOME").unwrap(),
+            loaded.command_surface.env_set.get("TOOL_HOME").unwrap(),
             "$dir",
             "env_set must match for reapply"
         );
         assert_eq!(
-            loaded.env_set.get("TOOL_CFG").unwrap(),
+            loaded.command_surface.env_set.get("TOOL_CFG").unwrap(),
             "$persist_dir\\config",
             "env_set must match for reapply"
         );
-        assert_eq!(loaded.persist.len(), 2, "persist must match for sync");
-        assert_eq!(loaded.persist[0].relative_path, "config");
-        assert_eq!(loaded.persist[1].store_name, "data-db");
+        assert_eq!(loaded.command_surface.persist.len(), 2, "persist must match for sync");
+        assert_eq!(loaded.command_surface.persist[0].relative_path, "config");
+        assert_eq!(loaded.command_surface.persist[1].store_name, "data-db");
         assert_eq!(
-            loaded.pre_uninstall,
+            loaded.uninstall.pre_uninstall,
             vec!["pre-uninstall.ps1".to_string()],
             "pre_uninstall must match for uninstall hook"
         );
         assert_eq!(
-            loaded.uninstaller_script,
+            loaded.uninstall.uninstaller_script,
             vec!["uninstaller.exe /quiet".to_string()],
             "uninstaller_script must match for uninstall"
         );
         assert_eq!(
-            loaded.post_uninstall,
+            loaded.uninstall.post_uninstall,
             vec!["post-cleanup.ps1".to_string()],
             "post_uninstall must match for cleanup hook"
         );
         assert_eq!(
-            loaded.integrations.get("tool.settings").unwrap(),
+            loaded.integrations[0].value,
             "/custom/settings/path",
             "integrations must match for reapply"
         );
 
         // Prove the canonical state is still readable through the store.
-        let reread = read_installed_state(&layout, "reapply-pkg").await;
+        let reread = read_installed_state(&db, "reapply-pkg").await;
         assert!(reread.is_some(), "state must still exist in canonical store");
     });
 
@@ -428,27 +456,27 @@ fn uninstall_lifecycle_emits_stage_contract() {
     let root = temp_dir("uninstall-stage-contract");
     std::fs::create_dir_all(&root).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     let current_root = root.join("scoop").join("apps").join("demo").join("current");
     std::fs::create_dir_all(&current_root).expect("create current root");
     std::fs::write(current_root.join("demo.exe"), b"demo-binary").expect("write demo");
 
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "demo".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["demo".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "demo".to_string(),
+                version: "1.0.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["demo".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
         },
     ))
     .expect("write installed state");
@@ -520,27 +548,27 @@ fn install_update_share_front_half_lifecycle_modules() {
     assert_eq!(update_planned.resolved.bucket.name, "main");
 
     let mut sink = |_event: BackendEvent| {};
-    let archives = block_on(crate::scoop::lifecycle::acquire::acquire_payloads(
+    let archives = block_on(crate::scoop::lifecycle::acquire::acquire_assets(
         &root,
         "demo",
         &install_planned.source,
-        &install_planned.source.payloads,
+        &install_planned.source.assets,
         "",
         None,
         &mut sink,
     ))
-    .expect("acquire payloads");
+    .expect("acquire assets");
     assert_eq!(archives.len(), 1);
 
     let version_root = root.join("scoop").join("apps").join("demo").join("1.0.0");
-    let primary = block_on(crate::scoop::lifecycle::materialize::materialize_payloads(
+    let primary = block_on(crate::scoop::lifecycle::materialize::materialize_assets(
         &root,
         &archives,
         &install_planned.source,
         &version_root,
         &mut sink,
     ))
-    .expect("materialize payloads");
+    .expect("materialize assets");
     assert!(primary.is_some());
     assert!(version_root.join("demo.exe").exists());
 }
@@ -665,8 +693,10 @@ fn hook_failures_stop_before_state_commit() {
     );
 
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     assert!(
-        block_on(read_installed_state(&layout, "demo")).is_none(),
+        block_on(read_installed_state(&db, "demo")).is_none(),
         "fatal hook failure must not leave committed installed state"
     );
     assert!(
@@ -707,39 +737,44 @@ fn reapply_runs_without_hooks_and_reuses_back_half_modules() {
     std::fs::create_dir_all(&current_root).expect("create current root");
     std::fs::write(current_root.join("demo.exe"), b"demo-binary").expect("write demo");
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     block_on(sync_main_bucket_registry(&root)).expect("register main bucket");
 
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "demo".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["demo".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec!["this-should-not-run.ps1".to_string()],
-            uninstaller_script: vec!["this-should-not-run.exe".to_string()],
-            post_uninstall: vec!["this-should-not-run.ps1".to_string()],
+            identity: InstalledPackageIdentity {
+                package: "demo".to_string(),
+                version: "1.0.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["demo".to_string()],
+                ..Default::default()
+            },
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec!["this-should-not-run.ps1".to_string()],
+                uninstaller_script: vec!["this-should-not-run.exe".to_string()],
+                post_uninstall: vec!["this-should-not-run.ps1".to_string()],
+            },
+            ..Default::default()
         },
     ))
     .expect("write state");
 
-    let host = NoopScoopRuntimeHost;
+    let host = NoopPorts;
     let mut sink = |_event: BackendEvent| {};
-    let surface = block_on(crate::scoop::reapply_package_command_surface_streaming_with_host(
+    block_on(crate::scoop::reapply_package_command_surface(
         &root,
         "demo",
         &host,
         &mut sink,
     ))
     .expect("surface reapply should succeed");
-    let integrations = block_on(crate::scoop::reapply_package_integrations_streaming_with_host(
+    block_on(crate::scoop::reapply_package_integrations(
         &root,
         "demo",
         &host,
@@ -747,8 +782,8 @@ fn reapply_runs_without_hooks_and_reuses_back_half_modules() {
     ))
     .expect("integration reapply should succeed");
 
-    assert!(surface.iter().any(|line| line.contains("Reapplied command surface")));
-    assert!(integrations.iter().any(|line| line.contains("Reapplied integrations")));
+    let reread = block_on(read_installed_state(&db, "demo")).expect("state should remain");
+    assert_eq!(reread.command_surface.bins, vec!["demo".to_string()]);
 }
 
 #[test]
@@ -775,47 +810,46 @@ fn uninstall_and_reapply_use_shared_lifecycle_contract() {
     std::fs::write(current_root.join("demo.exe"), b"demo-binary").expect("write demo");
     block_on(sync_main_bucket_registry(&root)).expect("register main bucket");
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "demo".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["demo".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "demo".to_string(),
+                version: "1.0.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["demo".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
         },
     ))
     .expect("write state");
 
-    let host = NoopScoopRuntimeHost;
+    let host = NoopPorts;
     let mut sink = |_event: BackendEvent| {};
-    let reapply = block_on(crate::scoop::lifecycle::reapply::reapply(
-        &root,
-        "demo",
-        &host,
-        &mut sink,
-    ))
-    .expect("reapply should succeed");
-    assert!(reapply.iter().any(|line| line.contains("Reapplied command surface")));
+    block_on(crate::scoop::reapply_package_command_surface(&root, "demo", &host, &mut sink))
+        .expect("surface reapply should succeed");
+    block_on(crate::scoop::reapply_package_integrations(&root, "demo", &host, &mut sink))
+        .expect("integration reapply should succeed");
+    let reread = block_on(read_installed_state(&db, "demo")).expect("state should remain");
+    assert_eq!(reread.command_surface.bins, vec!["demo".to_string()]);
 
-    let uninstall = block_on(crate::scoop::lifecycle::uninstall::uninstall(
-        &root,
-        42,
-        "demo",
-        &host,
-        &mut sink,
+    let context = BackendContext::new(root.clone(), None, false, "x64", "default", TestPorts);
+    let plan: ScoopPackagePlan = plan_package_action("uninstall", "demo", "demo", Some(&root));
+    let uninstall = block_on(execute_package_action_outcome_streaming_with_context(
+        &context,
+        &plan,
+        None,
+        Some(&mut sink),
     ))
     .expect("uninstall should succeed");
-    assert!(uninstall.iter().any(|line| line.contains("Removed Scoop package 'demo'.")));
+    assert!(uninstall.output.iter().any(|line| line.contains("Removed Scoop package 'demo'.")));
 }
 
 #[test]
@@ -823,42 +857,46 @@ fn post_uninstall_hook_is_warning_only() {
     let root = temp_dir("post-uninstall-warning");
     std::fs::create_dir_all(&root).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     let current_root = root.join("scoop").join("apps").join("demo").join("current");
     std::fs::create_dir_all(&current_root).expect("create current root");
     std::fs::write(current_root.join("demo.exe"), b"demo-binary").expect("write demo");
 
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "demo".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["demo".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec!["throw 'boom'".to_string()],
+            identity: InstalledPackageIdentity {
+                package: "demo".to_string(),
+                version: "1.0.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["demo".to_string()],
+                ..Default::default()
+            },
+            uninstall: InstalledPackageUninstall {
+                post_uninstall: vec!["throw 'boom'".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
         },
     ))
     .expect("write state");
 
-    let host = NoopScoopRuntimeHost;
     let mut sink = |_event: BackendEvent| {};
-    let uninstall = block_on(crate::scoop::lifecycle::uninstall::uninstall(
-        &root,
-        99,
-        "demo",
-        &host,
-        &mut sink,
+    let context = BackendContext::new(root.clone(), None, false, "x64", "default", TestPorts);
+    let plan: ScoopPackagePlan = plan_package_action("uninstall", "demo", "demo", Some(&root));
+    let uninstall = block_on(execute_package_action_outcome_streaming_with_context(
+        &context,
+        &plan,
+        None,
+        Some(&mut sink),
     ))
     .expect("uninstall should still succeed");
-    assert!(uninstall.iter().any(|line| line.contains("Removed Scoop package 'demo'.")));
+    assert!(uninstall.output.iter().any(|line| line.contains("Removed Scoop package 'demo'.")));
 }
 
 #[test]
@@ -866,28 +904,32 @@ fn warning_only_uninstall_tail_preserves_main_result() {
     let root = temp_dir("warning-only-uninstall-tail");
     std::fs::create_dir_all(&root).expect("create temp dir");
     let layout = RuntimeLayout::from_root(&root);
+    let db = block_on(Db::open(&layout.scoop.db_path()))
+        .expect("open control plane db");
     let current_root = root.join("scoop").join("apps").join("demo").join("current");
     let package_root = root.join("scoop").join("apps").join("demo");
     std::fs::create_dir_all(&current_root).expect("create current root");
     std::fs::write(current_root.join("demo.exe"), b"demo-binary").expect("write demo");
 
     block_on(write_installed_state(
-        &layout,
+        &db,
         &InstalledPackageState {
-            package: "demo".to_string(),
-            version: "1.0.0".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["demo".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: BTreeMap::new(),
-            persist: vec![],
-            integrations: BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec!["throw 'warning tail failed'".to_string()],
+            identity: InstalledPackageIdentity {
+                package: "demo".to_string(),
+                version: "1.0.0".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["demo".to_string()],
+                ..Default::default()
+            },
+            uninstall: InstalledPackageUninstall {
+                post_uninstall: vec!["throw 'warning tail failed'".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
         },
     ))
     .expect("write state");
@@ -921,7 +963,7 @@ fn warning_only_uninstall_tail_preserves_main_result() {
     assert!(post_uninstall < completed);
 
     assert!(
-        block_on(read_installed_state(&layout, "demo")).is_none(),
+        block_on(read_installed_state(&db, "demo")).is_none(),
         "warning-only tail must not preserve installed state"
     );
     assert!(
