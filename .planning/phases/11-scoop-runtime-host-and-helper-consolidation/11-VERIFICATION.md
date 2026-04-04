@@ -22,10 +22,12 @@ That goal was met in three structural steps:
 - [`host`](/d:/projects/spoon/spoon-backend/src/scoop/host)
 - [`package_source.rs`](/d:/projects/spoon/spoon-backend/src/scoop/package_source.rs)
 - [`planner.rs`](/d:/projects/spoon/spoon-backend/src/scoop/planner.rs)
-- [`state/mod.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/mod.rs)
+- [`state.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state.rs)
 - [`lifecycle/mod.rs`](/d:/projects/spoon/spoon-backend/src/scoop/lifecycle/mod.rs)
 - [`mod.rs`](/d:/projects/spoon/spoon-backend/src/scoop/mod.rs)
 - [`runtime.rs`](/d:/projects/spoon/spoon/src/service/scoop/runtime.rs)
+- [`ports.rs`](/d:/projects/spoon/spoon-backend/src/ports.rs)
+- [`ports.rs`](/d:/projects/spoon/spoon-backend/src/scoop/ports.rs)
 
 ### Completed Plan Summaries
 
@@ -45,6 +47,12 @@ That goal was met in three structural steps:
 
 - `projection.rs` now reads more clearly as an internal helper pool, but its actual redundancy cleanup is intentionally deferred to Phase 12.
 - Root DTO duplication in `query/info/status` was not removed here; this phase only cleared the structural and naming path for that work.
+- Follow-up refinements after the phase completion further simplified this boundary:
+  `BackendContext<P>` now directly implements the host traits, `NoopScoopRuntimeHost` became `NoopPorts`, and `test_mode` was moved out of the host trait and into explicit execution parameters.
+- Follow-up refinements also removed several thin host convenience layers:
+  reapply helpers now keep only the core `*_with_host(...)` entry points, shim activation no longer returns legacy line output, and hook execution is modeled through typed `HookExecutionContext` / `HookPhase` plus a PowerShell template.
+- Host-side error handling also tightened after the phase close:
+  several `BackendError::Other(...)` cases in `host/` were reduced to filesystem errors or dedicated host-specific variants, leaving `Other` closer to a true fallback.
 
 ## Conclusion
 

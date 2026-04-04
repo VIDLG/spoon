@@ -55,9 +55,16 @@ This roadmap continues phase numbering after `v0.6.0` and focuses on cleaning th
 Plans:
 - [ ] TBD (run /gsd:plan-phase 12.1 to break down)
 
+### Phase 12.2: Scoop Surface and Actions Decomposition (INSERTED)
+
+**Goal:** decompose the remaining oversized Scoop orchestration and detail modules so lifecycle boundaries stay explicit and large Scoop files become easier to evolve.
+**Requirements**: SLEG-02, BECT-05
+**Depends on:** Phase 12.1
+**Plans:** 4 plans
+
 ### Phase 13: Scoop Cleanup Safety Net Refresh
 **Goal**: protect the Scoop legacy cleanup with focused backend and app-shell regressions.
-**Depends on**: Phase 12.1
+**Depends on**: Phase 12.2
 **Requirements**: TEST-07, TEST-08
 **Success Criteria** (what must be TRUE):
   1. Backend tests protect the Scoop legacy-cleanup breakpoints close to where the cleanup happened.
@@ -72,6 +79,7 @@ Plans:
 | 11. Scoop Runtime Host and Helper Consolidation | 4/4 | Complete | 2026-04-03 |
 | 12. Scoop Read Model and Shared Cleanup Refinement | 4/4 | Complete | 2026-04-03 |
 | 12.1. Control Plane Simplification and Migration Hardening | 4/4 | Complete | 2026-04-03 |
+| 12.2. Scoop Surface and Actions Decomposition | 4/4 | Complete | 2026-04-04 |
 | 13. Scoop Cleanup Safety Net Refresh | 0/0 | Pending | - |
 
 ## Backlog

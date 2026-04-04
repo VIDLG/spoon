@@ -45,10 +45,10 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SLEG-01 | Phase 10 | Pending |
-| SLEG-02 | Phase 11 | Pending |
+| SLEG-02 | Phase 12.2 | Pending |
 | SLEG-03 | Phase 12 | Pending |
 | SLEG-04 | Phase 10 | Pending |
-| BECT-05 | Phase 11 | Pending |
+| BECT-05 | Phase 12.2 | Pending |
 | BECT-06 | Phase 12 | Pending |
 | BECT-07 | Phase 12.1 | Pending |
 | BECT-08 | Phase 12.1 | Pending |

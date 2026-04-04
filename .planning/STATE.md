@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Scoop Legacy Cleanup and Domain Refinement
 status: active
-stopped_at: Phase 12.1 complete
-last_updated: "2026-04-03T10:30:00.000Z"
-last_activity: 2026-04-01
+stopped_at: Phase 12.2 complete
+last_updated: "2026-04-04T10:30:00.000Z"
+last_activity: 2026-04-04
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 16
-  percent: 80
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 20
+  completed_plans: 20
+  percent: 83
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Make `spoon-backend` the single trusted backend core and keep `spoon` as the thin app shell that orchestrates and presents it.  
-**Current focus:** Prepare the final Scoop safety-net phase after completing the control-plane refactor.
+**Current focus:** Start the Scoop cleanup safety-net refresh now that the decomposition phase is complete.
 
 ## Current Position
 
 Phase: 13. Scoop Cleanup Safety Net Refresh  
 Plan: Not started  
-Status: Phase 12.1 complete; ready to discuss and plan Phase 13  
-Last activity: 2026-04-03 - Completed Phase 12.1 and recorded verification
+Status: Phase 12.2 complete; next step is Phase 13 discussion/planning  
+Last activity: 2026-04-04 - Completed Phase 12.2 Scoop surface/actions decomposition
 
-Progress: [########--] 80%
+Progress: [########--] 83%
 
 ## Carried Context
 
@@ -50,6 +50,7 @@ Progress: [########--] 80%
 - Remove remaining hardcoded production paths from backend runtime execution. See [`2026-03-31-remove-hardcoded-production-paths.md`](/d:/projects/spoon/.planning/todos/pending/2026-03-31-remove-hardcoded-production-paths.md).
 - Continue derive-not-store cleanup for lower-value read models. See [`2026-04-01-audit-derive-not-store-fields.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-audit-derive-not-store-fields.md).
 - Simplify `SystemPort` / `ScoopRuntimeHost` boundaries further. See [`2026-04-01-simplify-system-port-and-runtime-host-boundaries.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-01-simplify-system-port-and-runtime-host-boundaries.md).
+- Group `InstalledPackageState` into semantic facets before considering schema splits. See [`2026-04-03-group-scoop-installed-state-facets.md`](/d:/projects/spoon/.planning/todos/pending/2026-04-03-group-scoop-installed-state-facets.md).
 - Review backlog phase [`999.1-test-architecture-cleanup`](/d:/projects/spoon/.planning/phases/999.1-test-architecture-cleanup).
 
 ### Seeds
@@ -65,9 +66,10 @@ Progress: [########--] 80%
 ### Roadmap Evolution
 
 - Phase 12.1 inserted after Phase 12: Control Plane Simplification and Migration Hardening (URGENT)
+- Phase 12.2 inserted after Phase 12: Scoop surface and actions decomposition (URGENT, completed 2026-04-04)
 
 ## Session Continuity
 
-Last session: 2026-04-03T10:30:00.000Z  
-Stopped at: Phase 12.1 complete; next step is Phase 13 discussion/planning  
+Last session: 2026-04-04T10:30:00.000Z  
+Stopped at: Phase 12.2 complete; next step is Phase 13 discussion/planning  
 Resume file: .planning/ROADMAP.md

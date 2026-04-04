@@ -20,8 +20,7 @@ That goal was met through three linked changes:
 ### Core Code Changes
 
 - [`query.rs`](/d:/projects/spoon/spoon-backend/src/scoop/query.rs)
-- [`state/model.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/model.rs)
-- [`state/store.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state/store.rs)
+- [`state.rs`](/d:/projects/spoon/spoon-backend/src/scoop/state.rs)
 - [`status.rs`](/d:/projects/spoon/spoon-backend/src/status.rs)
 - [`projection.rs`](/d:/projects/spoon/spoon-backend/src/scoop/projection.rs)
 - [`buckets.rs`](/d:/projects/spoon/spoon-backend/src/scoop/buckets.rs)
@@ -29,6 +28,7 @@ That goal was met through three linked changes:
 - [`run.rs`](/d:/projects/spoon/spoon/src/cli/run.rs)
 - [`Cargo.toml`](/d:/projects/spoon/spoon-backend/Cargo.toml)
 - [`state.rs`](/d:/projects/spoon/spoon-backend/src/msvc/state.rs)
+- [`package_source.rs`](/d:/projects/spoon/spoon-backend/src/scoop/package_source.rs)
 
 ### Completed Plan Summaries
 
@@ -48,6 +48,10 @@ That goal was met through three linked changes:
 
 - Some outward contract questions remain subjective even with `schemars`; schema derivation helps identify true contract structs but does not replace architectural judgment.
 - `projection.rs` is now much less central, but additional helper simplification can still happen opportunistically in later work if more dead code is exposed.
+- `InstalledPackageState` is now flatter and more DB-first, but its persisted fields still mix identity, command-surface, integration, and uninstall/reapply facts in one model. A follow-up should group those facets semantically before considering any physical schema split.
+- The package-source model has continued to improve after the phase close: the runtime source is now expressed as `ResolvedPackageSource` with `PackageAsset`, and the parser uses a typed raw-manifest layer instead of full-file `serde_json::Value` branching.
+- Naming cleanup after the phase close also pushed the asset terminology through the Scoop backend:
+  the runtime source now consistently uses `assets`, `acquire_assets`, and `materialize_assets` instead of carrying old `payload` wording forward.
 
 ## Conclusion
 
