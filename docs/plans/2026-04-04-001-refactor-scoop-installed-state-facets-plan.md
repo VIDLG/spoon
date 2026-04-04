@@ -10,7 +10,7 @@ origin: docs/brainstorms/2026-04-04-scoop-installed-state-facets-requirements.md
 
 ## Problem Frame
 
-`spoon-backend/src/scoop/state.rs` currently persists Scoop installed state as one flat `InstalledPackageState` model backed by one wide `installed_packages` table. That shape still stores canonical facts, but it mixes identity, command surface, integrations, and uninstall lifecycle data in one record.
+Before this refactor, `spoon-backend/src/scoop/state.rs` persisted Scoop installed state as one flat `InstalledPackageState` model backed by one wide `installed_packages` table. That shape still stored canonical facts, but it mixed identity, command surface, integrations, and uninstall lifecycle data in one record.
 
 The rest of the Scoop domain has already been decomposed into narrower modules. State is now the largest remaining place where unrelated concerns are still packed together. This refactor will redesign the Scoop installed-state contract in a forward-only way so the Rust model, SQLite schema, and read/write API all reflect the same semantic facets.
 
@@ -30,12 +30,12 @@ Source of truth: `docs/brainstorms/2026-04-04-scoop-installed-state-facets-requi
 ### Existing repo patterns
 
 - `spoon-backend/src/scoop/state.rs` was the canonical installed-state model and store helper before decomposition.
-- `spoon-backend/src/control_plane/schema/0001_control_plane.sql` defined one wide `installed_packages` table with multiple JSON-serialized fields.
+- `spoon-backend/src/control_plane/schema/0001_control_plane.sql` originally defined one wide `installed_packages` table with multiple JSON-serialized fields.
 - `spoon-backend/src/scoop/actions/install.rs` wrote all Scoop state in one `write_installed_state` call after install/update.
 - `spoon-backend/src/scoop/actions/uninstall.rs` consumed uninstall fields from one loaded state object before removing the row.
 - `spoon-backend/src/scoop/host/integration.rs` and `spoon-backend/src/scoop/host/surface/reapply.rs` updated only one slice of the state but still needed canonical store writes.
 - `spoon-backend/src/scoop/info/package.rs` and `spoon-backend/src/scoop/query.rs` consumed the installed-state contract directly.
-- `spoon-backend/src/scoop/tests/state.rs` and `spoon-backend/src/tests/control_plane.rs` already provided focused coverage around state roundtrips and control-plane bootstrap.
+- `spoon-backend/src/scoop/tests/state.rs` and `spoon-backend/src/tests/control_plane.rs` already provided focused coverage around state roundtrips and control-plane bootstrap before the current refactor was completed.
 
 ### Planning decisions from origin
 
@@ -60,7 +60,7 @@ Skipped. The repo already has strong local patterns for SQLite-backed state, nar
   - `installed_package_uninstall`
 - **Integration storage:** use one row per integration with a uniqueness constraint on `(package, integration_key)` or equivalent foreign-key pair.
 - **Read posture:** keep one canonical composed full-state read/write path first, while making the schema facet-friendly enough that later work can add facet-specific reads without redesigning storage again.
-- **Migration posture:** use a new control-plane migration to create facet tables, backfill data from the current wide shape, rebuild `installed_packages` as the identity table, and then switch all Scoop readers/writers to the new layout in one forward migration step.
+- **Migration posture:** use a new control-plane migration to create facet tables, backfill data from the previous wide shape, rebuild `installed_packages` as the identity table, and then switch all Scoop readers/writers to the new layout in one forward migration step.
 
 ## High-Level Technical Design
 
@@ -145,7 +145,7 @@ This keeps the backend contract simple while allowing future facet-specific read
 - Use one new migration or one rebuilt bootstrap schema path so the SQLite layout matches the grouped model exactly.
 
 **Pattern references:**
-- `spoon-backend/src/scoop/state.rs` (current fused shape to replace)
+- `spoon-backend/src/scoop/state.rs` (pre-refactor fused shape that was replaced)
 - `spoon-backend/src/control_plane/schema/0001_control_plane.sql`
 
 **Test files:**
@@ -176,7 +176,7 @@ This keeps the backend contract simple while allowing future facet-specific read
 
 **Pattern references:**
 - `spoon-backend/src/db.rs`
-- `spoon-backend/src/scoop/state.rs` (current fused shape to replace)
+- `spoon-backend/src/scoop/state.rs` (pre-refactor fused shape that was replaced)
 
 **Test files:**
 - `spoon-backend/src/scoop/tests/state.rs`
@@ -279,7 +279,7 @@ This keeps the backend contract simple while allowing future facet-specific read
 
 - `spoon-backend/src/scoop/mod.rs` will keep exporting `InstalledPackageState`, but the meaning of its fields will become grouped rather than flat.
 - `spoon-backend/src/scoop/state/mod.rs` becomes a Scoop-owned shared seam that both persistence code and higher Scoop layers depend on.
-- Every Scoop path that currently reads or writes state becomes coupled to the new facet-aware store implementation: installs, updates, uninstall, reapply, package info, runtime status, and package listing.
+- Every Scoop path that reads or writes state is now coupled to the new facet-aware store implementation: installs, updates, uninstall, reapply, package info, runtime status, and package listing.
 - The app crate should not need product-level behavior changes, but compile-time updates are likely where it directly consumes backend Scoop state.
 - This refactor increases future leverage: integration repair, state doctoring, and facet-specific reads all become easier once the schema reflects the domain.
 

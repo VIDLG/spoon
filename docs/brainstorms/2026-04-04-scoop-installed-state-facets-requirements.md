@@ -7,7 +7,7 @@ topic: scoop-installed-state-facets
 
 ## Problem Frame
 
-`spoon-backend/src/scoop/state.rs` currently stores the Scoop installed-package contract as one flat `InstalledPackageState` model backed by one wide `installed_packages` row. That shape is still correct in the sense that it stores canonical non-derivable facts, but it mixes several different concerns:
+Before this refactor, `spoon-backend/src/scoop/state.rs` stored the Scoop installed-package contract as one flat `InstalledPackageState` model backed by one wide `installed_packages` row. That shape was still correct in the sense that it stored canonical non-derivable facts, but it mixed several different concerns:
 
 - package identity
 - command surface and package-local runtime environment
@@ -70,7 +70,7 @@ The goal is to redesign the Scoop installed-state contract in a forward-only way
 
 ## Dependencies / Assumptions
 
-- Scoop action, query, info, and reapply code paths will need coordinated updates because they currently assume the flat installed-state shape.
+- Scoop action, query, info, and reapply code paths require coordinated updates wherever they still assume the former flat installed-state shape.
 - The current control-plane/SQLite foundation is stable enough after Phase 12.1 and 12.2 to support another Scoop-specific schema reshape.
 - The shared state model should be Scoop-specific rather than a new backend-global generic model package. The goal is to separate Scoop state semantics from Scoop persistence details, not to introduce a cross-domain abstraction prematurely.
 
