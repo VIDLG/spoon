@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{BackendError, Result};
 
+use super::models::{PersistEntry, ShimTarget, ShortcutEntry};
+
 #[derive(Debug, Clone)]
-pub struct SelectedPackageSource {
+pub struct ResolvedPackageSource {
     pub version: String,
-    pub payloads: Vec<PackagePayload>,
+    pub assets: Vec<PackageAsset>,
     pub depends: Vec<String>,
     pub extract_dir: Vec<String>,
     pub extract_to: Vec<String>,
@@ -27,34 +29,161 @@ pub struct SelectedPackageSource {
 }
 
 #[derive(Debug, Clone)]
-pub struct PackagePayload {
+pub struct PackageAsset {
     pub url: String,
     pub hash: String,
     pub target_name: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ShimTarget {
-    pub relative_path: String,
-    pub alias: String,
-    pub args: Vec<String>,
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawManifest {
+    #[serde(flatten)]
+    base: RawPackageFields,
+    #[serde(default)]
+    architecture: BTreeMap<String, RawPackageFields>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PersistEntry {
-    pub relative_path: String,
-    pub store_name: String,
+impl RawManifest {
+    fn resolve(&self, arch_key: &str) -> RawPackageFields {
+        let mut resolved = self.base.clone();
+        if let Some(arch) = self.architecture.get(arch_key) {
+            resolved.overlay(arch);
+        }
+        resolved
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShortcutEntry {
-    pub target_path: String,
-    pub name: String,
-    pub args: Option<String>,
-    pub icon_path: Option<String>,
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawPackageFields {
+    version: Option<String>,
+    url: Option<RawStringList>,
+    hash: Option<RawStringList>,
+    depends: Option<RawStringList>,
+    extract_dir: Option<RawStringList>,
+    extract_to: Option<RawStringList>,
+    installer: Option<RawScriptOwner>,
+    bin: Option<RawBinField>,
+    shortcuts: Option<Vec<Vec<String>>>,
+    env_add_path: Option<RawStringList>,
+    env_set: Option<BTreeMap<String, String>>,
+    persist: Option<RawPersistField>,
+    pre_install: Option<RawStringList>,
+    post_install: Option<RawStringList>,
+    pre_uninstall: Option<RawStringList>,
+    post_uninstall: Option<RawStringList>,
+    uninstaller: Option<RawScriptOwner>,
+    innosetup: Option<bool>,
 }
 
-pub fn selected_architecture_key() -> &'static str {
+impl RawPackageFields {
+    fn overlay(&mut self, other: &Self) {
+        if other.version.is_some() {
+            self.version = other.version.clone();
+        }
+        if other.url.is_some() {
+            self.url = other.url.clone();
+        }
+        if other.hash.is_some() {
+            self.hash = other.hash.clone();
+        }
+        if other.depends.is_some() {
+            self.depends = other.depends.clone();
+        }
+        if other.extract_dir.is_some() {
+            self.extract_dir = other.extract_dir.clone();
+        }
+        if other.extract_to.is_some() {
+            self.extract_to = other.extract_to.clone();
+        }
+        if other.installer.is_some() {
+            self.installer = other.installer.clone();
+        }
+        if other.bin.is_some() {
+            self.bin = other.bin.clone();
+        }
+        if other.shortcuts.is_some() {
+            self.shortcuts = other.shortcuts.clone();
+        }
+        if other.env_add_path.is_some() {
+            self.env_add_path = other.env_add_path.clone();
+        }
+        if other.env_set.is_some() {
+            self.env_set = other.env_set.clone();
+        }
+        if other.persist.is_some() {
+            self.persist = other.persist.clone();
+        }
+        if other.pre_install.is_some() {
+            self.pre_install = other.pre_install.clone();
+        }
+        if other.post_install.is_some() {
+            self.post_install = other.post_install.clone();
+        }
+        if other.pre_uninstall.is_some() {
+            self.pre_uninstall = other.pre_uninstall.clone();
+        }
+        if other.post_uninstall.is_some() {
+            self.post_uninstall = other.post_uninstall.clone();
+        }
+        if other.uninstaller.is_some() {
+            self.uninstaller = other.uninstaller.clone();
+        }
+        if other.innosetup.is_some() {
+            self.innosetup = other.innosetup;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawStringList {
+    Single(String),
+    Many(Vec<String>),
+}
+
+impl RawStringList {
+    fn into_trimmed_vec(self) -> Vec<String> {
+        match self {
+            Self::Single(item) => normalize_string_items([item]),
+            Self::Many(items) => normalize_string_items(items),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawScriptOwner {
+    script: Option<RawStringList>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawBinField {
+    Single(String),
+    Many(Vec<RawBinEntry>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawBinEntry {
+    Path(String),
+    Tuple(Vec<String>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawPersistField {
+    Single(String),
+    Many(Vec<RawPersistEntry>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum RawPersistEntry {
+    Path(String),
+    Tuple(Vec<String>),
+}
+
+pub fn current_architecture_key() -> &'static str {
     if cfg!(target_arch = "x86_64") {
         "64bit"
     } else if cfg!(target_arch = "aarch64") {
@@ -81,48 +210,33 @@ pub fn dependency_lookup_key(spec: &str) -> String {
         .to_string()
 }
 
-fn value_from_manifest<'a>(manifest: &'a Value, key: &str) -> Option<&'a Value> {
-    manifest
-        .get("architecture")
-        .and_then(|value| value.get(selected_architecture_key()))
-        .and_then(|value| value.get(key))
-        .or_else(|| manifest.get(key))
-}
-
 fn manifest_error(message: impl Into<String>) -> BackendError {
     BackendError::ManifestValidation(message.into())
 }
 
-fn string_value(manifest: &Value, key: &str) -> Option<String> {
-    value_from_manifest(manifest, key)
-        .and_then(Value::as_str)
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+fn normalize_string_items<I>(items: I) -> Vec<String>
+where
+    I: IntoIterator<Item = String>,
+{
+    items.into_iter()
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+        .collect()
 }
 
-fn parse_string_list(manifest: &Value, key: &str) -> Result<Vec<String>> {
-    let Some(value) = value_from_manifest(manifest, key) else {
-        return Ok(Vec::new());
-    };
-    match value {
-        Value::String(item) => Ok(vec![item.trim().to_string()]
-            .into_iter()
-            .filter(|item| !item.is_empty())
-            .collect()),
-        Value::Array(items) => Ok(items
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::trim)
-            .filter(|item| !item.is_empty())
-            .map(ToString::to_string)
-            .collect()),
-        _ => Err(manifest_error(format!("unsupported `{key}` field shape"))),
-    }
+fn required_trimmed_string(value: Option<String>, key: &str) -> Result<String> {
+    value.map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+        .ok_or_else(|| manifest_error(format!("manifest is missing `{key}`")))
 }
 
-fn parse_payloads(manifest: &Value) -> Result<Vec<PackagePayload>> {
-    let urls = parse_string_list(manifest, "url")?;
-    let hashes = parse_string_list(manifest, "hash")?;
+fn parse_string_list(value: Option<RawStringList>) -> Vec<String> {
+    value.map(RawStringList::into_trimmed_vec).unwrap_or_default()
+}
+
+fn parse_assets(fields: &RawPackageFields) -> Result<Vec<PackageAsset>> {
+    let urls = parse_string_list(fields.url.clone());
+    let hashes = parse_string_list(fields.hash.clone());
     if urls.is_empty() {
         return Err(manifest_error("manifest is missing supported `url`"));
     }
@@ -135,15 +249,15 @@ fn parse_payloads(manifest: &Value) -> Result<Vec<PackagePayload>> {
     Ok(urls
         .into_iter()
         .zip(hashes)
-        .map(|(url, hash)| PackagePayload {
-            target_name: payload_target_name(&url),
+        .map(|(url, hash)| PackageAsset {
+            target_name: asset_target_name(&url),
             url,
             hash,
         })
         .collect())
 }
 
-fn payload_target_name(url: &str) -> Option<String> {
+fn asset_target_name(url: &str) -> Option<String> {
     let fragment = url.split('#').nth(1)?.trim();
     let trimmed = fragment.strip_prefix('/')?.trim();
     if trimmed.is_empty() {
@@ -153,31 +267,22 @@ fn payload_target_name(url: &str) -> Option<String> {
     }
 }
 
-fn parse_env_set(manifest: &Value) -> Result<BTreeMap<String, String>> {
-    let Some(value) = value_from_manifest(manifest, "env_set") else {
-        return Ok(BTreeMap::new());
-    };
-    let Value::Object(map) = value else {
-        return Err(manifest_error("unsupported `env_set` field shape"));
-    };
-    Ok(map
-        .iter()
-        .filter_map(|(key, value)| {
-            value
-                .as_str()
-                .map(|value| (key.clone(), value.trim().to_string()))
-        })
+fn parse_env_set(value: Option<BTreeMap<String, String>>) -> BTreeMap<String, String> {
+    value
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(key, value)| (key, value.trim().to_string()))
         .filter(|(_, value)| !value.is_empty())
-        .collect())
+        .collect()
 }
 
-fn parse_persist_entries(manifest: &Value) -> Result<Vec<PersistEntry>> {
-    let Some(value) = value_from_manifest(manifest, "persist") else {
+fn parse_persist_entries(value: Option<RawPersistField>) -> Result<Vec<PersistEntry>> {
+    let Some(value) = value else {
         return Ok(Vec::new());
     };
     let mut entries = Vec::new();
     match value {
-        Value::String(path) => {
+        RawPersistField::Single(path) => {
             let path = path.trim();
             if !path.is_empty() {
                 entries.push(PersistEntry {
@@ -186,10 +291,10 @@ fn parse_persist_entries(manifest: &Value) -> Result<Vec<PersistEntry>> {
                 });
             }
         }
-        Value::Array(items) => {
+        RawPersistField::Many(items) => {
             for item in items {
                 match item {
-                    Value::String(path) => {
+                    RawPersistEntry::Path(path) => {
                         let path = path.trim();
                         if !path.is_empty() {
                             entries.push(PersistEntry {
@@ -198,16 +303,16 @@ fn parse_persist_entries(manifest: &Value) -> Result<Vec<PersistEntry>> {
                             });
                         }
                     }
-                    Value::Array(parts) if !parts.is_empty() => {
+                    RawPersistEntry::Tuple(parts) if !parts.is_empty() => {
                         let relative_path = parts
                             .first()
-                            .and_then(Value::as_str)
+                            .map(String::as_str)
                             .map(str::trim)
                             .filter(|value| !value.is_empty())
                             .ok_or_else(|| manifest_error("unsupported persist tuple path"))?;
                         let store_name = parts
                             .get(1)
-                            .and_then(Value::as_str)
+                            .map(String::as_str)
                             .map(str::trim)
                             .filter(|value| !value.is_empty())
                             .unwrap_or(relative_path);
@@ -220,47 +325,40 @@ fn parse_persist_entries(manifest: &Value) -> Result<Vec<PersistEntry>> {
                 }
             }
         }
-        _ => return Err(manifest_error("unsupported `persist` field shape")),
     }
     Ok(entries)
 }
 
-fn parse_shortcuts(manifest: &Value) -> Result<Vec<ShortcutEntry>> {
-    let Some(value) = value_from_manifest(manifest, "shortcuts") else {
+fn parse_shortcuts(value: Option<Vec<Vec<String>>>) -> Result<Vec<ShortcutEntry>> {
+    let Some(items) = value else {
         return Ok(Vec::new());
     };
-    let Value::Array(items) = value else {
-        return Err(manifest_error("unsupported `shortcuts` field shape"));
-    };
     let mut shortcuts = Vec::new();
-    for item in items {
-        let Value::Array(parts) = item else {
-            return Err(manifest_error("unsupported `shortcuts` item shape"));
-        };
+    for parts in items {
         if !(2..=4).contains(&parts.len()) {
             return Err(manifest_error("unsupported `shortcuts` tuple length"));
         }
         let target_path = parts
             .first()
-            .and_then(Value::as_str)
+            .map(String::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| manifest_error("unsupported shortcuts target path"))?;
         let name = parts
             .get(1)
-            .and_then(Value::as_str)
+            .map(String::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| manifest_error("unsupported shortcuts name"))?;
         let args = parts
             .get(2)
-            .and_then(Value::as_str)
+            .map(String::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToString::to_string);
         let icon_path = parts
             .get(3)
-            .and_then(Value::as_str)
+            .map(String::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToString::to_string);
@@ -274,90 +372,85 @@ fn parse_shortcuts(manifest: &Value) -> Result<Vec<ShortcutEntry>> {
     Ok(shortcuts)
 }
 
-fn parse_bin_targets(manifest: &Value) -> Result<Vec<ShimTarget>> {
-    let Some(bin_value) = value_from_manifest(manifest, "bin") else {
+fn parse_bin_targets(value: Option<RawBinField>) -> Result<Vec<ShimTarget>> {
+    let Some(bin_value) = value else {
         return Err(manifest_error(
             "manifest is missing a supported `bin` field",
         ));
     };
     let mut targets = Vec::new();
     match bin_value {
-        Value::String(path) => targets.push(ShimTarget {
-            relative_path: path.to_string(),
-            alias: Path::new(path)
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .unwrap_or(path)
-                .to_string(),
-            args: Vec::new(),
-        }),
-        Value::Array(items) => {
+        RawBinField::Single(path) => targets.push(shim_target(path, None, Vec::new())),
+        RawBinField::Many(items) => {
             for item in items {
                 match item {
-                    Value::String(path) => targets.push(ShimTarget {
-                        relative_path: path.to_string(),
-                        alias: Path::new(path)
-                            .file_stem()
-                            .and_then(|value| value.to_str())
-                            .unwrap_or(path)
-                            .to_string(),
-                        args: Vec::new(),
-                    }),
-                    Value::Array(parts) if !parts.is_empty() => {
+                    RawBinEntry::Path(path) => targets.push(shim_target(path, None, Vec::new())),
+                    RawBinEntry::Tuple(parts) if !parts.is_empty() => {
                         let path = parts
                             .first()
-                            .and_then(Value::as_str)
+                            .map(String::as_str)
                             .ok_or_else(|| manifest_error("unsupported bin tuple path"))?;
-                        let alias = parts.get(1).and_then(Value::as_str).unwrap_or_else(|| {
-                            Path::new(path)
-                                .file_stem()
-                                .and_then(|value| value.to_str())
-                                .unwrap_or(path)
-                        });
+                        let alias = parts.get(1).map(String::as_str);
                         let args = parts
                             .get(2)
-                            .and_then(Value::as_str)
+                            .map(String::as_str)
                             .map(str::trim)
                             .filter(|value| !value.is_empty())
                             .map(|value| vec![value.to_string()])
                             .unwrap_or_default();
-                        targets.push(ShimTarget {
-                            relative_path: path.to_string(),
-                            alias: alias.to_string(),
-                            args,
-                        });
+                        targets.push(shim_target(path.to_string(), alias, args));
                     }
                     _ => return Err(manifest_error("unsupported `bin` item shape")),
                 }
             }
         }
-        _ => return Err(manifest_error("unsupported `bin` field shape")),
     }
     Ok(targets)
 }
 
-pub fn parse_selected_source(manifest: &Value) -> Result<SelectedPackageSource> {
-    let version = string_value(manifest, "version")
-        .ok_or_else(|| manifest_error("manifest is missing `version`"))?;
-    let payloads = parse_payloads(manifest)?;
-    let mut depends = parse_string_list(manifest, "depends")?;
-    let extract_dir = parse_string_list(manifest, "extract_dir")?;
-    let extract_to = parse_string_list(manifest, "extract_to")?;
-    let installer_script = parse_installer_script_lines(manifest)?;
-    infer_helper_dependencies(&payloads, manifest, &installer_script, &mut depends);
-    let bins = parse_bin_targets(manifest)?;
-    let shortcuts = parse_shortcuts(manifest)?;
-    let env_add_path = parse_string_list(manifest, "env_add_path")?;
-    let env_set = parse_env_set(manifest)?;
-    let persist = parse_persist_entries(manifest)?;
-    let pre_install = parse_lifecycle_script_lines(manifest, "pre_install")?;
-    let post_install = parse_lifecycle_script_lines(manifest, "post_install")?;
-    let pre_uninstall = parse_lifecycle_script_lines(manifest, "pre_uninstall")?;
-    let post_uninstall = parse_lifecycle_script_lines(manifest, "post_uninstall")?;
-    let uninstaller_script = parse_uninstaller_script_lines(manifest)?;
-    Ok(SelectedPackageSource {
+fn shim_target(path: String, alias: Option<&str>, args: Vec<String>) -> ShimTarget {
+    let inferred_alias = alias
+        .map(ToString::to_string)
+        .unwrap_or_else(|| {
+            Path::new(&path)
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or(path.as_str())
+                .to_string()
+        });
+    ShimTarget {
+        relative_path: path,
+        alias: inferred_alias,
+        args,
+    }
+}
+
+pub fn resolve_package_source(manifest: &Value) -> Result<ResolvedPackageSource> {
+    let raw: RawManifest = serde_json::from_value(manifest.clone())
+        .map_err(|err| manifest_error(format!("invalid Scoop manifest shape: {err}")))?;
+    let fields = raw.resolve(current_architecture_key());
+
+    let version = required_trimmed_string(fields.version.clone(), "version")?;
+    let assets = parse_assets(&fields)?;
+    let mut depends = parse_string_list(fields.depends.clone());
+    let extract_dir = parse_string_list(fields.extract_dir.clone());
+    let extract_to = parse_string_list(fields.extract_to.clone());
+    let installer_script = parse_script_lines(fields.installer.clone());
+    infer_helper_dependencies(&assets, &fields, &installer_script, &mut depends);
+    let bins = parse_bin_targets(fields.bin.clone())?;
+    let shortcuts = parse_shortcuts(fields.shortcuts.clone())?;
+    let env_add_path = parse_string_list(fields.env_add_path.clone());
+    let env_set = parse_env_set(fields.env_set.clone());
+    let persist = parse_persist_entries(fields.persist.clone())?;
+    let pre_install = parse_string_list(fields.pre_install.clone());
+    let post_install = parse_string_list(fields.post_install.clone());
+    let pre_uninstall = parse_string_list(fields.pre_uninstall.clone());
+    let post_uninstall = parse_string_list(fields.post_uninstall.clone());
+    let uninstaller_script = parse_script_lines(fields.uninstaller.clone());
+
+    Ok(ResolvedPackageSource {
         version,
-        payloads,
+        assets,
         depends,
         extract_dir,
         extract_to,
@@ -375,59 +468,19 @@ pub fn parse_selected_source(manifest: &Value) -> Result<SelectedPackageSource> 
     })
 }
 
-fn parse_lifecycle_script_lines(manifest: &Value, key: &str) -> Result<Vec<String>> {
-    let Some(value) = value_from_manifest(manifest, key) else {
-        return Ok(Vec::new());
-    };
-    parse_script_lines(value)
-}
-
-fn parse_uninstaller_script_lines(manifest: &Value) -> Result<Vec<String>> {
-    let Some(uninstaller) = value_from_manifest(manifest, "uninstaller") else {
-        return Ok(Vec::new());
-    };
-    let Some(script) = uninstaller.get("script") else {
-        return Ok(Vec::new());
-    };
-    parse_script_lines(script)
-}
-
-fn parse_installer_script_lines(manifest: &Value) -> Result<Vec<String>> {
-    let Some(installer) = value_from_manifest(manifest, "installer") else {
-        return Ok(Vec::new());
-    };
-    let Some(script) = installer.get("script") else {
-        return Ok(Vec::new());
-    };
-    parse_script_lines(script)
-}
-
-fn parse_script_lines(value: &Value) -> Result<Vec<String>> {
-    match value {
-        Value::String(line) => Ok(vec![line.trim().to_string()]
-            .into_iter()
-            .filter(|line| !line.is_empty())
-            .collect()),
-        Value::Array(items) => Ok(items
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(ToString::to_string)
-            .collect()),
-        _ => Err(manifest_error("unsupported script field shape")),
-    }
+fn parse_script_lines(owner: Option<RawScriptOwner>) -> Vec<String> {
+    owner.and_then(|owner| owner.script)
+        .map(RawStringList::into_trimmed_vec)
+        .unwrap_or_default()
 }
 
 fn infer_helper_dependencies(
-    payloads: &[PackagePayload],
-    manifest: &Value,
+    assets: &[PackageAsset],
+    fields: &RawPackageFields,
     installer_script: &[String],
     depends: &mut Vec<String>,
 ) {
-    let needs_innounp = value_from_manifest(manifest, "innosetup")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
+    let needs_innounp = fields.innosetup.unwrap_or(false)
         || installer_script
             .iter()
             .any(|line| line.contains("Expand-InnoArchive"));
@@ -448,12 +501,12 @@ fn infer_helper_dependencies(
     {
         depends.push("dark".to_string());
     }
-    let needs_7zip = payloads.iter().any(|payload| {
-        payload
+    let needs_7zip = assets.iter().any(|asset| {
+        asset
             .target_name
             .as_deref()
             .or_else(|| {
-                Path::new(&payload.url)
+                Path::new(&asset.url)
                     .file_name()
                     .and_then(|value| value.to_str())
             })

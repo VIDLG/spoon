@@ -2,7 +2,7 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
-use crate::control_plane::ControlPlaneDb;
+use crate::db::Db;
 use crate::layout::RuntimeLayout;
 use crate::{BackendError, Result};
 
@@ -147,7 +147,7 @@ fn validation_status_label(status: MsvcValidationStatus) -> &'static str {
 }
 
 pub async fn read_canonical_state(layout: &RuntimeLayout) -> Option<MsvcCanonicalState> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await.ok()?;
+    let db = Db::open(&layout.scoop.db_path()).await.ok()?;
     let row = db
         .call(|conn| {
             conn.query_row(
@@ -180,7 +180,7 @@ pub async fn write_canonical_state(
     layout: &RuntimeLayout,
     state: &MsvcCanonicalState,
 ) -> Result<()> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
+    let db = Db::open(&layout.scoop.db_path()).await?;
     let runtime_kind = runtime_kind_label(state.runtime_kind).to_string();
     let installed = if state.installed { 1_i64 } else { 0_i64 };
     let version = state.version.clone();
@@ -234,7 +234,7 @@ pub async fn write_canonical_state(
 }
 
 pub async fn clear_canonical_state(layout: &RuntimeLayout) -> Result<()> {
-    let db = ControlPlaneDb::open(&layout.scoop.control_plane_db_path()).await?;
+    let db = Db::open(&layout.scoop.db_path()).await?;
     db.call(|conn| {
         conn.execute("DELETE FROM msvc_runtime_state WHERE singleton_key = 'msvc'", [])?;
         Ok(())

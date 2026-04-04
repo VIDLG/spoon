@@ -2,6 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::{BackendError, Result};
+
 use super::buckets::resolve_manifest;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -173,13 +175,22 @@ pub struct Installer {
     pub keep: Option<bool>,
 }
 
-pub fn parse_manifest(json: &str) -> Result<ScoopManifest, serde_json::Error> {
+pub fn parse_manifest(json: &str) -> std::result::Result<ScoopManifest, serde_json::Error> {
     serde_json::from_str(json)
 }
 
 pub async fn load_manifest(path: &Path) -> Option<ScoopManifest> {
     let content = tokio::fs::read_to_string(path).await.ok()?;
     parse_manifest(&content).ok()
+}
+
+pub async fn load_manifest_value(path: &Path) -> Result<serde_json::Value> {
+    let content = tokio::fs::read_to_string(path)
+        .await
+        .map_err(|err| BackendError::fs("read", path, err))?;
+    serde_json::from_str(&content)
+        .map_err(BackendError::from)
+        .map_err(|err| err.context(format!("invalid manifest {}", path.display())))
 }
 
 pub fn load_manifest_sync(path: &Path) -> Option<ScoopManifest> {

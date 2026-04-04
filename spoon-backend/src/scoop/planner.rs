@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use crate::{BackendError, Result};
 
 use super::buckets::{ResolvedBucket, resolve_manifest, resolve_manifest_sync};
-use super::host::load_manifest_value;
-use super::package_source::{SelectedPackageSource, parse_selected_source};
+use super::manifest::load_manifest_value;
+use super::package_source::{ResolvedPackageSource, resolve_package_source};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoopPackageAction {
@@ -27,7 +27,7 @@ pub struct ScoopPackagePlan {
 #[derive(Debug, Clone)]
 pub(crate) struct PlannedPackageLifecycle {
     pub resolved: ResolvedBucket,
-    pub source: SelectedPackageSource,
+    pub source: ResolvedPackageSource,
 }
 
 impl ScoopPackagePlan {
@@ -126,7 +126,7 @@ pub(crate) async fn plan_package_lifecycle(
             .ok_or(BackendError::ManifestUnavailable)?,
     };
     let manifest = load_manifest_value(&resolved.manifest_path).await?;
-    let source = parse_selected_source(&manifest)?;
+    let source = resolve_package_source(&manifest)?;
     Ok(PlannedPackageLifecycle { resolved, source })
 }
 

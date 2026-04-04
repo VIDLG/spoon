@@ -3,26 +3,26 @@ use std::path::Path;
 use tokio::fs;
 
 use crate::Result;
-use crate::{BackendError, BackendEvent};
+use crate::BackendError;
 use crate::scoop::PersistEntry;
 
 use super::super::extract::{copy_path_recursive, remove_path_if_exists};
+
+async fn ensure_persist_root(persist_root: &Path) -> Result<()> {
+    fs::create_dir_all(persist_root)
+        .await
+        .map_err(|err| BackendError::fs("create", persist_root, err))
+}
 
 pub async fn sync_persist_entries_from_root(
     install_root: &Path,
     persist_root: &Path,
     entries: &[PersistEntry],
-    _emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<()> {
     if entries.is_empty() {
         return Ok(());
     }
-    fs::create_dir_all(persist_root).await.map_err(|err| {
-        BackendError::Other(format!(
-            "failed to create {}: {err}",
-            persist_root.display()
-        ))
-    })?;
+    ensure_persist_root(persist_root).await?;
     for entry in entries {
         let current_path = install_root.join(&entry.relative_path);
         if !current_path.exists() {
@@ -44,17 +44,11 @@ pub async fn restore_persist_entries_into_root(
     install_root: &Path,
     persist_root: &Path,
     entries: &[PersistEntry],
-    _emit: &mut dyn FnMut(BackendEvent),
 ) -> Result<()> {
     if entries.is_empty() {
         return Ok(());
     }
-    fs::create_dir_all(persist_root).await.map_err(|err| {
-        BackendError::Other(format!(
-            "failed to create {}: {err}",
-            persist_root.display()
-        ))
-    })?;
+    ensure_persist_root(persist_root).await?;
     for entry in entries {
         let persist_path = persist_root.join(&entry.store_name);
         let current_path = install_root.join(&entry.relative_path);

@@ -1,8 +1,8 @@
-use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::Path;
-use std::pin::Pin;
 
+use async_trait::async_trait;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use crate::{BackendEvent, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,11 +11,18 @@ pub struct SupplementalShimSpec {
     pub relative_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct AppliedIntegration {
+    pub key: String,
+    pub value: String,
+}
+
 /// App-owned Scoop integration callbacks invoked by backend lifecycle code.
 ///
 /// These ports stay defined in `spoon-backend` because the backend decides
 /// when lifecycle steps need host-owned package integrations, but the actual
 /// implementation belongs to the app shell.
+#[async_trait(?Send)]
 pub trait ScoopIntegrationPort {
     fn supplemental_shims(
         &self,
@@ -23,11 +30,11 @@ pub trait ScoopIntegrationPort {
         current_root: &Path,
     ) -> Vec<SupplementalShimSpec>;
 
-    fn apply_integrations<'a>(
-        &'a self,
-        package_name: &'a str,
-        current_root: &'a Path,
-        persist_root: &'a Path,
-        emit: &'a mut dyn FnMut(BackendEvent),
-    ) -> Pin<Box<dyn Future<Output = Result<BTreeMap<String, String>>> + 'a>>;
+    async fn apply_integrations(
+        &self,
+        package_name: &str,
+        current_root: &Path,
+        persist_root: &Path,
+        emit: &mut dyn FnMut(BackendEvent),
+    ) -> Result<Vec<AppliedIntegration>>;
 }

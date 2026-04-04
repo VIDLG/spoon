@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use schemars::JsonSchema;
+use crate::db::Db;
 use super::buckets::{self, Bucket};
 use super::manifest::{self, ScoopManifest};
 use super::state::{InstalledPackageState, InstalledPackageSummary};
@@ -52,8 +53,11 @@ pub struct ScoopSearchResults {
 /// package name.
 pub async fn installed_package_states(tool_root: &Path) -> Vec<InstalledPackageState> {
     let layout = RuntimeLayout::from_root(tool_root);
-    let mut states = super::state::list_installed_states(&layout).await;
-    states.sort_by(|a, b| a.package.cmp(&b.package));
+    let Ok(db) = Db::open(&layout.scoop.db_path()).await else {
+        return Vec::new();
+    };
+    let mut states = super::state::list_installed_states(&db).await;
+    states.sort_by(|a, b| a.package().cmp(b.package()));
     states
 }
 
@@ -67,11 +71,14 @@ where
     F: FnMut(&InstalledPackageState) -> bool,
 {
     let layout = RuntimeLayout::from_root(tool_root);
-    let mut states = super::state::list_installed_states(&layout).await;
+    let Ok(db) = Db::open(&layout.scoop.db_path()).await else {
+        return Vec::new();
+    };
+    let mut states = super::state::list_installed_states(&db).await;
     if let Some(mut predicate) = filter {
         states.retain(|state| predicate(state));
     }
-    states.sort_by(|a, b| a.package.cmp(&b.package));
+    states.sort_by(|a, b| a.package().cmp(b.package()));
     states
 }
 
@@ -117,12 +124,15 @@ async fn search_manifests_local_async(
 pub async fn runtime_status(tool_root: &Path) -> ScoopStatus {
     let layout = RuntimeLayout::from_root(tool_root);
     let buckets = buckets::load_buckets_from_registry(tool_root).await;
-    let mut summaries = super::state::list_installed_states(&layout)
-        .await
+    let states = match Db::open(&layout.scoop.db_path()).await {
+        Ok(db) => super::state::list_installed_states(&db).await,
+        Err(_) => Vec::new(),
+    };
+    let mut summaries = states
         .into_iter()
         .map(|state| InstalledPackageSummary {
-            name: state.package,
-            version: state.version.trim().to_string(),
+            name: state.identity.package,
+            version: state.identity.version.trim().to_string(),
         })
         .collect::<Vec<_>>();
     summaries.sort_by(|a, b| a.name.cmp(&b.name));

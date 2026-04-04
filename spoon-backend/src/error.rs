@@ -100,6 +100,33 @@ pub enum BackendError {
     #[error("unsupported archive kind for {path}")]
     UnsupportedArchiveKind { path: PathBuf },
 
+    /// Installer completed without materializing any declared command-surface targets.
+    #[error("installer actions completed but no declared bin/shortcut targets materialized under {current_root} (expected bins: {expected_bins}; expected shortcuts: {expected_shortcuts})")]
+    InstallerLayoutMissingTargets {
+        current_root: PathBuf,
+        expected_bins: String,
+        expected_shortcuts: String,
+    },
+
+    /// A declared shim target could not be found when writing command-surface wrappers.
+    #[error("refusing to write shim '{alias}' because target was missing: {path}")]
+    MissingShimTarget {
+        alias: String,
+        path: PathBuf,
+    },
+
+    /// Hook template preparation failed before the script could run.
+    #[error("hook template failed: {0}")]
+    HookTemplate(String),
+
+    /// Hook process ran but returned a non-success status.
+    #[error("hook execution failed with status {status:?}\nstdout: {stdout}\nstderr: {stderr}")]
+    HookExecutionFailed {
+        status: Option<i32>,
+        stdout: String,
+        stderr: String,
+    },
+
     /// Generic error for business logic or other situations.
     #[error("{0}")]
     Other(String),
@@ -151,6 +178,16 @@ impl BackendError {
     ) -> Self {
         Self::External {
             message: message.into(),
+            source: Box::new(source),
+        }
+    }
+
+    pub fn control_plane(
+        operation: &'static str,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::External {
+            message: format!("control-plane {operation} failed"),
             source: Box::new(source),
         }
     }

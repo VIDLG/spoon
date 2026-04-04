@@ -3,17 +3,14 @@ use std::path::Path;
 use serde::Serialize;
 use tokio::fs;
 
-use crate::control_plane::{
-    DoctorIssueRecord, list_doctor_issues, sync_failed_lifecycle_issues,
-};
+use crate::control_plane::{DoctorIssueRecord, list_doctor_issues, sync_failed_lifecycle_issues};
+use crate::db::Db;
 use crate::layout::RuntimeLayout;
 use crate::{BackendContext, BackendError, Result, SystemPort};
 
 use super::buckets::load_buckets_from_registry;
 use super::ports::ScoopIntegrationPort;
-use super::host::{
-    ContextRuntimeHost, ScoopRuntimeHost, ensure_scoop_shims_activated_with_host,
-};
+use super::host::{ScoopRuntimeHost, ensure_scoop_shims_activated_with_host};
 
 #[derive(Debug, Serialize)]
 pub struct ScoopRuntimeDetails {
@@ -28,7 +25,6 @@ pub struct ScoopDoctorDetails {
     pub success: bool,
     pub runtime: ScoopRuntimeDetails,
     pub ensured_paths: Vec<String>,
-    pub shim_activation_output: Vec<String>,
     pub registered_buckets: Vec<super::buckets::Bucket>,
     pub control_plane_issues: Vec<DoctorIssueRecord>,
 }
@@ -56,10 +52,11 @@ pub async fn doctor_with_host(
     }
 
     super::buckets::ensure_main_bucket_ready(tool_root, proxy).await?;
-    let shim_activation_output = ensure_scoop_shims_activated_with_host(tool_root, host).await?;
+    ensure_scoop_shims_activated_with_host(tool_root, host).await?;
 
-    sync_failed_lifecycle_issues(&layout).await?;
-    let persisted_issues = list_doctor_issues(&layout).await?;
+    let db = Db::open(&layout.scoop.db_path()).await?;
+    sync_failed_lifecycle_issues(&db).await?;
+    let persisted_issues = list_doctor_issues(&db).await?;
     let has_unresolved_persisted = persisted_issues.iter().any(|issue| !issue.resolved);
 
     Ok(ScoopDoctorDetails {
@@ -74,7 +71,6 @@ pub async fn doctor_with_host(
             .into_iter()
             .map(|path| path.display().to_string())
             .collect(),
-        shim_activation_output,
         registered_buckets: load_buckets_from_registry(tool_root).await,
         control_plane_issues: persisted_issues,
     })
@@ -84,6 +80,5 @@ pub async fn doctor_with_context<P>(context: &BackendContext<P>) -> Result<Scoop
 where
     P: SystemPort + ScoopIntegrationPort,
 {
-    let host = ContextRuntimeHost::new(context);
-    doctor_with_host(&context.root, context.proxy.as_deref().unwrap_or(""), &host).await
+    doctor_with_host(&context.root, context.proxy.as_deref().unwrap_or(""), context).await
 }

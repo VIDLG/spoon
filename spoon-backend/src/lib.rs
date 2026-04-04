@@ -2,6 +2,7 @@ use serde::Serialize;
 
 pub mod context;
 mod archive;
+mod db;
 pub mod control_plane;
 mod download;
 mod error;
@@ -22,6 +23,7 @@ mod task;
 mod tests;
 
 pub use context::BackendContext;
+pub use db::Db;
 pub use error::{BackendError, Result};
 pub use event::{
     BackendEvent, EventReceiver, EventSender, EventSink, FinishEvent, LifecycleStage,

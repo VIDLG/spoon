@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use sha1::Sha1;
+use sha2::{Digest, Sha256};
+use strum_macros::AsRefStr;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -7,6 +10,50 @@ use crate::{
     BackendError, BackendEvent, CancellationToken, ProgressEvent, ProgressKind, Result,
     check_token_cancel,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
+#[strum(serialize_all = "lowercase")]
+enum HashAlgorithm {
+    Sha256,
+    Sha1,
+}
+
+impl HashAlgorithm {
+    fn parse_expected(expected: &str) -> (Self, &str) {
+        let trimmed = expected.trim();
+        if let Some(value) = trimmed.strip_prefix("sha1:") {
+            return (Self::Sha1, value.trim());
+        }
+        if let Some(value) = trimmed.strip_prefix("sha256:") {
+            return (Self::Sha256, value.trim());
+        }
+        (Self::Sha256, trimmed)
+    }
+}
+
+pub fn hash_matches(bytes: &[u8], expected: &str) -> bool {
+    let (algorithm, expected_hex) = HashAlgorithm::parse_expected(expected);
+    match algorithm {
+        HashAlgorithm::Sha256 => {
+            let mut hasher = Sha256::new();
+            hasher.update(bytes);
+            format!("{:x}", hasher.finalize()).eq_ignore_ascii_case(expected_hex)
+        }
+        HashAlgorithm::Sha1 => {
+            let mut hasher = Sha1::new();
+            hasher.update(bytes);
+            format!("{:x}", hasher.finalize()).eq_ignore_ascii_case(expected_hex)
+        }
+    }
+}
+
+fn hash_label(expected: &str) -> &'static str {
+    let (algorithm, _) = HashAlgorithm::parse_expected(expected);
+    match algorithm {
+        HashAlgorithm::Sha256 => "sha256",
+        HashAlgorithm::Sha1 => "sha1",
+    }
+}
 
 pub async fn copy_or_download_to_file(
     client: &reqwest::Client,
@@ -121,4 +168,39 @@ pub async fn copy_or_download_to_file(
         .map_err(|err| BackendError::fs("flush", destination, err))?;
 
     Ok(())
+}
+
+pub async fn materialize_to_file_with_hash(
+    client: &reqwest::Client,
+    url: &str,
+    destination: &Path,
+    expected_hash: &str,
+    progress_label: &str,
+    progress_kind: ProgressKind,
+    cancel: Option<&CancellationToken>,
+    emit: &mut dyn FnMut(BackendEvent),
+) -> Result<()> {
+    copy_or_download_to_file(
+        client,
+        url,
+        destination,
+        progress_label,
+        progress_kind,
+        cancel,
+        emit,
+    )
+    .await?;
+
+    let bytes = fs::read(destination)
+        .await
+        .map_err(|err| BackendError::fs("read", destination, err))?;
+    if hash_matches(&bytes, expected_hash) {
+        return Ok(());
+    }
+
+    Err(BackendError::Other(format!(
+        "invalid package {} for {}",
+        hash_label(expected_hash),
+        destination.display()
+    )))
 }

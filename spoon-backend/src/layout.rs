@@ -43,8 +43,26 @@ pub struct OfficialMsvcLayout {
 }
 
 impl ScoopLayout {
-    pub fn control_plane_db_path(&self) -> PathBuf {
+    pub fn db_path(&self) -> PathBuf {
         self.state_root.join("control-plane.sqlite3")
+    }
+
+    pub fn package_cache_file(
+        &self,
+        package_name: &str,
+        version: &str,
+        asset: &crate::scoop::PackageAsset,
+    ) -> PathBuf {
+        let ext = asset
+            .target_name
+            .as_deref()
+            .and_then(|value| Path::new(value).extension())
+            .or_else(|| Path::new(&asset.url).extension())
+            .map(|value| format!(".{}", value.to_string_lossy()))
+            .unwrap_or_else(|| ".download".to_string());
+        let hash_suffix = asset.hash.chars().take(12).collect::<String>();
+        self.cache_root
+            .join(format!("{package_name}#{version}#{hash_suffix}{ext}"))
     }
 
     pub fn bucket_root(&self, bucket_name: &str) -> PathBuf {
