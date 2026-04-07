@@ -1,10 +1,12 @@
 use std::path::Path;
 
 use anyhow::Result as AnyResult;
+use spoon_backend::application::commands::scoop as backend_scoop_commands;
+use spoon_scoop::ScoopPackageOperationOutcome;
 
 use crate::service::{
-    BackendEvent, CancellationToken, StreamChunk, backend_to_anyhow,
-    build_scoop_backend_context, stream_chunk_from_backend_event,
+    BackendEvent, CancellationToken, StreamChunk, backend_to_anyhow, build_scoop_backend_context,
+    stream_chunk_from_backend_event,
 };
 
 use super::ScoopPackagePlan;
@@ -13,7 +15,7 @@ pub(crate) async fn doctor_details(
     tool_root: &Path,
 ) -> AnyResult<spoon_backend::scoop::ScoopDoctorDetails> {
     let context = build_scoop_backend_context(tool_root);
-    backend_to_anyhow(spoon_backend::scoop::doctor_with_context(&context).await)
+    backend_to_anyhow(backend_scoop_commands::doctor_with_context(&context).await)
 }
 
 pub(crate) fn resolved_pip_mirror_url_for_display(policy_value: &str) -> String {
@@ -32,7 +34,7 @@ pub(crate) async fn reapply_package_integrations_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::reapply_package_integrations(
+        backend_scoop_commands::reapply_package_integrations(
             &context.root,
             package_name,
             &context,
@@ -40,7 +42,10 @@ pub(crate) async fn reapply_package_integrations_streaming(
         )
         .await,
     )?;
-    Ok(vec![format!("Reapplied integrations for '{}'.", package_name)])
+    Ok(vec![format!(
+        "Reapplied integrations for '{}'.",
+        package_name
+    )])
 }
 
 pub(crate) async fn reapply_package_command_surface_streaming(
@@ -55,7 +60,7 @@ pub(crate) async fn reapply_package_command_surface_streaming(
         }
     };
     backend_to_anyhow(
-        spoon_backend::scoop::reapply_package_command_surface(
+        backend_scoop_commands::reapply_package_command_surface(
             &context.root,
             package_name,
             &context,
@@ -63,7 +68,10 @@ pub(crate) async fn reapply_package_command_surface_streaming(
         )
         .await,
     )?;
-    Ok(vec![format!("Reapplied command surface for '{}'.", package_name)])
+    Ok(vec![format!(
+        "Reapplied command surface for '{}'.",
+        package_name
+    )])
 }
 
 pub(crate) async fn execute_package_action_outcome_streaming(
@@ -72,7 +80,7 @@ pub(crate) async fn execute_package_action_outcome_streaming(
     _proxy: &str,
     cancel: Option<&CancellationToken>,
     emit: Option<&mut dyn FnMut(StreamChunk)>,
-) -> AnyResult<spoon_backend::scoop::ScoopPackageOperationOutcome> {
+) -> AnyResult<ScoopPackageOperationOutcome> {
     let context = build_scoop_backend_context(tool_root);
     match emit {
         Some(emit) => {
@@ -82,7 +90,7 @@ pub(crate) async fn execute_package_action_outcome_streaming(
                 }
             };
             backend_to_anyhow(
-                spoon_backend::scoop::execute_package_action_outcome_streaming_with_context(
+                backend_scoop_commands::execute_package_action_outcome_streaming_with_context(
                     &context,
                     plan,
                     cancel,
@@ -92,7 +100,7 @@ pub(crate) async fn execute_package_action_outcome_streaming(
             )
         }
         None => backend_to_anyhow(
-            spoon_backend::scoop::execute_package_action_outcome_streaming_with_context(
+            backend_scoop_commands::execute_package_action_outcome_streaming_with_context(
                 &context, plan, cancel, None,
             )
             .await,

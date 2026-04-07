@@ -7,14 +7,14 @@ use crate::service::{
     BackendEvent, CommandResult, CommandStatus, StreamChunk, stream_chunk_from_backend_event,
 };
 
-pub use spoon_backend::RepoSyncOutcome;
+pub use spoon_core::RepoSyncOutcome;
 
 fn configured_proxy() -> String {
     crate::config::load_global_config().proxy.clone()
 }
 
 use super::{
-    BackendScoopBucketInventory, BucketSpec, ScoopBucketOperationOutcome, ScoopDoctorDetails,
+    ScoopBucketInventory, BucketSpec, ScoopBucketOperationOutcome, ScoopDoctorDetails,
     add_bucket_to_registry_outcome, command_result, load_buckets_from_registry,
     remove_bucket_from_registry_outcome, runtime, update_buckets_outcome,
     update_buckets_streaming_outcome,
@@ -45,9 +45,9 @@ pub async fn bucket_list_report(tool_root: &Path) -> CommandResult {
     command_result("list Scoop buckets", CommandStatus::Success, output, false)
 }
 
-pub async fn bucket_inventory(tool_root: &Path) -> BackendScoopBucketInventory {
+pub async fn bucket_inventory(tool_root: &Path) -> ScoopBucketInventory {
     let buckets = load_buckets_from_registry(tool_root).await;
-    BackendScoopBucketInventory {
+    ScoopBucketInventory {
         kind: "scoop_bucket_list",
         success: true,
         bucket_count: buckets.len(),
@@ -62,7 +62,6 @@ pub async fn doctor_summary(tool_root: &Path) -> AnyResult<CommandResult> {
         .into_iter()
         .map(|path| format!("Ensured Scoop directory: {path}"))
         .collect::<Vec<_>>();
-    output.extend(details.shim_activation_output);
     output.push(format!(
         "Registered Scoop buckets: {}",
         details.registered_buckets.len()

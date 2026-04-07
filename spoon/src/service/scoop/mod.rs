@@ -32,13 +32,16 @@ pub use spoon_scoop::{
 pub use spoon_scoop::{BucketSpec, known_bucket_source};
 
 pub(crate) use spoon_backend::scoop::{
-    ScoopBucketInventory as BackendScoopBucketInventory,
-    ScoopBucketOperationOutcome, ScoopDoctorDetails, ScoopPackageActionOutcome,
-    add_bucket_to_registry_outcome, load_buckets_from_registry,
+    ScoopBucketOperationOutcome, ScoopDoctorDetails,
+    add_bucket_to_registry_outcome,
     remove_bucket_from_registry_outcome, update_buckets_outcome,
     update_buckets_streaming_outcome,
 };
-pub(crate) use spoon_scoop::{ScoopActionPackage, ScoopPackageInstallState, ScoopPackageOperationOutcome, ScoopPackagePlan};
+pub(crate) use spoon_scoop::{
+    ScoopActionPackage, ScoopBucketInventory, ScoopPackageActionOutcome,
+    ScoopPackageInstallState, ScoopPackageOperationOutcome, ScoopPackagePlan,
+};
+pub(crate) use spoon_scoop::load_buckets_from_registry;
 pub(crate) use spoon_scoop::{
     infer_tool_root_with_overrides as infer_tool_root,
     plan_package_action_with_display as plan_package_action,
