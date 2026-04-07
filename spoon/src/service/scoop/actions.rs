@@ -8,7 +8,8 @@ use crate::service::{CancellationToken, PackageRef, StreamChunk};
 use super::runtime;
 use super::{
     CommandResult, CommandStatus, RunMode, ScoopPackageActionOutcome, ScoopPackageInstallState,
-    command_result, command_result_from_scoop_package_outcome, infer_tool_root, plan_package_action,
+    command_result, command_result_from_scoop_package_outcome, infer_tool_root,
+    plan_package_action,
 };
 
 fn fake_result(
@@ -253,39 +254,44 @@ pub fn package_action_result(
     display_name: &str,
     result: &CommandResult,
 ) -> AnyResult<ScoopPackageActionOutcome> {
-    let backend_outcome = block_on_sync(spoon_backend::scoop::package_operation_outcome(
-        tool_root,
-        action,
+    let installed_state = block_on_sync(spoon_scoop::read_installed_state(
+        &spoon_core::RuntimeLayout::from_root(tool_root).scoop,
         package_name,
-        display_name,
-        result.status,
-        &result.title,
-        result.output.clone(),
-        result.streamed,
-    ));
+    ))
+    .ok()
+    .flatten();
+    let (installed, installed_version, current) = match installed_state {
+        Some(state) => {
+            let version = state.version().to_string();
+            let layout = spoon_core::RuntimeLayout::from_root(tool_root);
+            let current_path = layout.scoop.package_current_root(package_name);
+            (true, Some(version), Some(current_path.display().to_string()))
+        }
+        None => (false, None, None),
+    };
     Ok(ScoopPackageActionOutcome {
         kind: "scoop_package_action",
-        action: backend_outcome.action.clone(),
+        action: action.to_string(),
         package: super::ScoopActionPackage {
-            name: backend_outcome.package.name.clone(),
-            display_name: backend_outcome.package.display_name.clone(),
+            name: package_name.to_string(),
+            display_name: display_name.to_string(),
         },
-        success: backend_outcome.is_success(),
-        title: backend_outcome.title,
-        streamed: backend_outcome.streamed,
-        output: backend_outcome.output,
+        success: result.is_success(),
+        title: result.title.clone(),
+        streamed: result.streamed,
+        output: result.output.clone(),
         state: ScoopPackageInstallState {
-            installed: backend_outcome.state.installed,
-            installed_version: backend_outcome.state.installed_version,
-            current: backend_outcome.state.current,
+            installed,
+            installed_version,
+            current,
         },
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::service::{PackageRef, StreamChunk};
     use crate::config;
+    use crate::service::{PackageRef, StreamChunk};
 
     use super::{run_package_action_streaming, run_scoop_streaming};
 
