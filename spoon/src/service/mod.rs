@@ -2,12 +2,10 @@ mod cache;
 pub mod msvc;
 pub mod scoop;
 
-use std::collections::BTreeMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
 use anyhow::Result as AnyResult;
+use async_trait::async_trait;
 
 pub use crate::formatting::format_bytes;
 pub use cache::{
@@ -15,11 +13,12 @@ pub use cache::{
     action_result_for_tool_root as cache_action_result, clear_for_tool_root as clear_cache,
     prune_for_tool_root as prune_cache,
 };
-pub use spoon_backend::{
-    BackendContext, BackendError, BackendEvent, CancellationToken, CommandStatus, FinishEvent,
-    NoticeEvent, NoticeLevel, ProgressEvent, ProgressKind, ProgressState, ProgressUnit, Result,
-    StageEvent, SystemPort,
+pub use spoon_core::{
+    BackendEvent, CancellationToken, CommandStatus, FinishEvent,
+    NoticeEvent, NoticeLevel, ProgressEvent, ProgressKind, ProgressState, ProgressUnit,
+    StageEvent,
 };
+pub use spoon_backend::{BackendContext, BackendError, Result, SystemPort};
 use spoon_backend::scoop::ScoopIntegrationPort;
 
 pub(crate) type GlobalConfig = crate::config::GlobalConfig;
@@ -147,6 +146,7 @@ impl SystemPort for &'static AppSystemPort {
     }
 }
 
+#[async_trait(?Send)]
 impl ScoopIntegrationPort for AppSystemPort {
     fn supplemental_shims(
         &self,
@@ -162,24 +162,23 @@ impl ScoopIntegrationPort for AppSystemPort {
             .collect()
     }
 
-    fn apply_integrations<'a>(
-        &'a self,
-        package_name: &'a str,
-        _current_root: &'a Path,
-        _persist_root: &'a Path,
-        _emit: &'a mut dyn FnMut(BackendEvent),
-    ) -> Pin<Box<dyn Future<Output = spoon_backend::Result<BTreeMap<String, String>>> + 'a>> {
-        Box::pin(async move {
-            let mut mapped = |chunk: StreamChunk| match chunk {
-                StreamChunk::Append(line) | StreamChunk::ReplaceLast(line) => {
-                    tracing::info!("{line}")
-                }
-            };
-            apply_integrations_backend(package_name, &mut mapped).await
-        })
+    async fn apply_integrations(
+        &self,
+        package_name: &str,
+        _current_root: &Path,
+        _persist_root: &Path,
+        _emit: &mut dyn FnMut(BackendEvent),
+    ) -> spoon_backend::Result<Vec<spoon_backend::scoop::AppliedIntegration>> {
+        let mut mapped = |chunk: StreamChunk| match chunk {
+            StreamChunk::Append(line) | StreamChunk::ReplaceLast(line) => {
+                tracing::info!("{line}")
+            }
+        };
+        apply_integrations_backend(package_name, &mut mapped).await
     }
 }
 
+#[async_trait(?Send)]
 impl ScoopIntegrationPort for &'static AppSystemPort {
     fn supplemental_shims(
         &self,
@@ -189,14 +188,59 @@ impl ScoopIntegrationPort for &'static AppSystemPort {
         (*self).supplemental_shims(package_name, current_root)
     }
 
-    fn apply_integrations<'a>(
-        &'a self,
-        package_name: &'a str,
-        current_root: &'a Path,
-        persist_root: &'a Path,
-        emit: &'a mut dyn FnMut(BackendEvent),
-    ) -> Pin<Box<dyn Future<Output = spoon_backend::Result<BTreeMap<String, String>>> + 'a>> {
-        (*self).apply_integrations(package_name, current_root, persist_root, emit)
+    async fn apply_integrations(
+        &self,
+        package_name: &str,
+        current_root: &Path,
+        persist_root: &Path,
+        emit: &mut dyn FnMut(BackendEvent),
+    ) -> spoon_backend::Result<Vec<spoon_backend::scoop::AppliedIntegration>> {
+        (*self).apply_integrations(package_name, current_root, persist_root, emit).await
+    }
+}
+
+impl spoon_scoop::ScoopPorts for AppSystemPort {
+    fn ensure_user_path_entry(&self, path: &Path) -> spoon_scoop::Result<()> {
+        crate::config::ensure_user_path_entry(path)
+            .map_err(|err| spoon_scoop::ScoopError::Other(format!("failed to update user PATH: {err}")))
+    }
+
+    fn ensure_process_path_entry(&self, path: &Path) {
+        crate::config::ensure_process_path_entry(path);
+    }
+
+    fn remove_user_path_entry(&self, path: &Path) -> spoon_scoop::Result<()> {
+        crate::config::remove_user_path_entry(path)
+            .map_err(|err| spoon_scoop::ScoopError::Other(format!("failed to update user PATH: {err}")))
+    }
+
+    fn remove_process_path_entry(&self, path: &Path) {
+        crate::config::remove_process_path_entry(path);
+    }
+
+    fn supplemental_shims(
+        &self,
+        package_name: &str,
+        current_root: &Path,
+    ) -> Vec<spoon_scoop::SupplementalShimSpec> {
+        crate::packages::supplemental_shims(package_name, current_root)
+            .into_iter()
+            .map(|spec| spoon_scoop::SupplementalShimSpec {
+                alias: spec.alias,
+                relative_path: spec.relative_path,
+            })
+            .collect()
+    }
+
+    fn apply_integrations(
+        &self,
+        _package_name: &str,
+        _current_root: &Path,
+        _persist_root: &Path,
+    ) -> spoon_scoop::Result<Vec<spoon_scoop::AppliedIntegration>> {
+        // Integration scripts are platform-specific and handled by the binary layer.
+        // The spoon-scoop workflow functions don't call this yet (_ports is unused).
+        Ok(Vec::new())
     }
 }
 
@@ -220,18 +264,6 @@ pub(crate) fn build_scoop_backend_context(
     )
 }
 
-pub(crate) fn build_msvc_backend_context(tool_root: &Path) -> spoon_backend::BackendContext<()> {
-    let backend = load_backend_config();
-    spoon_backend::BackendContext::new(
-        tool_root.to_path_buf(),
-        (!backend.proxy().trim().is_empty()).then(|| backend.proxy().to_string()),
-        test_mode_enabled(),
-        backend.selected_msvc_arch(),
-        backend.msvc_command_profile(),
-        (),
-    )
-}
-
 pub fn msvc_arch_from_config(global: &GlobalConfig) -> String {
     crate::config::msvc_arch_from_config(global)
 }
@@ -248,22 +280,12 @@ pub fn ensure_user_path_entry(path: &Path) -> anyhow::Result<()> {
     crate::config::ensure_user_path_entry(path)
 }
 
-pub(crate) fn ensure_user_path_entry_backend(path: &Path) -> spoon_backend::Result<()> {
-    ensure_user_path_entry(path)
-        .map_err(|err| BackendError::Other(format!("failed to update user PATH: {err}")))
-}
-
 pub fn remove_process_path_entry(path: &Path) {
     crate::config::remove_process_path_entry(path)
 }
 
 pub fn remove_user_path_entry(path: &Path) -> anyhow::Result<()> {
     crate::config::remove_user_path_entry(path)
-}
-
-pub(crate) fn remove_user_path_entry_backend(path: &Path) -> spoon_backend::Result<()> {
-    remove_user_path_entry(path)
-        .map_err(|err| BackendError::Other(format!("failed to update user PATH: {err}")))
 }
 
 #[cfg(test)]
@@ -288,16 +310,20 @@ pub(crate) fn desired_policy_entries(package_name: &str) -> Vec<ConfigEntry> {
 pub(crate) async fn apply_integrations(
     package_name: &str,
     emit: &mut dyn FnMut(StreamChunk),
-) -> AnyResult<BTreeMap<String, String>> {
+) -> AnyResult<Vec<spoon_scoop::AppliedIntegration>> {
     crate::packages::apply_integrations(package_name, emit)
 }
 
 pub(crate) async fn apply_integrations_backend(
     package_name: &str,
     emit: &mut dyn FnMut(StreamChunk),
-) -> spoon_backend::Result<BTreeMap<String, String>> {
+) -> spoon_backend::Result<Vec<spoon_backend::scoop::AppliedIntegration>> {
     apply_integrations(package_name, emit)
         .await
+        .map(|integrations| integrations.into_iter().map(|i| spoon_backend::scoop::AppliedIntegration {
+            key: i.key,
+            value: i.value,
+        }).collect())
         .map_err(|err| BackendError::Other(format!("failed to apply integrations: {err}")))
 }
 
@@ -379,17 +405,6 @@ pub fn stream_chunk_from_backend_event(event: BackendEvent) -> Option<StreamChun
             }
             None => Some(StreamChunk::Append("Operation blocked.".to_string())),
         },
-    }
-}
-
-pub(crate) fn command_result_from_msvc_outcome(
-    outcome: spoon_backend::msvc::MsvcOperationOutcome,
-) -> CommandResult {
-    CommandResult {
-        title: outcome.title,
-        status: outcome.status,
-        output: outcome.output,
-        streamed: outcome.streamed,
     }
 }
 
