@@ -2,13 +2,12 @@ use serde::Serialize;
 
 use std::path::{Path, PathBuf};
 
-use spoon_backend::{
-    RuntimeLayout,
-    msvc::{clear_cache as clear_msvc_cache, msvc_cache_root, prune_cache as prune_msvc_cache},
-    scoop::{clear_cache as clear_scoop_cache, prune_cache as prune_scoop_cache},
-};
+use spoon_backend::scoop::{clear_cache as clear_scoop_cache, prune_cache as prune_scoop_cache};
+use spoon_core::RuntimeLayout;
+use spoon_msvc::facts::cache::{clear as clear_msvc_cache, prune as prune_msvc_cache};
+use spoon_msvc::paths::msvc_cache_root;
 
-use super::{CommandResult, CommandStatus, Result};
+use super::{BackendError, CommandResult, CommandStatus, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheScope {
@@ -71,10 +70,10 @@ pub fn prune(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
     match scope {
         CacheScope::All => {
             output.extend(prune_scoop_cache(&roots.scoop)?);
-            output.extend(prune_msvc_cache(&roots.msvc)?);
+            output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?);
         }
         CacheScope::Scoop => output.extend(prune_scoop_cache(&roots.scoop)?),
-        CacheScope::Msvc => output.extend(prune_msvc_cache(&roots.msvc)?),
+        CacheScope::Msvc => output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?),
     }
     Ok(CommandResult {
         title: "prune cache".to_string(),
@@ -89,10 +88,10 @@ pub fn clear(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
     match scope {
         CacheScope::All => {
             output.extend(clear_scoop_cache(&roots.scoop)?);
-            output.extend(clear_msvc_cache(&roots.msvc)?);
+            output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?);
         }
         CacheScope::Scoop => output.extend(clear_scoop_cache(&roots.scoop)?),
-        CacheScope::Msvc => output.extend(clear_msvc_cache(&roots.msvc)?),
+        CacheScope::Msvc => output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?),
     }
     Ok(CommandResult {
         title: "clear cache".to_string(),
