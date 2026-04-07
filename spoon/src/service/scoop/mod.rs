@@ -23,24 +23,29 @@ pub use report::{
     runtime_status_report, search_report,
 };
 
-pub use spoon_backend::scoop::{
-    BucketSpec, ensure_main_bucket_ready, known_bucket_source, latest_version,
-    latest_version_async, load_manifest, load_manifest_sync, load_package_manifest,
-    load_package_manifest_sync, parse_manifest, plan_package_action, resolve_manifest,
-    resolve_package_manifest, search_manifests_async, upsert_bucket_to_registry,
+pub use spoon_backend::scoop::ensure_main_bucket_ready;
+pub use spoon_scoop::{
+    latest_version, latest_version_async, load_manifest,
+    load_manifest_sync, load_package_manifest, load_package_manifest_sync, parse_manifest,
+    resolve_manifest, upsert_bucket_to_registry,
 };
+pub use spoon_scoop::{BucketSpec, known_bucket_source};
 
 pub(crate) use spoon_backend::scoop::{
-    ScoopActionPackage, ScoopBucketInventory as BackendScoopBucketInventory,
+    ScoopBucketInventory as BackendScoopBucketInventory,
     ScoopBucketOperationOutcome, ScoopDoctorDetails, ScoopPackageActionOutcome,
-    ScoopPackageInstallState, ScoopPackageOperationOutcome,
-    ScoopPackagePlan, add_bucket_to_registry_outcome, infer_tool_root, installed_package_states,
-    load_buckets_from_registry,
-    remove_bucket_from_registry_outcome, runtime_status, search_results, update_buckets_outcome,
+    add_bucket_to_registry_outcome, load_buckets_from_registry,
+    remove_bucket_from_registry_outcome, update_buckets_outcome,
     update_buckets_streaming_outcome,
 };
+pub(crate) use spoon_scoop::{ScoopActionPackage, ScoopPackageInstallState, ScoopPackageOperationOutcome, ScoopPackagePlan};
+pub(crate) use spoon_scoop::{
+    infer_tool_root_with_overrides as infer_tool_root,
+    plan_package_action_with_display as plan_package_action,
+};
+pub(crate) use spoon_scoop::{installed_package_states, runtime_status, search_results};
 
-pub type ScoopPackageDetailsOutcome = spoon_backend::scoop::ScoopPackageDetailsOutcome<ConfigEntry>;
+pub type ScoopPackageDetailsOutcome = spoon_scoop::ScoopPackageDetailsOutcome<ConfigEntry>;
 
 static REAL_BACKEND_TEST_MODE: AtomicBool = AtomicBool::new(false);
 
@@ -87,11 +92,9 @@ pub(super) enum RunMode {
 
 pub async fn package_info(tool_root: &Path, package_name: &str) -> ScoopPackageDetailsOutcome {
     let desired_policy = desired_policy_entries(package_name);
-    spoon_backend::scoop::package_info(
-        tool_root,
-        package_name,
-        desired_policy,
-        |entry: &ConfigEntry| entry.key.as_str(),
-    )
-    .await
+    let mut outcome = spoon_scoop::package_info::<ConfigEntry>(tool_root, package_name).await;
+    if let ScoopPackageDetailsOutcome::Details(details) = &mut outcome {
+        details.integration.policy.desired = desired_policy;
+    }
+    outcome
 }

@@ -15,11 +15,7 @@ pub(crate) fn start_bg_status_check(app: &mut App) {
             .as_deref()
             .map(|r| std::path::PathBuf::from(r))
             .or_else(config::configured_tool_root);
-        let snapshot = resolved_root.as_deref().map(|r| {
-            runtime::test_block_on(
-                spoon_backend::status::BackendStatusSnapshot::from_tool_root(r),
-            )
-        });
+        let snapshot = resolved_root.as_deref().map(status::snapshot);
         let mut statuses =
             status::collect_statuses_with_snapshot(root.as_deref(), snapshot.as_ref());
         status::populate_installed_size_info(&mut statuses);

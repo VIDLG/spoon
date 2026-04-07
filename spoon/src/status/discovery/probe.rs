@@ -2,9 +2,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::status::BackendStatusSnapshot;
+use spoon_core::RuntimeLayout;
 
+use crate::status::StatusSnapshot;
 use crate::config;
 use crate::service::msvc;
 use crate::status::ToolStatus;
@@ -111,7 +111,7 @@ fn probe_version(tool: &Tool, path: &Path) -> Option<VersionProbe> {
 fn managed_scoop_state_version(
     tool: &'static Tool,
     _install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> Option<String> {
     if tool.backend != crate::tool::Backend::Scoop {
         return None;
@@ -197,6 +197,7 @@ fn probe_msvc_toolchain(install_root: Option<&Path>) -> ProbeResult {
     }
 }
 
+#[cfg(test)]
 fn probe_tool(tool: &'static Tool, install_root: Option<&Path>) -> ProbeResult {
     probe_tool_with_snapshot(tool, install_root, None)
 }
@@ -204,7 +205,7 @@ fn probe_tool(tool: &'static Tool, install_root: Option<&Path>) -> ProbeResult {
 fn probe_tool_with_snapshot(
     tool: &'static Tool,
     install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> ProbeResult {
     if tool.has_managed_toolchain_runtime() {
         return probe_msvc_toolchain(install_root);
@@ -248,7 +249,7 @@ pub fn collect_statuses_fast(install_root: Option<&Path>) -> Vec<ToolStatus> {
 
 pub fn collect_statuses_fast_with_snapshot(
     install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> Vec<ToolStatus> {
     tool::all_tools()
         .into_iter()
@@ -285,7 +286,7 @@ pub fn collect_statuses(install_root: Option<&Path>) -> Vec<ToolStatus> {
 
 pub fn collect_statuses_with_snapshot(
     install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> Vec<ToolStatus> {
     tool::all_tools()
         .into_iter()
@@ -312,8 +313,9 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::tool;
-    use spoon_backend::RuntimeLayout;
-    use spoon_backend::status::BackendStatusSnapshot;
+    use spoon_core::RuntimeLayout;
+    use spoon_scoop::InstalledPackageSummary;
+    use crate::status::StatusSnapshot;
 
     use super::{
         configured_probe_path, extract_version_token, is_windowsapps_alias_path,
@@ -352,7 +354,10 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let msvc_root = RuntimeLayout::from_root(&tool_root).msvc.managed.toolchain_root;
+        let msvc_root = RuntimeLayout::from_root(&tool_root)
+            .msvc
+            .managed
+            .toolchain_root;
         let state_root = RuntimeLayout::from_root(&tool_root).msvc.managed.state_root;
         fs::create_dir_all(&state_root).unwrap();
         fs::write(crate::service::msvc::runtime_state_path(&tool_root), "{}").unwrap();
@@ -416,7 +421,10 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let msvc_root = RuntimeLayout::from_root(&tool_root).msvc.managed.toolchain_root;
+        let msvc_root = RuntimeLayout::from_root(&tool_root)
+            .msvc
+            .managed
+            .toolchain_root;
         fs::create_dir_all(&msvc_root).unwrap();
 
         let probe = probe_msvc_toolchain(Some(&tool_root));
@@ -480,31 +488,13 @@ mod tests {
 
     #[test]
     fn managed_scoop_state_version_reads_installed_package_version() {
-        let snap = BackendStatusSnapshot {
-            kind: "test",
-            scoop: spoon_backend::status::BackendScoopSummary {
-                installed: true,
-                root: String::new(),
-                shims: String::new(),
-                bucket_count: 0,
-                installed_package_count: 1,
-                buckets: vec![],
-                installed_packages: vec![
-                    spoon_backend::status::BackendInstalledPackageEntry {
-                        name: "git".into(),
-                        version: "2.53.0.2".into(),
-                    },
-                ],
-            },
-            msvc: spoon_backend::status::BackendMsvcSummary {
-                managed_status: String::new(),
-                managed_version: None,
-                managed_root: String::new(),
-                official_status: String::new(),
-                official_version: None,
-                official_root: String::new(),
-            },
-            runtime_roots: spoon_backend::status::BackendRuntimeRoots::default(),
+        let snap = StatusSnapshot {
+            installed_packages: vec![InstalledPackageSummary {
+                name: "git".into(),
+                version: "2.53.0.2".into(),
+            }],
+            root: String::new(),
+            scoop_root: String::new(),
         };
 
         let git = tool::find_tool("git").expect("git tool");
@@ -580,35 +570,19 @@ mod tests {
         )
         .unwrap();
 
-        let snap = BackendStatusSnapshot {
-            kind: "test",
-            scoop: spoon_backend::status::BackendScoopSummary {
-                installed: true,
-                root: String::new(),
-                shims: String::new(),
-                bucket_count: 0,
-                installed_package_count: 2,
-                buckets: vec![],
-                installed_packages: vec![
-                    spoon_backend::status::BackendInstalledPackageEntry {
-                        name: "gh".into(),
-                        version: "2.88.1".into(),
-                    },
-                    spoon_backend::status::BackendInstalledPackageEntry {
-                        name: "7zip".into(),
-                        version: "26.00".into(),
-                    },
-                ],
-            },
-            msvc: spoon_backend::status::BackendMsvcSummary {
-                managed_status: String::new(),
-                managed_version: None,
-                managed_root: String::new(),
-                official_status: String::new(),
-                official_version: None,
-                official_root: String::new(),
-            },
-            runtime_roots: spoon_backend::status::BackendRuntimeRoots::default(),
+        let snap = StatusSnapshot {
+            installed_packages: vec![
+                InstalledPackageSummary {
+                    name: "gh".into(),
+                    version: "2.88.1".into(),
+                },
+                InstalledPackageSummary {
+                    name: "7zip".into(),
+                    version: "26.00".into(),
+                },
+            ],
+            root: String::new(),
+            scoop_root: String::new(),
         };
 
         for key in ["gh", "7zip"] {

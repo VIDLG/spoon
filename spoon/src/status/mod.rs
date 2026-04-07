@@ -1,31 +1,71 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use crate::config;
 use crate::tool::{self, EntityKind, Tool, ToolCategory};
 use crossterm::style::Stylize;
 use serde::Serialize;
-use spoon_backend::status::BackendStatusSnapshot;
 use walkdir::WalkDir;
 
 mod discovery;
 mod policy;
 mod update;
 
+/// Lightweight snapshot of installed Scoop packages and runtime layout paths.
+/// Replaces the heavyweight `BackendStatusSnapshot` from spoon-backend.
+pub struct StatusSnapshot {
+    installed_packages: Vec<spoon_scoop::InstalledPackageSummary>,
+    root: String,
+    scoop_root: String,
+}
+
+impl StatusSnapshot {
+    pub async fn from_tool_root(tool_root: &Path) -> Self {
+        let layout = spoon_core::RuntimeLayout::from_root(tool_root);
+        let states = spoon_scoop::installed_package_states(tool_root).await;
+        let installed_packages = states
+            .into_iter()
+            .map(|s| spoon_scoop::InstalledPackageSummary {
+                name: s.package().to_string(),
+                version: s.version().to_string(),
+            })
+            .collect();
+        StatusSnapshot {
+            installed_packages,
+            root: tool_root.display().to_string(),
+            scoop_root: layout.scoop.root.display().to_string(),
+        }
+    }
+
+    pub fn installed_package_version(&self, name: &str) -> Option<&str> {
+        self.installed_packages
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| p.version.as_str())
+    }
+
+    pub fn has_installed_package(&self, name: &str) -> bool {
+        self.installed_package_version(name).is_some()
+    }
+}
+
+/// Build a snapshot synchronously (blocks on async internals).
+pub fn snapshot(tool_root: &Path) -> StatusSnapshot {
+    crate::runtime::test_block_on(StatusSnapshot::from_tool_root(tool_root))
+}
+
 pub use discovery::{collect_statuses, collect_statuses_fast, command_path, refresh_process_env_from_registry};
 
 // Snapshot-accepting variants for backend-driven status collection.
-// These are the primary entry points for code that has a BackendStatusSnapshot.
 pub fn collect_statuses_with_snapshot(
     install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> Vec<ToolStatus> {
     discovery::collect_statuses_with_snapshot(install_root, snapshot)
 }
 
 pub fn collect_statuses_fast_with_snapshot(
     install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> Vec<ToolStatus> {
     discovery::collect_statuses_fast_with_snapshot(install_root, snapshot)
 }
@@ -108,9 +148,6 @@ pub struct UpdateSummary {
 pub struct StatusRoots {
     pub root: String,
     pub scoop: String,
-    pub managed_msvc: String,
-    pub managed_toolchain: String,
-    pub official_msvc: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -219,7 +256,7 @@ fn should_surface_update(status: &ToolStatus) -> bool {
 fn has_managed_scoop_state(
     status: &ToolStatus,
     _install_root: Option<&Path>,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> bool {
     if status.tool.backend != tool::Backend::Scoop {
         return false;
@@ -240,7 +277,7 @@ pub fn status_lines(install_root: Option<&Path>, include_update_info: bool) -> V
 pub fn build_status_details_with_snapshot(
     install_root: Option<&Path>,
     include_update_info: bool,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> StatusDetails {
     let mut statuses = if include_update_info {
         if let Some(snap) = snapshot {
@@ -288,11 +325,8 @@ pub fn build_status_details_with_snapshot(
         }
     };
     let roots = snapshot_ref.map(|snap| StatusRoots {
-        root: snap.runtime_roots.root.clone(),
-        scoop: snap.runtime_roots.scoop.clone(),
-        managed_msvc: snap.runtime_roots.managed_msvc.clone(),
-        managed_toolchain: snap.runtime_roots.managed_toolchain.clone(),
-        official_msvc: snap.runtime_roots.official_msvc.clone(),
+        root: snap.root.clone(),
+        scoop: snap.scoop_root.clone(),
     });
     let path_mismatches = install_root
         .map(|root| status_path_mismatches(root, &statuses))
@@ -371,12 +405,6 @@ fn render_status_details(view: &StatusDetails) -> Vec<String> {
         lines.push("  Roots".to_string());
         lines.push(format!("    root: {}", roots.root));
         lines.push(format!("    scoop: {}", roots.scoop));
-        lines.push(format!("    managed_msvc: {}", roots.managed_msvc));
-        lines.push(format!(
-            "    managed_toolchain: {}",
-            roots.managed_toolchain
-        ));
-        lines.push(format!("    official_msvc: {}", roots.official_msvc));
         for mismatch in &view.runtime.path_mismatches {
             lines.push(format!(
                 "  Path mismatch: {} -> current={} expected={}",
@@ -543,13 +571,9 @@ fn replace_colored_tokens(line: &str, tokens: &[(&str, ColorTag)]) -> String {
     rendered
 }
 
-fn status_tool_entry(status: &ToolStatus) -> ToolStatusDetails {
-    status_tool_entry_with_snapshot(status, None)
-}
-
 fn status_tool_entry_with_snapshot(
     status: &ToolStatus,
-    snapshot: Option<&BackendStatusSnapshot>,
+    snapshot: Option<&StatusSnapshot>,
 ) -> ToolStatusDetails {
     let state = match (&status.path, status.broken, status.available) {
         (None, _, _) => "missing".to_string(),
@@ -593,7 +617,7 @@ fn status_tool_entry_with_snapshot(
 }
 
 fn status_path_mismatches(root: &Path, statuses: &[ToolStatus]) -> Vec<PathMismatch> {
-    let shims_root = spoon_backend::layout::RuntimeLayout::from_root(root).shims;
+    let shims_root = spoon_core::RuntimeLayout::from_root(root).shims;
     statuses
         .iter()
         .filter_map(|status| {

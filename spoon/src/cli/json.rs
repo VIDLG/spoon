@@ -7,7 +7,6 @@ use serde_json::{Value, json};
 
 use crate::cli::response::CliResponse;
 use crate::config;
-use crate::runtime;
 use crate::service::{CommandResult, CommandStatus};
 use crate::status;
 use crate::view;
@@ -151,9 +150,7 @@ pub fn status_view(install_root: Option<&Path>, include_update_info: bool) -> Js
     let root = install_root
         .map(Path::to_path_buf)
         .or_else(config::configured_tool_root);
-    let snapshot = root.as_deref().map(|r| {
-        runtime::test_block_on(spoon_backend::status::BackendStatusSnapshot::from_tool_root(r))
-    });
+    let snapshot = root.as_deref().map(status::snapshot);
     JsonEnvelope {
         kind: "status",
         data: serde_json::to_value(status::build_status_details_with_snapshot(
