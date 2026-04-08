@@ -45,24 +45,21 @@ where
         let result = CommandResult {
             title: format!("install editor {}", candidate.label),
             status: CommandStatus::Success,
-            output: vec![
-                crate::service::scoop::plan_package_action(
-                    "install",
-                    candidate.label,
-                    candidate.package_name,
-                    None,
-                )
-                .command_line(),
-                format!(
-                    "Test mode: skipped real Scoop install for {}.",
-                    candidate.label
-                ),
-            ],
-            streamed: true,
         };
-        for line in &result.output {
-            emit(StreamChunk::Append(line.clone()));
+        let plan = crate::service::scoop::plan_package_action(
+            "install",
+            candidate.label,
+            candidate.package_name,
+            None,
+        );
+        if let Some(line) = plan.resolution_line() {
+            emit(StreamChunk::Append(line));
         }
+        emit(StreamChunk::Append(plan.command_line()));
+        emit(StreamChunk::Append(format!(
+            "Test mode: skipped real Scoop install for {}.",
+            candidate.label
+        )));
         if result.is_success() {
             state::set_availability_override(candidate.command, Some(true));
         }
@@ -74,11 +71,6 @@ where
         return Ok(CommandResult {
             title: format!("install editor {}", candidate.label),
             status: CommandStatus::Blocked,
-            output: vec![
-                "Editor installation requires a configured root.".to_string(),
-                "Set root in spoon config before installing Scoop-managed editors.".to_string(),
-            ],
-            streamed: true,
         });
     };
     let result = scoop::run_package_action_streaming(
@@ -112,24 +104,21 @@ where
         let result = CommandResult {
             title: format!("uninstall editor {}", candidate.label),
             status: CommandStatus::Success,
-            output: vec![
-                crate::service::scoop::plan_package_action(
-                    "uninstall",
-                    candidate.label,
-                    candidate.package_name,
-                    None,
-                )
-                .command_line(),
-                format!(
-                    "Test mode: skipped real Scoop uninstall for {}.",
-                    candidate.label
-                ),
-            ],
-            streamed: true,
         };
-        for line in &result.output {
-            emit(StreamChunk::Append(line.clone()));
+        let plan = crate::service::scoop::plan_package_action(
+            "uninstall",
+            candidate.label,
+            candidate.package_name,
+            None,
+        );
+        if let Some(line) = plan.resolution_line() {
+            emit(StreamChunk::Append(line));
         }
+        emit(StreamChunk::Append(plan.command_line()));
+        emit(StreamChunk::Append(format!(
+            "Test mode: skipped real Scoop uninstall for {}.",
+            candidate.label
+        )));
         if result.is_success() {
             state::set_availability_override(candidate.command, Some(false));
         }
@@ -141,11 +130,6 @@ where
         return Ok(CommandResult {
             title: format!("uninstall editor {}", candidate.label),
             status: CommandStatus::Blocked,
-            output: vec![
-                "Editor uninstall requires a configured root.".to_string(),
-                "Set root in spoon config before managing Scoop-managed editors.".to_string(),
-            ],
-            streamed: true,
         });
     };
     let result = scoop::run_package_action_streaming(

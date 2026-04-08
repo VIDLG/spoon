@@ -54,8 +54,6 @@ pub struct CacheActionOutcome {
     pub scope: &'static str,
     pub success: bool,
     pub title: String,
-    pub streamed: bool,
-    pub output: Vec<String>,
     pub paths: CachePaths,
 }
 
@@ -91,6 +89,22 @@ pub fn action_result_for_tool_root(
 }
 
 pub fn prune(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
+    let _ = prune_lines(roots, scope)?;
+    Ok(CommandResult {
+        title: "prune cache".to_string(),
+        status: CommandStatus::Success,
+    })
+}
+
+pub fn clear(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
+    let _ = clear_lines(roots, scope)?;
+    Ok(CommandResult {
+        title: "clear cache".to_string(),
+        status: CommandStatus::Success,
+    })
+}
+
+pub fn prune_lines(roots: &CacheRoots, scope: CacheScope) -> Result<Vec<String>> {
     let mut output = Vec::new();
     match scope {
         CacheScope::All => {
@@ -100,15 +114,10 @@ pub fn prune(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
         CacheScope::Scoop => output.extend(prune_scoop_cache(&roots.scoop)?),
         CacheScope::Msvc => output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?),
     }
-    Ok(CommandResult {
-        title: "prune cache".to_string(),
-        status: CommandStatus::Success,
-        output,
-        streamed: false,
-    })
+    Ok(output)
 }
 
-pub fn clear(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
+pub fn clear_lines(roots: &CacheRoots, scope: CacheScope) -> Result<Vec<String>> {
     let mut output = Vec::new();
     match scope {
         CacheScope::All => {
@@ -118,12 +127,7 @@ pub fn clear(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
         CacheScope::Scoop => output.extend(clear_scoop_cache(&roots.scoop)?),
         CacheScope::Msvc => output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?),
     }
-    Ok(CommandResult {
-        title: "clear cache".to_string(),
-        status: CommandStatus::Success,
-        output,
-        streamed: false,
-    })
+    Ok(output)
 }
 
 pub fn action_result(
@@ -138,8 +142,6 @@ pub fn action_result(
         scope: scope_label(scope),
         success: result.is_success(),
         title: result.title.clone(),
-        streamed: result.streamed,
-        output: result.output.clone(),
         paths: cache_paths(roots, scope),
     }
 }

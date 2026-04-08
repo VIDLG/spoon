@@ -4,7 +4,7 @@ use anyhow::Result as AnyResult;
 
 use crate::runtime::block_on_sync;
 use crate::service::{
-    CommandResult, CommandStatus, StreamChunk,
+    CommandResult, CommandStatus, StreamChunk, stream_chunk_from_event,
 };
 
 pub use spoon_core::RepoSyncOutcome;
@@ -16,15 +16,15 @@ use super::{
 };
 
 fn command_result_from_bucket_outcome(outcome: ScoopBucketOperationOutcome) -> CommandResult {
-    command_result(
-        outcome.title,
-        outcome.status,
-        outcome.output,
-        outcome.streamed,
-    )
+    command_result(outcome.title, outcome.status)
 }
 
 pub async fn bucket_list_report(tool_root: &Path) -> CommandResult {
+    let _output = bucket_list_report_lines(tool_root).await;
+    command_result("list Scoop buckets", CommandStatus::Success)
+}
+
+pub async fn bucket_list_report_lines(tool_root: &Path) -> Vec<String> {
     let buckets = load_buckets_from_registry(tool_root).await;
     let mut output = Vec::new();
     if buckets.is_empty() {
@@ -37,7 +37,7 @@ pub async fn bucket_list_report(tool_root: &Path) -> CommandResult {
             ));
         }
     }
-    command_result("list Scoop buckets", CommandStatus::Success, output, false)
+    output
 }
 
 pub async fn bucket_inventory(tool_root: &Path) -> ScoopBucketInventory {
@@ -51,6 +51,14 @@ pub async fn bucket_inventory(tool_root: &Path) -> ScoopBucketInventory {
 }
 
 pub async fn doctor_summary(tool_root: &Path) -> AnyResult<CommandResult> {
+    let _details = doctor_report(tool_root).await?;
+    Ok(command_result(
+        "doctor Scoop runtime",
+        CommandStatus::Success,
+    ))
+}
+
+pub async fn doctor_summary_lines(tool_root: &Path) -> AnyResult<Vec<String>> {
     let details = doctor_report(tool_root).await?;
     let mut output = details
         .ensured_paths
@@ -62,13 +70,7 @@ pub async fn doctor_summary(tool_root: &Path) -> AnyResult<CommandResult> {
         details.registered_buckets.len()
     ));
     output.push(format!("Scoop state root: {}", details.runtime.state_root));
-
-    Ok(command_result(
-        "doctor Scoop runtime",
-        CommandStatus::Success,
-        output,
-        false,
-    ))
+    Ok(output)
 }
 
 pub async fn doctor_report(tool_root: &Path) -> AnyResult<ScoopDoctorDetails> {
@@ -88,8 +90,6 @@ pub fn bucket_action_result(
         targets: target_names.to_vec(),
         status: result.status,
         title: result.title.clone(),
-        streamed: result.streamed,
-        output: result.output.clone(),
         bucket_count: buckets.len(),
         buckets,
     }
@@ -127,7 +127,8 @@ pub async fn bucket_update(tool_root: &Path, names: &[String]) -> AnyResult<Comm
     )
 }
 
-pub(crate) async fn bucket_update_streaming<F>(
+/// Run bucket update with FnMut(StreamChunk) forwarding for CLI callers.
+pub async fn bucket_update_with_emit<F>(
     tool_root: &Path,
     names: &[String],
     mut emit: F,
@@ -135,10 +136,17 @@ pub(crate) async fn bucket_update_streaming<F>(
 where
     F: FnMut(StreamChunk),
 {
-    let result = update_buckets_outcome(tool_root, names, &configured_proxy()).await
+    let (_sender, mut receiver) = spoon_core::event_bus(64);
+    let result = update_buckets_outcome(tool_root, names, &configured_proxy())
+        .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    for line in &result.output {
-        emit(StreamChunk::Append(line.clone()));
+
+    // Forward collected events
+    while let Ok(Some(event)) = receiver.try_recv() {
+        if let Some(chunk) = stream_chunk_from_event(event) {
+            emit(chunk);
+        }
     }
+
     Ok(command_result_from_bucket_outcome(result))
 }

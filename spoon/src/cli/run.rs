@@ -27,14 +27,12 @@ fn effective_root(install_root: Option<&Path>) -> Option<PathBuf> {
         .or_else(config::configured_tool_root)
 }
 
-fn discard_stream_chunk(_: StreamChunk) {}
-
 fn print_command_result(result: &crate::service::CommandResult, json_mode: bool) {
     if json_mode {
         output::print_json_value(&cli_json::command_result(result));
-    } else if !result.streamed {
-        output::print_lines(&result.output);
     }
+    // Non-streamed output lines are no longer stored in CommandResult.
+    // Streaming output is forwarded in real-time via the FnMut(StreamChunk) callback.
 }
 
 fn print_cli_response(response: &crate::cli::response::CliResponse, json_mode: bool) {
@@ -226,23 +224,29 @@ async fn reapply_package_config_change(
     let Some(root) = config::configured_tool_root() else {
         return Ok(Vec::new());
     };
-    let emit = if json_mode {
-        &mut discard_stream_chunk as &mut dyn FnMut(StreamChunk)
-    } else {
-        &mut output::print_stream_chunk as &mut dyn FnMut(StreamChunk)
-    };
     match reapply {
         PackageConfigReapply::None => Ok(Vec::new()),
         PackageConfigReapply::ScoopIntegrations => {
-            scoop::runtime::reapply_package_integrations_streaming(&root, package_key, emit).await
+            if json_mode {
+                scoop::runtime::reapply_package_integrations(&root, package_key).await
+            } else {
+                scoop::runtime::reapply_package_integrations_with_emit(&root, package_key, output::print_stream_chunk).await
+            }
         }
         PackageConfigReapply::ScoopCommandSurface => {
-            scoop::runtime::reapply_package_command_surface_streaming(&root, package_key, emit)
-                .await
+            if json_mode {
+                scoop::runtime::reapply_package_command_surface(&root, package_key).await
+            } else {
+                scoop::runtime::reapply_package_command_surface_with_emit(&root, package_key, output::print_stream_chunk).await
+            }
         }
         PackageConfigReapply::ManagedMsvcCommandSurface => {
             let command_profile = crate::config::load_policy_config().msvc.command_profile;
-            msvc::reapply_managed_command_surface_streaming(&root, &command_profile, emit).await
+            if json_mode {
+                msvc::reapply_managed_command_surface(&root, &command_profile).await
+            } else {
+                msvc::reapply_managed_command_surface_with_emit(&root, &command_profile, output::print_stream_chunk).await
+            }
         }
     }
 }
@@ -358,93 +362,59 @@ async fn run_msvc_action(
             MsvcInstallerModeArg::Quiet => msvc::official::OfficialInstallerMode::Quiet,
             MsvcInstallerModeArg::Passive => msvc::official::OfficialInstallerMode::Passive,
         };
-        match action {
-            ToolAction::Uninstall => {
-                let result = match install_root {
-                    Some(root) => {
-                        let mut emit = if json_mode {
-                            discard_stream_chunk as fn(StreamChunk)
-                        } else {
-                            output::print_stream_chunk as fn(StreamChunk)
-                        };
-                        msvc::official::uninstall_toolchain_streaming(
-                            root,
-                            installer_mode,
-                            None,
-                            &mut emit,
-                        )
-                        .await?
+        let result = match action {
+            ToolAction::Install => match install_root {
+                Some(root) => {
+                    if json_mode {
+                        msvc::official::install_toolchain(root, installer_mode, None, None).await?
+                    } else {
+                        msvc::official::install_toolchain_with_emit(root, installer_mode, None, output::print_stream_chunk).await?
                     }
-                    None => {
-                        print_cli_response(&messages::missing_msvc_root(), json_mode);
-                        return Ok(());
+                }
+                None => {
+                    print_cli_response(&messages::missing_msvc_root(), json_mode);
+                    return Ok(());
+                }
+            },
+            ToolAction::Update => match install_root {
+                Some(root) => {
+                    if json_mode {
+                        msvc::official::update_toolchain(root, installer_mode, None, None).await?
+                    } else {
+                        msvc::official::update_toolchain_with_emit(root, installer_mode, None, output::print_stream_chunk).await?
                     }
-                };
-                logger::command_results(logger::CLI_MSVC_ACTION, std::slice::from_ref(&result));
-                print_command_result(&result, json_mode);
-                return Ok(());
-            }
-            ToolAction::Install => {
-                let result = match install_root {
-                    Some(root) => {
-                        let mut emit = if json_mode {
-                            discard_stream_chunk as fn(StreamChunk)
-                        } else {
-                            output::print_stream_chunk as fn(StreamChunk)
-                        };
-                        msvc::official::install_toolchain_streaming(
-                            root,
-                            installer_mode,
-                            None,
-                            &mut emit,
-                        )
-                        .await?
+                }
+                None => {
+                    print_cli_response(&messages::missing_msvc_root(), json_mode);
+                    return Ok(());
+                }
+            },
+            ToolAction::Uninstall => match install_root {
+                Some(root) => {
+                    if json_mode {
+                        msvc::official::uninstall_toolchain(root, installer_mode, None, None).await?
+                    } else {
+                        msvc::official::uninstall_toolchain_with_emit(root, installer_mode, None, output::print_stream_chunk).await?
                     }
-                    None => {
-                        print_cli_response(&messages::missing_msvc_root(), json_mode);
-                        return Ok(());
-                    }
-                };
-                logger::command_results(logger::CLI_MSVC_ACTION, std::slice::from_ref(&result));
-                print_command_result(&result, json_mode);
-                return Ok(());
-            }
-            ToolAction::Update => {
-                let result = match install_root {
-                    Some(root) => {
-                        let mut emit = if json_mode {
-                            discard_stream_chunk as fn(StreamChunk)
-                        } else {
-                            output::print_stream_chunk as fn(StreamChunk)
-                        };
-                        msvc::official::update_toolchain_streaming(
-                            root,
-                            installer_mode,
-                            None,
-                            &mut emit,
-                        )
-                        .await?
-                    }
-                    None => {
-                        print_cli_response(&messages::missing_msvc_root(), json_mode);
-                        return Ok(());
-                    }
-                };
-                logger::command_results(logger::CLI_MSVC_ACTION, std::slice::from_ref(&result));
-                print_command_result(&result, json_mode);
-                return Ok(());
-            }
-        }
+                }
+                None => {
+                    print_cli_response(&messages::missing_msvc_root(), json_mode);
+                    return Ok(());
+                }
+            },
+        };
+        logger::command_results(logger::CLI_MSVC_ACTION, std::slice::from_ref(&result));
+        print_command_result(&result, json_mode);
+        return Ok(());
     }
     let result = match action {
         ToolAction::Install => match install_root {
             Some(root) => {
-                let emit = if json_mode {
-                    &mut (discard_stream_chunk as fn(StreamChunk))
+                if json_mode {
+                    msvc::install_toolchain(root, None, None).await?
                 } else {
-                    &mut (output::print_stream_chunk as fn(StreamChunk))
-                };
-                msvc::install_toolchain_async_streaming(root, emit).await?
+                    msvc::install_toolchain_with_emit(root, None, output::print_stream_chunk).await?
+                }
             }
             None => {
                 print_cli_response(&messages::missing_msvc_root(), json_mode);
@@ -453,12 +423,11 @@ async fn run_msvc_action(
         },
         ToolAction::Update => match install_root {
             Some(root) => {
-                let emit = if json_mode {
-                    &mut (discard_stream_chunk as fn(StreamChunk))
+                if json_mode {
+                    msvc::update_toolchain(root, None, None).await?
                 } else {
-                    &mut (output::print_stream_chunk as fn(StreamChunk))
-                };
-                msvc::update_toolchain_async_streaming(root, emit).await?
+                    msvc::update_toolchain_with_emit(root, None, output::print_stream_chunk).await?
+                }
             }
             None => {
                 print_cli_response(&messages::missing_msvc_root(), json_mode);
@@ -466,7 +435,7 @@ async fn run_msvc_action(
             }
         },
         ToolAction::Uninstall => match install_root {
-            Some(root) => msvc::uninstall_toolchain(root).await?,
+            Some(root) => msvc::uninstall_toolchain(root, None, None).await?,
             None => {
                 print_cli_response(&messages::missing_msvc_root(), json_mode);
                 return Ok(());
@@ -494,8 +463,9 @@ async fn run_msvc_command(
                 return Ok(());
             }
             let result = msvc::status_report(root).await;
+            let lines = msvc::status_report_lines(root).await;
             logger::command_results(logger::CLI_MSVC_STATUS, std::slice::from_ref(&result));
-            print_command_result(&result, false);
+            output::print_lines(&lines);
             Ok(())
         }
         MsvcSubcommand::Install(MsvcRuntimeCommand {
@@ -563,15 +533,24 @@ fn run_domain_cache_command(
     root: &Path,
     json_mode: bool,
 ) {
-    let (action, result) = match command {
-        DomainCacheSubcommand::Prune => ("prune", prune_cache(root, scope)),
-        DomainCacheSubcommand::Clear => ("clear", clear_cache(root, scope)),
+    let roots = crate::service::cache_roots_for_tool_root(root);
+    let (action, result, lines) = match command {
+        DomainCacheSubcommand::Prune => {
+            let lines = crate::service::cache_prune_lines(&roots, scope)
+                .expect("cache prune should succeed once root is configured");
+            ("prune", prune_cache(root, scope), lines)
+        }
+        DomainCacheSubcommand::Clear => {
+            let lines = crate::service::cache_clear_lines(&roots, scope)
+                .expect("cache clear should succeed once root is configured");
+            ("clear", clear_cache(root, scope), lines)
+        }
     };
     let result = result.expect("cache command should succeed once root is configured");
     if json_mode {
         output::print_json_value(&cache_action_result(root, scope, action, &result));
     } else {
-        print_command_result(&result, false);
+        output::print_lines(&lines);
     }
 }
 
@@ -648,8 +627,9 @@ async fn run_scoop_command(
                 return Ok(());
             }
             let result = scoop::runtime_status_report(root).await;
+            let lines = scoop::runtime_status_report_lines(root).await;
             logger::command_results(logger::CLI_SCOOP_STATUS, std::slice::from_ref(&result));
-            print_command_result(&result, false);
+            output::print_lines(&lines);
             Ok(())
         }
         ScoopSubcommand::List => {
@@ -678,11 +658,12 @@ async fn run_scoop_command(
                 return Ok(());
             }
             let result = scoop::package_list_report(root).await;
+            let lines = scoop::package_list_report_lines(root).await;
             logger::command_results(
                 logger::CLI_SCOOP_PACKAGE_QUERY,
                 std::slice::from_ref(&result),
             );
-            print_command_result(&result, false);
+            output::print_lines(&lines);
             Ok(())
         }
         ScoopSubcommand::Search(ScoopSearchCommand { query }) => {
@@ -699,8 +680,9 @@ async fn run_scoop_command(
                 return Ok(());
             }
             let result = scoop::search_report(root, query.as_deref()).await;
+            let lines = scoop::search_report_lines(root, query.as_deref()).await;
             logger::command_results(logger::CLI_SCOOP_SEARCH, std::slice::from_ref(&result));
-            output::print_search_result_lines(&result.output, query.as_deref());
+            output::print_search_result_lines(&lines, query.as_deref());
             Ok(())
         }
         ScoopSubcommand::Info(ScoopSinglePackageCommand { package }) => {
@@ -714,11 +696,12 @@ async fn run_scoop_command(
                 return Ok(());
             }
             let result = scoop::package_info_report(root, &package).await;
+            let lines = scoop::package_info_report_lines(root, &package).await;
             logger::command_results(
                 logger::CLI_SCOOP_PACKAGE_QUERY,
                 std::slice::from_ref(&result),
             );
-            print_command_result(&result, false);
+            output::print_lines(&lines);
             Ok(())
         }
         ScoopSubcommand::Cat(ScoopSinglePackageCommand { package }) => {
@@ -728,14 +711,15 @@ async fn run_scoop_command(
                 return Ok(());
             };
             let result = scoop::package_manifest(root, &package).await;
+            let lines = scoop::package_manifest_lines(root, &package).await;
             logger::command_results(
                 logger::CLI_SCOOP_PACKAGE_QUERY,
                 std::slice::from_ref(&result),
             );
             if json_mode {
-                output::print_lines(&result.output);
+                output::print_json_lines(&lines);
             } else {
-                output::print_json_lines(&result.output);
+                output::print_lines(&lines);
             }
             Ok(())
         }
@@ -767,11 +751,12 @@ async fn run_scoop_command(
                 return Ok(());
             }
             let result = scoop::package_prefix_report(root, &package).await;
+            let lines = scoop::package_prefix_report_lines(root, &package).await;
             logger::command_results(
                 logger::CLI_SCOOP_PACKAGE_QUERY,
                 std::slice::from_ref(&result),
             );
-            print_command_result(&result, false);
+            output::print_lines(&lines);
             Ok(())
         }
         ScoopSubcommand::Install(command) => {
@@ -804,7 +789,10 @@ async fn run_scoop_command(
                         output::print_json_value(&scoop::bucket_inventory(root).await);
                         return Ok(());
                     }
-                    scoop::bucket_list_report(root).await
+                    let result = scoop::bucket_list_report(root).await;
+                    let lines = scoop::bucket_list_report_lines(root).await;
+                    output::print_lines(&lines);
+                    result
                 }
                 ScoopBucketSubcommand::Add(command) => {
                     let source = command
@@ -862,11 +850,11 @@ pub async fn run_command(
         Commands::Status(StatusCommand { refresh }) => {
             if refresh {
                 if let Some(root) = effective_root(install_root) {
-                    let result = scoop::bucket_update_streaming(
+                    let result = scoop::bucket_update_with_emit(
                         &root,
                         &[],
                         if json_mode {
-                            discard_stream_chunk
+                            |_| {}
                         } else {
                             output::print_stream_chunk
                         },
@@ -913,8 +901,9 @@ pub async fn run_command(
                 return Ok(());
             }
             let result = scoop::doctor_summary(root).await?;
+            let lines = scoop::doctor_summary_lines(root).await?;
             logger::command_results(logger::CLI_SCOOP_DOCTOR, std::slice::from_ref(&result));
-            print_command_result(&result, false);
+            output::print_lines(&lines);
         }
         Commands::Install(command) => {
             run_scoop_package_command("install", &command, install_root, json_mode)?;

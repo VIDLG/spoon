@@ -160,7 +160,6 @@ pub struct ScoopPackageManifestOutcome {
     pub manifest_path: Option<String>,
     pub content: Option<String>,
     pub error: Option<ScoopPackageError>,
-    pub streamed: bool,
 }
 
 impl ScoopPackageManifestOutcome {
@@ -194,8 +193,6 @@ pub struct ScoopPackageActionOutcome {
     pub package: ScoopActionPackage,
     pub success: bool,
     pub title: String,
-    pub streamed: bool,
-    pub output: Vec<String>,
     pub state: ScoopPackageInstallState,
 }
 
@@ -207,8 +204,6 @@ pub struct ScoopPackageOperationOutcome {
     pub package: ScoopActionPackage,
     pub status: spoon_core::CommandStatus,
     pub title: String,
-    pub streamed: bool,
-    pub output: Vec<String>,
     pub state: ScoopPackageInstallState,
 }
 
@@ -228,8 +223,6 @@ pub struct ScoopBucketOperationOutcome {
     pub targets: Vec<String>,
     pub status: spoon_core::CommandStatus,
     pub title: String,
-    pub streamed: bool,
-    pub output: Vec<String>,
     pub bucket_count: usize,
     pub buckets: Vec<Bucket>,
 }

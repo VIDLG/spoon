@@ -22,8 +22,6 @@ pub struct CommandResultJson {
     pub title: String,
     pub status: &'static str,
     pub success: bool,
-    pub streamed: bool,
-    pub output: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,8 +46,6 @@ pub fn command_result(result: &CommandResult) -> JsonEnvelope<CommandResultJson>
             title: result.title.clone(),
             status: result.status.as_str(),
             success: result.status == CommandStatus::Success,
-            streamed: result.streamed,
-            output: result.output.clone(),
         },
     }
 }

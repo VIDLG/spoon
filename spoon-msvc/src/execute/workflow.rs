@@ -7,6 +7,7 @@ use walkdir::WalkDir;
 
 use spoon_core::{CoreError, Result, format_bytes};
 
+use crate::common::emit_notice;
 use crate::facts::manifest;
 use crate::paths;
 use crate::rules::write_installed_toolchain_target;
@@ -47,8 +48,7 @@ impl ToolchainAction {
 
 fn handle_manifest_refresh_failure(
     action: ToolchainAction,
-    lines: &mut Vec<String>,
-    _emit: &mut Option<&mut dyn FnMut(spoon_core::SpoonEvent)>,
+    emit: Option<&spoon_core::EventSender>,
     err: spoon_core::CoreError,
 ) -> spoon_core::Result<()> {
     if action == ToolchainAction::Update {
@@ -56,10 +56,9 @@ fn handle_manifest_refresh_failure(
             "failed to refresh latest managed MSVC manifest for update: {err}"
         )));
     }
-    crate::common::push_stream_line(
-        lines,
-        &mut None,
-        format!("Warning: failed to refresh managed MSVC manifest cache: {err}"),
+    emit_notice(
+        emit,
+        &format!("Warning: failed to refresh managed MSVC manifest cache: {err}"),
     );
     Ok(())
 }
@@ -119,7 +118,7 @@ fn write_installed_state(
     Ok(())
 }
 
-fn write_runtime_state(tool_root: &Path) -> Result<Vec<String>> {
+fn write_runtime_state(tool_root: &Path, emit: Option<&spoon_core::EventSender>) -> Result<()> {
     let state_root = paths::msvc_state_root(tool_root);
     fs::create_dir_all(&state_root)
         .map_err(|e| CoreError::fs("create_dir_all", &state_root, e))?;
@@ -135,23 +134,28 @@ fn write_runtime_state(tool_root: &Path) -> Result<Vec<String>> {
         .as_bytes(),
     )
     .map_err(|e| CoreError::fs("write", &runtime_state, e))?;
-    Ok(vec![format!(
-        "Wrote managed runtime state into {}.",
-        runtime_state.display()
-    )])
+    emit_notice(
+        emit,
+        &format!(
+            "Wrote managed runtime state into {}.",
+            runtime_state.display()
+        ),
+    );
+    Ok(())
 }
 
-fn remove_autoenv_dir(tool_root: &Path) -> Result<Vec<String>> {
+fn remove_autoenv_dir(tool_root: &Path, emit: Option<&spoon_core::EventSender>) -> Result<()> {
     let autoenv_root = pipeline::msvc_dir(tool_root).join("autoenv");
     if !autoenv_root.exists() {
-        return Ok(Vec::new());
+        return Ok(());
     }
     fs::remove_dir_all(&autoenv_root)
         .map_err(|e| CoreError::fs("remove_dir_all", &autoenv_root, e))?;
-    Ok(vec![format!(
-        "Removed autoenv directory {}.",
-        autoenv_root.display()
-    )])
+    emit_notice(
+        emit,
+        &format!("Removed autoenv directory {}.", autoenv_root.display()),
+    );
+    Ok(())
 }
 
 fn dir_size_bytes(root: &Path) -> Option<u64> {
@@ -177,12 +181,12 @@ fn user_facing_toolchain_label(raw: &str) -> String {
 pub fn ensure_materialized_toolchain(
     tool_root: &Path,
     target: &manifest::ToolchainTarget,
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let image_root = pipeline::install_image_cache_dir(tool_root);
     if !image_root.exists() {
-        return Ok(vec![
-            "Install image not present yet; skipped toolchain materialization.".to_string(),
-        ]);
+        emit_notice(emit, "Install image not present yet; skipped toolchain materialization.");
+        return Ok(());
     }
 
     let toolchain_root = pipeline::msvc_dir(tool_root);
@@ -195,20 +199,23 @@ pub fn ensure_materialized_toolchain(
     let reused = usize::from(after == before);
     write_installed_state(tool_root, target)?;
 
-    Ok(vec![format!(
-        "Materialized managed toolchain image into {} (copied {}, reused {}).",
-        toolchain_root.display(),
-        copied,
-        reused
-    )])
+    emit_notice(
+        emit,
+        &format!(
+            "Materialized managed toolchain image into {} (copied {}, reused {}).",
+            toolchain_root.display(),
+            copied,
+            reused
+        ),
+    );
+    Ok(())
 }
 
-pub fn cleanup_post_install_cache(tool_root: &Path) -> Vec<String> {
+pub fn cleanup_post_install_cache(tool_root: &Path, emit: Option<&spoon_core::EventSender>) {
     let cache_root = paths::msvc_cache_root(tool_root);
     let cleanup_targets = [cache_root.join("image")];
     let mut removed = 0_usize;
     let mut freed_bytes = 0_u64;
-    let mut warnings = Vec::new();
 
     for dir in cleanup_targets {
         if !dir.exists() {
@@ -220,28 +227,40 @@ pub fn cleanup_post_install_cache(tool_root: &Path) -> Vec<String> {
                 removed += 1;
                 freed_bytes += bytes;
             }
-            Err(err) => warnings.push(format!(
-                "Warning: failed to remove transient MSVC cache dir {}: {err}",
-                dir.display()
-            )),
+            Err(err) => {
+                emit_notice(
+                    emit,
+                    &format!(
+                        "Warning: failed to remove transient MSVC cache dir {}: {err}",
+                        dir.display()
+                    ),
+                );
+            }
         }
     }
 
-    let mut lines = vec![format!(
-        "Cleaned transient MSVC install-image cache after install (removed {}, freed {}).",
-        removed,
-        format_bytes(freed_bytes)
-    )];
-    lines.push(format!(
-        "Retained MSI extraction cache under {} for reuse.",
-        cache_root.join("expanded").display()
-    ));
-    lines.push(format!(
-        "Retained MSI staging cache under {} for reuse.",
-        cache_root.join("stage").display()
-    ));
-    lines.extend(warnings);
-    lines
+    emit_notice(
+        emit,
+        &format!(
+            "Cleaned transient MSVC install-image cache after install (removed {}, freed {}).",
+            removed,
+            format_bytes(freed_bytes)
+        ),
+    );
+    emit_notice(
+        emit,
+        &format!(
+            "Retained MSI extraction cache under {} for reuse.",
+            cache_root.join("expanded").display()
+        ),
+    );
+    emit_notice(
+        emit,
+        &format!(
+            "Retained MSI staging cache under {} for reuse.",
+            cache_root.join("stage").display()
+        ),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +271,7 @@ async fn run_toolchain_action_async(
     request: &crate::types::MsvcRequest,
     action: ToolchainAction,
     cancel: Option<&spoon_core::CancellationToken>,
-    mut emit: Option<&mut dyn FnMut(spoon_core::SpoonEvent)>,
+    emit: Option<&spoon_core::EventSender>,
 ) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
     let action_kind = action.operation_kind();
     let action_title = action.title().to_string();
@@ -260,16 +279,15 @@ async fn run_toolchain_action_async(
     let tool_root = request.root.as_path();
     let proxy = request.proxy.as_str();
     let selected_target_arch = request.normalized_target_arch();
-    let mut lines = Vec::new();
     let manifest_root = pipeline::manifest_dir(tool_root);
     if !request.test_mode {
         match crate::facts::manifest::sync_release_manifest_cache_async(&manifest_root, proxy).await {
             Ok(sync_lines) => {
                 for line in sync_lines {
-                    crate::common::push_stream_line(&mut lines, &mut emit, line);
+                    emit_notice(emit, &line);
                 }
             }
-            Err(err) => handle_manifest_refresh_failure(action, &mut lines, &mut emit, err)?,
+            Err(err) => handle_manifest_refresh_failure(action, emit, err)?,
         }
     }
     let Some(target_packages) = crate::facts::manifest::latest_toolchain_target_from_cached_manifest(
@@ -294,10 +312,9 @@ async fn run_toolchain_action_async(
             None,
         )
         .map_err(|e| spoon_core::CoreError::Other(e.to_string()))?;
-        crate::common::push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!(
+        emit_notice(
+            emit,
+            &format!(
                 "Managed MSVC toolchain is already up to date: {}",
                 user_facing_toolchain_label(&target_packages.label())
             ),
@@ -308,14 +325,11 @@ async fn run_toolchain_action_async(
             operation: action_kind,
             title: action_title,
             status: true,
-            output: lines,
-            streamed: false,
         });
     }
-    crate::common::push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
+    emit_notice(
+        emit,
+        &format!(
             "Selected target from cached manifest: {}",
             target_packages.label()
         ),
@@ -331,61 +345,34 @@ async fn run_toolchain_action_async(
             target_packages.label()
         )));
     };
-    for line in pipeline::ensure_cached_payloads(
+    pipeline::ensure_cached_payloads(
         tool_root,
         &target_packages,
         &payloads,
         proxy,
         cancel,
-        &mut emit,
+        emit,
     )
-    .await?
-    {
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in pipeline::ensure_msi_media_metadata(tool_root, &payloads)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in
-        pipeline::ensure_cached_companion_cabs(tool_root, &target_packages, &payloads, proxy, &mut emit)
-            .await?
-    {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in pipeline::ensure_staged_external_cabs(tool_root, &payloads)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in pipeline::ensure_extracted_msis(tool_root, &payloads, &mut emit)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in pipeline::ensure_extracted_archives(tool_root, &payloads)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in pipeline::ensure_install_image(tool_root, &payloads)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in ensure_materialized_toolchain(tool_root, &target_packages)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in cleanup_post_install_cache(tool_root) {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in write_runtime_state(tool_root)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
-    for line in remove_autoenv_dir(tool_root)? {
-        spoon_core::check_token_cancel(cancel)?;
-        crate::common::push_stream_line(&mut lines, &mut emit, line);
-    }
+    .await?;
+    pipeline::ensure_msi_media_metadata(tool_root, &payloads, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    pipeline::ensure_cached_companion_cabs(tool_root, &target_packages, &payloads, proxy, emit).await?;
+    spoon_core::check_token_cancel(cancel)?;
+    pipeline::ensure_staged_external_cabs(tool_root, &payloads, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    pipeline::ensure_extracted_msis(tool_root, &payloads, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    pipeline::ensure_extracted_archives(tool_root, &payloads, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    pipeline::ensure_install_image(tool_root, &payloads, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    ensure_materialized_toolchain(tool_root, &target_packages, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    cleanup_post_install_cache(tool_root, emit);
+    spoon_core::check_token_cancel(cancel)?;
+    write_runtime_state(tool_root, emit)?;
+    spoon_core::check_token_cancel(cancel)?;
+    remove_autoenv_dir(tool_root, emit)?;
     write_installed_state(tool_root, &target_packages)?;
     write_managed_canonical_state(
         request,
@@ -403,21 +390,19 @@ async fn run_toolchain_action_async(
                 wrappers::write_managed_toolchain_wrappers(tool_root, &request.command_profile, &wrapper_flags)?
             {
                 spoon_core::check_token_cancel(cancel)?;
-                crate::common::push_stream_line(&mut lines, &mut emit, line);
+                emit_notice(emit, &line);
             }
         }
         Err(err) => {
-            crate::common::push_stream_line(
-                &mut lines,
-                &mut emit,
-                format!("Skipped managed wrapper generation: {err}"),
+            emit_notice(
+                emit,
+                &format!("Skipped managed wrapper generation: {err}"),
             );
         }
     }
-    crate::common::push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
+    emit_notice(
+        emit,
+        &format!(
             "Managed wrappers are materialized under {}.",
             paths::shims_root(tool_root).display()
         ),
@@ -429,8 +414,6 @@ async fn run_toolchain_action_async(
         operation: action_kind,
         title: action_title,
         status: true,
-        output: lines,
-        streamed: false,
     })
 }
 
@@ -438,84 +421,55 @@ async fn run_toolchain_action_async(
 // Public entry points
 // ---------------------------------------------------------------------------
 
-pub async fn install_toolchain_async(
-    request: &crate::types::MsvcRequest,
-) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
-    run_toolchain_action_async(request, ToolchainAction::Install, None, None).await
-}
-
-pub async fn update_toolchain_async(
-    request: &crate::types::MsvcRequest,
-) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
-    run_toolchain_action_async(request, ToolchainAction::Update, None, None).await
-}
-
-pub async fn install_toolchain_streaming<F>(
+pub async fn install_toolchain(
     request: &crate::types::MsvcRequest,
     cancel: Option<&spoon_core::CancellationToken>,
-    emit: &mut F,
-) -> spoon_core::Result<crate::types::MsvcOperationOutcome>
-where
-    F: FnMut(spoon_core::SpoonEvent),
-{
-    let mut callback = emit as &mut dyn FnMut(spoon_core::SpoonEvent);
-    let mut result = run_toolchain_action_async(
-        request,
-        ToolchainAction::Install,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
+    emit: Option<&spoon_core::EventSender>,
+) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
+    run_toolchain_action_async(request, ToolchainAction::Install, cancel, emit).await
 }
 
-pub async fn update_toolchain_streaming<F>(
+pub async fn update_toolchain(
     request: &crate::types::MsvcRequest,
     cancel: Option<&spoon_core::CancellationToken>,
-    emit: &mut F,
-) -> spoon_core::Result<crate::types::MsvcOperationOutcome>
-where
-    F: FnMut(spoon_core::SpoonEvent),
-{
-    let mut callback = emit as &mut dyn FnMut(spoon_core::SpoonEvent);
-    let mut result = run_toolchain_action_async(
-        request,
-        ToolchainAction::Update,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
+    emit: Option<&spoon_core::EventSender>,
+) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
+    run_toolchain_action_async(request, ToolchainAction::Update, cancel, emit).await
 }
 
-pub async fn uninstall_toolchain_async(
+pub async fn uninstall_toolchain(
     request: &crate::types::MsvcRequest,
+    _cancel: Option<&spoon_core::CancellationToken>,
+    emit: Option<&spoon_core::EventSender>,
 ) -> spoon_core::Result<crate::types::MsvcOperationOutcome> {
     let tool_root = request.root.as_path();
     let target = pipeline::msvc_dir(tool_root);
     let state_root = paths::msvc_state_root(tool_root);
-    let mut lines = vec![format!("> remove MSVC toolchain at {}", target.display())];
-    lines.extend(wrappers::remove_managed_toolchain_wrappers(tool_root)?);
+    emit_notice(emit, &format!("> remove MSVC toolchain at {}", target.display()));
+    for line in wrappers::remove_managed_toolchain_wrappers(tool_root)? {
+        emit_notice(emit, &line);
+    }
 
     if target.exists() {
         std::fs::remove_dir_all(&target)
             .map_err(|err| spoon_core::CoreError::fs("remove", &target, err))?;
-        lines.push("Removed toolchain directory.".to_string());
+        emit_notice(emit, "Removed toolchain directory.");
     } else {
-        lines.push("Toolchain directory not present; nothing to remove.".to_string());
+        emit_notice(emit, "Toolchain directory not present; nothing to remove.");
     }
     if state_root.exists() {
         std::fs::remove_dir_all(&state_root)
             .map_err(|err| spoon_core::CoreError::fs("remove", &state_root, err))?;
-        lines.push("Removed managed state directory.".to_string());
+        emit_notice(emit, "Removed managed state directory.");
     }
 
-    lines.push(format!(
-        "Managed MSVC cache is retained at {}",
-        paths::msvc_cache_root(tool_root).display()
-    ));
+    emit_notice(
+        emit,
+        &format!(
+            "Managed MSVC cache is retained at {}",
+            paths::msvc_cache_root(tool_root).display()
+        ),
+    );
     write_managed_canonical_state(
         request,
         crate::types::MsvcOperationKind::Uninstall,
@@ -533,7 +487,5 @@ pub async fn uninstall_toolchain_async(
         operation: crate::types::MsvcOperationKind::Uninstall,
         title: "uninstall MSVC Toolchain".to_string(),
         status: true,
-        output: lines,
-        streamed: false,
     })
 }

@@ -33,6 +33,11 @@ where
 }
 
 pub async fn package_list_report(tool_root: &Path) -> CommandResult {
+    let _ = package_list_report_lines(tool_root).await;
+    command_result("list Scoop packages", CommandStatus::Success)
+}
+
+pub async fn package_list_report_lines(tool_root: &Path) -> Vec<String> {
     let packages = installed_package_states(tool_root)
         .await
         .into_iter()
@@ -43,12 +48,11 @@ pub async fn package_list_report(tool_root: &Path) -> CommandResult {
             },
         )
         .collect::<Vec<_>>();
-    let output = lines_or_default(
+    lines_or_default(
         packages,
         "No Scoop packages are currently installed.",
         |package| format!("{} | {}", package.name, package.version),
-    );
-    command_result("list Scoop packages", CommandStatus::Success, output, false)
+    )
 }
 
 pub async fn package_prefix_report(tool_root: &Path, package_name: &str) -> CommandResult {
@@ -61,12 +65,6 @@ pub async fn package_prefix_report(tool_root: &Path, package_name: &str) -> Comm
         .find(|p| p.name == package_name)
         .map(|p| p.version.trim().to_string());
     let installed = installed_version.is_some() && prefix.exists();
-    let mut output = Vec::new();
-    if installed {
-        output.push(prefix.display().to_string());
-    } else {
-        output.push(format!("Scoop package '{package_name}' is not installed."));
-    }
     let status = if installed {
         CommandStatus::Success
     } else {
@@ -75,12 +73,34 @@ pub async fn package_prefix_report(tool_root: &Path, package_name: &str) -> Comm
     command_result(
         format!("prefix Scoop package {package_name}"),
         status,
-        output,
-        false,
     )
 }
 
-pub async fn runtime_status_report(tool_root: &Path) -> CommandResult {
+pub async fn package_prefix_report_lines(tool_root: &Path, package_name: &str) -> Vec<String> {
+    let layout = RuntimeLayout::from_root(tool_root);
+    let prefix = layout.scoop.apps_root.join(package_name).join("current");
+    let status_data = runtime_status(tool_root).await;
+    let installed_version = status_data
+        .installed_packages
+        .iter()
+        .find(|p| p.name == package_name)
+        .map(|p| p.version.trim().to_string());
+    let installed = installed_version.is_some() && prefix.exists();
+    if installed {
+        vec![prefix.display().to_string()]
+    } else {
+        vec![format!("Scoop package '{package_name}' is not installed.")]
+    }
+}
+
+pub async fn runtime_status_report(_tool_root: &Path) -> CommandResult {
+    command_result(
+        "status Scoop runtime",
+        CommandStatus::Success,
+    )
+}
+
+pub async fn runtime_status_report_lines(tool_root: &Path) -> Vec<String> {
     let data = runtime_status(tool_root).await;
     let mut output = vec![
         "Scoop runtime:".to_string(),
@@ -103,17 +123,21 @@ pub async fn runtime_status_report(tool_root: &Path) -> CommandResult {
     output.push(format!("  cache: {}", data.paths.cache));
     output.push(format!("  persist: {}", data.paths.persist));
     output.push(format!("  state: {}", data.paths.state));
-    command_result(
-        "status Scoop runtime",
-        CommandStatus::Success,
-        output,
-        false,
-    )
+    output
 }
 
 pub async fn search_report(tool_root: &Path, query: Option<&str>) -> CommandResult {
     let data = search_results(tool_root, query).await;
-    let output = lines_or_default(data.matches, "No matching Scoop packages found.", |item| {
+    let title = match data.query {
+        Some(query) => format!("search Scoop packages for {query}"),
+        None => "search Scoop packages".to_string(),
+    };
+    command_result(title, CommandStatus::Success)
+}
+
+pub async fn search_report_lines(tool_root: &Path, query: Option<&str>) -> Vec<String> {
+    let data = search_results(tool_root, query).await;
+    lines_or_default(data.matches, "No matching Scoop packages found.", |item| {
         format!(
             "{} | {} | {} | {}",
             item.package_name,
@@ -121,15 +145,25 @@ pub async fn search_report(tool_root: &Path, query: Option<&str>) -> CommandResu
             item.bucket,
             item.description.unwrap_or_default()
         )
-    });
-    let title = match data.query {
-        Some(query) => format!("search Scoop packages for {query}"),
-        None => "search Scoop packages".to_string(),
-    };
-    command_result(title, CommandStatus::Success, output, false)
+    })
 }
 
 pub async fn package_info_report(tool_root: &Path, package_name: &str) -> CommandResult {
+    match package_info(tool_root, package_name).await {
+        ScoopPackageDetailsOutcome::Details(_) => {
+            command_result(
+                format!("info Scoop package {package_name}"),
+                CommandStatus::Success,
+            )
+        }
+        ScoopPackageDetailsOutcome::Error(error) => command_result(
+            format!("info Scoop package {}", error.package),
+            CommandStatus::Failed,
+        ),
+    }
+}
+
+pub async fn package_info_report_lines(tool_root: &Path, package_name: &str) -> Vec<String> {
     match package_info(tool_root, package_name).await {
         ScoopPackageDetailsOutcome::Details(details) => {
             let mut output = format_package_section(details.package);
@@ -141,20 +175,9 @@ pub async fn package_info_report(tool_root: &Path, package_name: &str) -> Comman
                 output.push("Integration:".to_string());
                 output.extend(integration_lines);
             }
-
-            command_result(
-                format!("info Scoop package {package_name}"),
-                CommandStatus::Success,
-                output,
-                false,
-            )
+            output
         }
-        ScoopPackageDetailsOutcome::Error(error) => command_result(
-            format!("info Scoop package {}", error.package),
-            CommandStatus::Failed,
-            vec![error.error.message],
-            false,
-        ),
+        ScoopPackageDetailsOutcome::Error(error) => vec![error.error.message],
     }
 }
 
@@ -290,10 +313,14 @@ fn format_integration_section(
 
 pub async fn package_manifest(tool_root: &Path, package_name: &str) -> CommandResult {
     let outcome = spoon_scoop::package_manifest(tool_root, package_name).await;
-    let output = match (outcome.content, outcome.error) {
+    command_result(outcome.title, outcome.status)
+}
+
+pub async fn package_manifest_lines(tool_root: &Path, package_name: &str) -> Vec<String> {
+    let outcome = spoon_scoop::package_manifest(tool_root, package_name).await;
+    match (outcome.content, outcome.error) {
         (Some(content), _) => content.lines().map(str::to_string).collect(),
         (None, Some(error)) => vec![error.message],
         (None, None) => Vec::new(),
-    };
-    command_result(outcome.title, outcome.status, output, outcome.streamed)
+    }
 }

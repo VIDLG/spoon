@@ -214,8 +214,6 @@ pub struct MsvcOperationOutcome {
     pub operation: MsvcOperationKind,
     pub status: bool,
     pub title: String,
-    pub output: Vec<String>,
-    pub streamed: bool,
 }
 
 impl MsvcOperationOutcome {

@@ -8,7 +8,8 @@ pub use crate::formatting::format_bytes;
 pub use cache::{
     CacheActionOutcome, CachePaths, CacheRoots, CacheScope,
     action_result_for_tool_root as cache_action_result, clear_for_tool_root as clear_cache,
-    prune_for_tool_root as prune_cache,
+    prune_for_tool_root as prune_cache, prune_lines as cache_prune_lines,
+    clear_lines as cache_clear_lines, roots_for_tool_root as cache_roots_for_tool_root,
 };
 pub use spoon_core::{
     SpoonEvent, CancellationToken, CommandStatus, FinishEvent,
@@ -24,8 +25,6 @@ pub(crate) type ConfigEntry = crate::packages::ConfigEntry;
 pub struct CommandResult {
     pub title: String,
     pub status: CommandStatus,
-    pub output: Vec<String>,
-    pub streamed: bool,
 }
 
 impl CommandResult {

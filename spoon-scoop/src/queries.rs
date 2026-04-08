@@ -382,7 +382,6 @@ pub async fn package_manifest(tool_root: &Path, package_name: &str) -> ScoopPack
                     manifest_path: Some(resolved.manifest_path.display().to_string()),
                     content: Some(content),
                     error: None,
-                    streamed: false,
                 },
                 Err(e) => ScoopPackageManifestOutcome {
                     kind: "package_manifest",
@@ -394,7 +393,6 @@ pub async fn package_manifest(tool_root: &Path, package_name: &str) -> ScoopPack
                     error: Some(ScoopPackageError {
                         message: e.to_string(),
                     }),
-                    streamed: false,
                 },
             }
         }
@@ -408,7 +406,6 @@ pub async fn package_manifest(tool_root: &Path, package_name: &str) -> ScoopPack
             error: Some(ScoopPackageError {
                 message: format!("package '{}' not found in any bucket", package_name),
             }),
-            streamed: false,
         },
     }
 }

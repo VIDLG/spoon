@@ -42,11 +42,9 @@ pub use discover::{
 pub use workflow::{
     cleanup_post_install_cache,
     ensure_materialized_toolchain,
-    install_toolchain_async,
-    install_toolchain_streaming,
-    uninstall_toolchain_async,
-    update_toolchain_async,
-    update_toolchain_streaming,
+    install_toolchain,
+    uninstall_toolchain,
+    update_toolchain,
 };
 
 // From validate.rs

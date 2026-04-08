@@ -52,27 +52,6 @@ fn command_result(scope: EventScope, title: &str, result: &CommandResult) {
             "command.result"
         );
     }
-    for line in &result.output {
-        if success {
-            tracing::info!(
-                layer = scope.layer,
-                domain = scope.domain,
-                action = scope.action,
-                title = title,
-                line = line,
-                "command.result.line"
-            );
-        } else {
-            tracing::error!(
-                layer = scope.layer,
-                domain = scope.domain,
-                action = scope.action,
-                title = title,
-                line = line,
-                "command.result.line"
-            );
-        }
-    }
 }
 
 pub fn command_results(scope: EventScope, results: &[CommandResult]) {

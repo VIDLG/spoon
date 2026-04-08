@@ -734,8 +734,6 @@ pub async fn execute_package_action_streaming<P: ScoopPorts>(
             spoon_core::CommandStatus::Failed
         },
         title: plan.title(),
-        streamed: true,
-        output: result.err().map(|e| vec![e.to_string()]).unwrap_or_default(),
         state: ScoopPackageInstallState::default(),
     })
 }

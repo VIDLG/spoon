@@ -96,8 +96,6 @@ pub async fn add_bucket(
         targets: vec![name.clone()],
         status: spoon_core::CommandStatus::Success,
         title: format!("add Scoop bucket {}", name),
-        streamed: false,
-        output: vec![],
         bucket_count: buckets.len(),
         buckets,
     })
@@ -119,13 +117,9 @@ pub async fn remove_bucket(
         return Err(ScoopError::Other(format!("bucket '{}' is not installed", name)));
     }
 
-    let mut output = Vec::new();
     tokio::fs::remove_dir_all(&bucket_dir).await
         .map_err(|e| ScoopError::fs("remove", &bucket_dir, e))?;
-    output.push(format!("Removed bucket directory: {}", bucket_dir.display()));
-
     remove_bucket_from_registry(&layout.scoop.root, name).await?;
-    output.push(format!("Removed bucket '{}'.", name));
 
     let buckets = load_buckets_from_registry(&layout.scoop.root).await;
     Ok(ScoopBucketOperationOutcome {
@@ -134,8 +128,6 @@ pub async fn remove_bucket(
         targets: vec![name.to_string()],
         status: spoon_core::CommandStatus::Success,
         title: format!("remove Scoop bucket {name}"),
-        streamed: false,
-        output,
         bucket_count: buckets.len(),
         buckets,
     })
@@ -158,16 +150,13 @@ pub async fn update_buckets(
             .collect()
     };
 
-    let mut output = Vec::new();
     let mut updated = 0_usize;
     let mut skipped = 0_usize;
 
     for bucket in selected {
         let source = bucket.source.clone();
         if source.trim().is_empty() {
-            let line = format!("Skipped bucket '{}': no registered source.", bucket.name);
-            tracing::info!("{line}");
-            output.push(line);
+            tracing::info!("Skipped bucket '{}': no registered source.", bucket.name);
             skipped += 1;
             continue;
         }
@@ -177,14 +166,14 @@ pub async fn update_buckets(
         let is_local_dir = Path::new(&source).is_dir();
 
         if is_local_dir {
-            output.push(format!("Syncing local bucket '{}'...", bucket.name));
+            tracing::info!("Syncing local bucket '{}'...", bucket.name);
             if current_root.exists() {
                 tokio::fs::remove_dir_all(&current_root).await
                     .map_err(|e| ScoopError::Other(format!("failed to remove {}: {e}", current_root.display())))?;
             }
             copy_path_recursive(Path::new(&source), &current_root, None).await
                 .map_err(|e| e.context(format!("failed to update bucket '{}'", bucket.name)))?;
-            output.push(format!("Updated bucket '{}' from local source.", bucket.name));
+            tracing::info!("Updated bucket '{}' from local source.", bucket.name);
             updated += 1;
             continue;
         }
@@ -194,19 +183,19 @@ pub async fn update_buckets(
             let _ = tokio::fs::remove_dir_all(&temp_root).await;
         }
 
-        output.push(format!("Updating bucket '{}' from {}...", bucket.name, source));
+        tracing::info!("Updating bucket '{}' from {}...", bucket.name, source);
         match clone_repo(&source, &temp_root, Some(branch), proxy, None, None).await {
             Ok(outcome) => {
                 if let Some(b) = &outcome.head_branch {
-                    output.push(format!("Checked out branch: {b}"));
+                    tracing::info!("Checked out branch: {b}");
                 }
                 if let Some(c) = &outcome.head_commit {
-                    output.push(format!("HEAD at commit: {c}"));
+                    tracing::info!("HEAD at commit: {c}");
                 }
             }
             Err(err) => {
                 let _ = tokio::fs::remove_dir_all(&temp_root).await;
-                output.push(format!("Failed to update bucket '{}': {err}", bucket.name));
+                tracing::info!("Failed to update bucket '{}': {err}", bucket.name);
                 skipped += 1;
                 continue;
             }
@@ -219,11 +208,11 @@ pub async fn update_buckets(
         tokio::fs::rename(&temp_root, &current_root).await
             .map_err(|e| ScoopError::Other(format!("failed to replace {}: {e}", current_root.display())))?;
 
-        output.push(format!("Updated bucket '{}'.", bucket.name));
+        tracing::info!("Updated bucket '{}'.", bucket.name);
         updated += 1;
     }
 
-    output.push(format!("Bucket update summary: {} updated, {} skipped.", updated, skipped));
+    tracing::info!("Bucket update summary: {} updated, {} skipped.", updated, skipped);
 
     let buckets = load_buckets_from_registry(&layout.scoop.root).await;
     Ok(ScoopBucketOperationOutcome {
@@ -232,8 +221,6 @@ pub async fn update_buckets(
         targets: names.to_vec(),
         status: spoon_core::CommandStatus::Success,
         title: "update Scoop buckets".to_string(),
-        streamed: false,
-        output,
         bucket_count: buckets.len(),
         buckets,
     })

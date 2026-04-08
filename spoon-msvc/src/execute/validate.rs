@@ -368,7 +368,5 @@ pub async fn validate_toolchain_async(
         operation: crate::types::MsvcOperationKind::Validate,
         title: "validate MSVC Toolchain".to_string(),
         status: true,
-        output: lines,
-        streamed: false,
     })
 }

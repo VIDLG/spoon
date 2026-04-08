@@ -10,8 +10,8 @@ use fs_err as fs;
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
-use spoon_core::{SpoonEvent, CancellationToken, CoreError, ProgressEvent, RuntimeLayout, progress_kind};
-use crate::common::{push_stream_line, unique_existing_dirs};
+use spoon_core::{SpoonEvent, CancellationToken, CoreError, EventSender, ProgressEvent, RuntimeLayout, progress_kind};
+use crate::common::{emit_notice, unique_existing_dirs};
 use crate::paths;
 use crate::rules::pick_higher_version;
 use crate::state::{read_canonical_state, write_canonical_state, MsvcCanonicalState, OfficialMsvcStateDetail};
@@ -337,81 +337,31 @@ fn has_desktop_windows_sdk(include_dirs: &[PathBuf], lib_dirs: &[PathBuf]) -> bo
 // Top-level async workflow entry points (called from workflows.rs)
 // ---------------------------------------------------------------------------
 
-pub async fn install_toolchain_async(
-    request: &MsvcRequest,
-    mode: OfficialInstallerMode,
-) -> spoon_core::Result<MsvcOperationOutcome> {
-    run_official_action_async(request, OfficialAction::Install, mode, None, None).await
-}
-
-pub async fn update_toolchain_async(
-    request: &MsvcRequest,
-    mode: OfficialInstallerMode,
-) -> spoon_core::Result<MsvcOperationOutcome> {
-    run_official_action_async(request, OfficialAction::Update, mode, None, None).await
-}
-
-pub async fn install_toolchain_streaming<F>(
+pub async fn install_toolchain(
     request: &MsvcRequest,
     mode: OfficialInstallerMode,
     cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> spoon_core::Result<MsvcOperationOutcome>
-where
-    F: FnMut(SpoonEvent),
-{
-    let mut callback = emit as &mut dyn FnMut(SpoonEvent);
-    let mut result =
-        run_official_action_async(request, OfficialAction::Install, mode, cancel, Some(&mut callback))
-            .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn update_toolchain_streaming<F>(
-    request: &MsvcRequest,
-    mode: OfficialInstallerMode,
-    cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> spoon_core::Result<MsvcOperationOutcome>
-where
-    F: FnMut(SpoonEvent),
-{
-    let mut callback = emit as &mut dyn FnMut(SpoonEvent);
-    let mut result =
-        run_official_action_async(request, OfficialAction::Update, mode, cancel, Some(&mut callback))
-            .await?;
-    result.streamed = true;
-    Ok(result)
-}
-
-pub async fn uninstall_toolchain_async(
-    request: &MsvcRequest,
-    mode: OfficialInstallerMode,
+    emit: Option<&EventSender>,
 ) -> spoon_core::Result<MsvcOperationOutcome> {
-    run_official_action_async(request, OfficialAction::Uninstall, mode, None, None).await
+    run_official_action_async(request, OfficialAction::Install, mode, cancel, emit).await
 }
 
-pub async fn uninstall_toolchain_streaming<F>(
+pub async fn update_toolchain(
     request: &MsvcRequest,
     mode: OfficialInstallerMode,
     cancel: Option<&CancellationToken>,
-    emit: &mut F,
-) -> spoon_core::Result<MsvcOperationOutcome>
-where
-    F: FnMut(SpoonEvent),
-{
-    let mut callback = emit as &mut dyn FnMut(SpoonEvent);
-    let mut result = run_official_action_async(
-        request,
-        OfficialAction::Uninstall,
-        mode,
-        cancel,
-        Some(&mut callback),
-    )
-    .await?;
-    result.streamed = true;
-    Ok(result)
+    emit: Option<&EventSender>,
+) -> spoon_core::Result<MsvcOperationOutcome> {
+    run_official_action_async(request, OfficialAction::Update, mode, cancel, emit).await
+}
+
+pub async fn uninstall_toolchain(
+    request: &MsvcRequest,
+    mode: OfficialInstallerMode,
+    cancel: Option<&CancellationToken>,
+    emit: Option<&EventSender>,
+) -> spoon_core::Result<MsvcOperationOutcome> {
+    run_official_action_async(request, OfficialAction::Uninstall, mode, cancel, emit).await
 }
 
 // ── Official action (install/update/uninstall) helpers ──
@@ -458,30 +408,27 @@ async fn cache_bootstrapper(
     tool_root: &Path,
     proxy: &str,
     cancel: Option<&CancellationToken>,
-    emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
-) -> spoon_core::Result<(String, PathBuf, Vec<String>)> {
+    emit: Option<&EventSender>,
+) -> spoon_core::Result<(String, PathBuf)> {
     let source = bootstrapper_source();
     let destination = bootstrapper_cache_path(tool_root, &source);
     fs::create_dir_all(bootstrapper_dir(tool_root))
         .map_err(|e| CoreError::fs("create_dir_all", bootstrapper_dir(tool_root), e))?;
 
-    let mut lines = Vec::new();
     if destination.exists() {
-        push_stream_line(
-            &mut lines,
+        emit_notice(
             emit,
-            format!(
+            &format!(
                 "Reused cached official MSVC bootstrapper at {}",
                 destination.display()
             ),
         );
-        return Ok((source, destination, lines));
+        return Ok((source, destination));
     }
 
-    push_stream_line(
-        &mut lines,
+    emit_notice(
         emit,
-        format!("Caching official MSVC bootstrapper from {}", source),
+        &format!("Caching official MSVC bootstrapper from {}", source),
     );
 
     if let Some(local) = source.strip_prefix("file:///") {
@@ -507,16 +454,16 @@ async fn cache_bootstrapper(
             .and_then(|name| name.to_str())
             .unwrap_or("vs_BuildTools.exe");
         if let Some(total_bytes) = total_bytes {
-            if let Some(callback) = emit.as_deref_mut() {
-                callback(SpoonEvent::Progress(ProgressEvent::bytes(
+            if let Some(sender) = emit {
+                sender.send(SpoonEvent::Progress(ProgressEvent::bytes(
                     progress_kind::DOWNLOAD,
                     target_label,
                     0,
                     Some(total_bytes),
                 )));
             }
-        } else if let Some(callback) = emit.as_deref_mut() {
-            callback(SpoonEvent::Progress(ProgressEvent::bytes(
+        } else if let Some(sender) = emit {
+            sender.send(SpoonEvent::Progress(ProgressEvent::bytes(
                 progress_kind::DOWNLOAD,
                 target_label,
                 0,
@@ -536,16 +483,16 @@ async fn cache_bootstrapper(
                 .map_err(|e| CoreError::fs("write_all", &destination, e))?;
             downloaded_bytes += chunk.len() as u64;
             if let Some(total_bytes) = total_bytes {
-                if let Some(callback) = emit.as_deref_mut() {
-                    callback(SpoonEvent::Progress(ProgressEvent::bytes(
+                if let Some(sender) = emit {
+                    sender.send(SpoonEvent::Progress(ProgressEvent::bytes(
                         progress_kind::DOWNLOAD,
                         target_label,
                         downloaded_bytes,
                         Some(total_bytes),
                     )));
                 }
-            } else if let Some(callback) = emit.as_deref_mut() {
-                callback(SpoonEvent::Progress(ProgressEvent::bytes(
+            } else if let Some(sender) = emit {
+                sender.send(SpoonEvent::Progress(ProgressEvent::bytes(
                     progress_kind::DOWNLOAD,
                     target_label,
                     downloaded_bytes,
@@ -555,15 +502,14 @@ async fn cache_bootstrapper(
         }
     }
 
-    push_stream_line(
-        &mut lines,
+    emit_notice(
         emit,
-        format!(
+        &format!(
             "Cached official MSVC bootstrapper at {}",
             destination.display()
         ),
     );
-    Ok((source, destination, lines))
+    Ok((source, destination))
 }
 
 fn official_action_args(
@@ -627,7 +573,6 @@ fn run_bootstrapper(
     args: &[String],
     tool_root: &Path,
     mode: OfficialInstallerMode,
-    _emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
 ) -> spoon_core::Result<()> {
     let extension = bootstrapper_path
         .extension()
@@ -756,7 +701,7 @@ async fn run_official_action_async(
     action: OfficialAction,
     mode: OfficialInstallerMode,
     cancel: Option<&CancellationToken>,
-    mut emit: Option<&mut dyn FnMut(SpoonEvent)>,
+    emit: Option<&EventSender>,
 ) -> spoon_core::Result<MsvcOperationOutcome> {
     let tool_root = request.root.as_path();
     let proxy = &request.proxy;
@@ -765,16 +710,15 @@ async fn run_official_action_async(
     fs::create_dir_all(logs_dir(tool_root))
         .map_err(|e| CoreError::fs("create_dir_all", logs_dir(tool_root), e))?;
 
-    let mut lines = vec![format!(
+    let header = format!(
         "Preparing official MSVC {} under {}",
         action.as_str(),
         official_instance_root(tool_root).display()
-    )];
-    tracing::info!("{}", lines[0]);
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!("Official installer mode: {}", mode.as_cli_token()),
+    );
+    tracing::info!("{header}");
+    emit_notice(
+        emit,
+        &format!("Official installer mode: {}", mode.as_cli_token()),
     );
 
     let (instance_root, runtime_state, installed_state) = (
@@ -787,15 +731,10 @@ async fn run_official_action_async(
         && !runtime_state.exists()
         && !installed_state.exists()
     {
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            "Official MSVC runtime is not present; nothing to uninstall.".to_string(),
-        );
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!(
+        emit_notice(emit, "Official MSVC runtime is not present; nothing to uninstall.");
+        emit_notice(
+            emit,
+            &format!(
                 "Official MSVC cache is retained at {}",
                 paths::official_msvc_cache_root(tool_root).display()
             ),
@@ -814,14 +753,11 @@ async fn run_official_action_async(
             operation: MsvcOperationKind::Uninstall,
             title: action.title().to_string(),
             status: true,
-            output: lines,
-            streamed: false,
         });
     }
 
-    let (bootstrapper_source, bootstrapper_path, bootstrapper_lines) =
-        cache_bootstrapper(tool_root, proxy, cancel, &mut emit).await?;
-    lines.extend(bootstrapper_lines);
+    let (bootstrapper_source, bootstrapper_path) =
+        cache_bootstrapper(tool_root, proxy, cancel, emit).await?;
 
     let (log_path, args) = official_action_args(tool_root, action, mode);
     write_command_metadata(
@@ -832,31 +768,27 @@ async fn run_official_action_async(
         &log_path,
         &args,
     )?;
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
+    emit_notice(
+        emit,
+        &format!(
             "Recorded official MSVC command metadata at {}",
             command_metadata_path(tool_root).display()
         ),
     );
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
+    emit_notice(
+        emit,
+        &format!(
             "Launching official Build Tools bootstrapper at {}",
             bootstrapper_path.display()
         ),
     );
     if matches!(mode, OfficialInstallerMode::Passive) {
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            "Showing official installer UI in passive mode; follow Microsoft setup for detailed progress."
-                .to_string(),
+        emit_notice(
+            emit,
+            "Showing official installer UI in passive mode; follow Microsoft setup for detailed progress.",
         );
     }
-    run_bootstrapper(&bootstrapper_path, &args, tool_root, mode, &mut emit)?;
+    run_bootstrapper(&bootstrapper_path, &args, tool_root, mode)?;
 
     if matches!(action, OfficialAction::Uninstall) {
         if instance_root.exists() {
@@ -878,15 +810,10 @@ async fn run_official_action_async(
             fs::remove_dir_all(&state_root)
                 .map_err(|e| CoreError::fs("remove_dir_all", &state_root, e))?;
         }
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            "Uninstalled official MSVC runtime through the Microsoft bootstrapper.".to_string(),
-        );
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!(
+        emit_notice(emit, "Uninstalled official MSVC runtime through the Microsoft bootstrapper.");
+        emit_notice(
+            emit,
+            &format!(
                 "Official MSVC cache is retained at {}",
                 paths::official_msvc_cache_root(tool_root).display()
             ),
@@ -905,35 +832,24 @@ async fn run_official_action_async(
             operation: MsvcOperationKind::Uninstall,
             title: action.title().to_string(),
             status: true,
-            output: lines,
-            streamed: false,
         });
     }
 
     let installed = detect_installed_state(&official_instance_root(tool_root));
     write_runtime_state(tool_root, action, &bootstrapper_path)?;
     write_installed_state(tool_root, &installed)?;
-    push_stream_line(
-        &mut lines,
-        &mut emit,
-        format!(
+    emit_notice(
+        emit,
+        &format!(
             "Installed official MSVC runtime into {}",
             official_instance_root(tool_root).display()
         ),
     );
     if let Some(version) = installed.version.as_deref() {
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!("Detected official MSVC version: {version}"),
-        );
+        emit_notice(emit, &format!("Detected official MSVC version: {version}"));
     }
     if let Some(sdk_version) = installed.sdk_version.as_deref() {
-        push_stream_line(
-            &mut lines,
-            &mut emit,
-            format!("Detected official Windows SDK version: {sdk_version}"),
-        );
+        emit_notice(emit, &format!("Detected official Windows SDK version: {sdk_version}"));
     }
     write_official_canonical_state(
         tool_root,
@@ -957,8 +873,6 @@ async fn run_official_action_async(
         },
         title: action.title().to_string(),
         status: true,
-        output: lines,
-        streamed: false,
     })
 }
 
@@ -1408,8 +1322,6 @@ pub async fn validate_official_toolchain_async(
         operation: MsvcOperationKind::Validate,
         title: "validate MSVC Toolchain".to_string(),
         status: true,
-        output: lines,
-        streamed: false,
     })
 }
 

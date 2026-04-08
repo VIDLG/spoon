@@ -7,7 +7,7 @@ use common::setup::create_configured_home;
 use serde_json::Value;
 use spoon::service::{
     SpoonEvent, CommandStatus, FinishEvent, NoticeEvent, StageEvent, StreamChunk,
-    stream_chunk_from_backend_event,
+    stream_chunk_from_event,
 };
 use spoon_core::LifecycleStage;
 use spoon_core::RuntimeLayout;
@@ -95,8 +95,8 @@ fn backend_stage_events_drive_app_stream_translation() {
     let running = SpoonEvent::Stage(StageEvent::started(LifecycleStage::Planned));
     let completed = SpoonEvent::Stage(StageEvent::completed(LifecycleStage::Completed));
 
-    let running_chunk = stream_chunk_from_backend_event(running);
-    let completed_chunk = stream_chunk_from_backend_event(completed);
+    let running_chunk = stream_chunk_from_event(running);
+    let completed_chunk = stream_chunk_from_event(completed);
 
     match running_chunk {
         Some(StreamChunk::ReplaceLast(line)) => assert_eq!(line, "Stage: planned"),
@@ -110,19 +110,19 @@ fn backend_stage_events_drive_app_stream_translation() {
 
 #[test]
 fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementation() {
-    let cancelled = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
+    let cancelled = stream_chunk_from_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Cancelled,
         None,
     )));
-    let failed = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
+    let failed = stream_chunk_from_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Failed,
         None,
     )));
-    let blocked = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
+    let blocked = stream_chunk_from_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Blocked,
         None,
     )));
-    let explicit = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::failed(
+    let explicit = stream_chunk_from_event(SpoonEvent::Finished(FinishEvent::failed(
         "hook failed before commit",
     )));
 
@@ -146,9 +146,9 @@ fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementati
 
 #[test]
 fn backend_notice_events_append_visible_messages() {
-    let info = stream_chunk_from_backend_event(SpoonEvent::Notice(NoticeEvent::info("hello")));
+    let info = stream_chunk_from_event(SpoonEvent::Notice(NoticeEvent::info("hello")));
     let warning =
-        stream_chunk_from_backend_event(SpoonEvent::Notice(NoticeEvent::warning("careful now")));
+        stream_chunk_from_event(SpoonEvent::Notice(NoticeEvent::warning("careful now")));
 
     match info {
         Some(StreamChunk::Append(line)) => assert_eq!(line, "hello"),

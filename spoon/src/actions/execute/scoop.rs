@@ -13,8 +13,7 @@ use super::super::ToolAction;
 fn skipped_result(
     action: ToolAction,
     tool: &'static Tool,
-    reason: &str,
-    streamed: bool,
+    _reason: &str,
 ) -> CommandResult {
     let verb = match action {
         ToolAction::Install => "install",
@@ -25,8 +24,6 @@ fn skipped_result(
     CommandResult {
         title: format!("{verb} {}", tool.display_name),
         status: CommandStatus::Success,
-        output: vec![format!("Skipped {}: {}", tool.display_name, reason)],
-        streamed,
     }
 }
 
@@ -76,7 +73,7 @@ pub(super) fn execute_scoop_action(
     let mut results = Vec::new();
     for tool in tools {
         if let Some(reason) = skip_reason(action, tool, &statuses) {
-            results.push(skipped_result(action, tool, reason, false));
+            results.push(skipped_result(action, tool, reason));
             continue;
         }
 
@@ -129,10 +126,7 @@ where
     let mut results = Vec::new();
     for tool in tools {
         if let Some(reason) = skip_reason(action, tool, &statuses) {
-            let result = skipped_result(action, tool, reason, true);
-            for line in &result.output {
-                emit(StreamChunk::Append(line.clone()));
-            }
+            let result = skipped_result(action, tool, reason);
             results.push(result);
             continue;
         }

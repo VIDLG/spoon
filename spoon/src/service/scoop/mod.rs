@@ -13,14 +13,17 @@ pub(crate) use actions::{
     install_tools_streaming, run_package_action_streaming, uninstall_tools_streaming,
     update_tools_streaming,
 };
-pub(crate) use bucket::bucket_update_streaming;
+pub(crate) use bucket::bucket_update_with_emit;
 pub use bucket::{
     RepoSyncOutcome, bucket_action_result, bucket_add, bucket_inventory, bucket_list_report,
-    bucket_remove, bucket_update, doctor_report, doctor_summary,
+    bucket_list_report_lines, bucket_remove, bucket_update, doctor_report, doctor_summary,
+    doctor_summary_lines,
 };
 pub use report::{
-    package_info_report, package_list_report, package_manifest, package_prefix_report,
-    runtime_status_report, search_report,
+    package_info_report, package_info_report_lines, package_list_report,
+    package_list_report_lines, package_manifest, package_manifest_lines,
+    package_prefix_report, package_prefix_report_lines, runtime_status_report,
+    runtime_status_report_lines, search_report, search_report_lines,
 };
 
 pub use spoon_scoop::ensure_main_bucket_ready;
@@ -68,27 +71,17 @@ pub(super) fn configured_proxy() -> String {
 pub(super) fn command_result(
     title: impl Into<String>,
     status: CommandStatus,
-    output: Vec<String>,
-    streamed: bool,
 ) -> CommandResult {
     CommandResult {
         title: title.into(),
         status,
-        output,
-        streamed,
     }
 }
 
 pub(super) fn command_result_from_scoop_package_outcome(
-    mut outcome: ScoopPackageOperationOutcome,
+    outcome: ScoopPackageOperationOutcome,
 ) -> CommandResult {
-    outcome.streamed = false;
-    command_result(
-        outcome.title,
-        outcome.status,
-        outcome.output,
-        outcome.streamed,
-    )
+    command_result(outcome.title, outcome.status)
 }
 
 #[derive(Debug, Clone, Copy)]

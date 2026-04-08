@@ -27,8 +27,6 @@ fn command_result_from_msvc_outcome(
         } else {
             CommandStatus::Failed
         },
-        output: outcome.output,
-        streamed: outcome.streamed,
     }
 }
 
@@ -40,17 +38,6 @@ pub(crate) fn command_result_from_msvc_result(
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-pub(crate) fn forward_backend_event_to_stream<'a, F>(emit: &'a mut F) -> impl FnMut(spoon_core::SpoonEvent) + 'a
-where
-    F: FnMut(StreamChunk),
-{
-    move |event: spoon_core::SpoonEvent| {
-        if let Some(chunk) = stream_chunk_from_event(event) {
-            emit(chunk);
-        }
-    }
-}
-
 pub(crate) fn runtime_state_path(tool_root: &Path) -> PathBuf {
     spoon_msvc::paths::msvc_state_root(tool_root)
 }
@@ -60,7 +47,7 @@ pub mod official {
 
     use anyhow::Result;
 
-    use crate::service::{CommandResult, StreamChunk};
+    use crate::service::{CommandResult, StreamChunk, stream_chunk_from_event};
     use spoon_core::CancellationToken;
     pub use spoon_msvc::OfficialInstallerMode;
     pub use spoon_msvc::official::{
@@ -69,90 +56,113 @@ pub mod official {
         vswhere_path, windows_kits_root,
     };
 
-    use super::{command_result_from_msvc_result, forward_backend_event_to_stream, msvc_request};
+    use super::{command_result_from_msvc_result, msvc_request};
 
-    pub async fn install_toolchain_async_with_mode(
-        tool_root: &Path,
-        mode: OfficialInstallerMode,
-    ) -> Result<CommandResult> {
-        command_result_from_msvc_result(
-            spoon_msvc::official::install_toolchain_async(&msvc_request(tool_root), mode).await,
-        )
-    }
-
-    pub async fn update_toolchain_async_with_mode(
-        tool_root: &Path,
-        mode: OfficialInstallerMode,
-    ) -> Result<CommandResult> {
-        command_result_from_msvc_result(
-            spoon_msvc::official::update_toolchain_async(&msvc_request(tool_root), mode).await,
-        )
-    }
-
-    pub async fn uninstall_toolchain_async(
-        tool_root: &Path,
-        mode: OfficialInstallerMode,
-    ) -> Result<CommandResult> {
-        command_result_from_msvc_result(
-            spoon_msvc::official::uninstall_toolchain_async(&msvc_request(tool_root), mode).await,
-        )
-    }
-
-    pub async fn install_toolchain_streaming<F>(
+    pub async fn install_toolchain(
         tool_root: &Path,
         mode: OfficialInstallerMode,
         cancel: Option<&CancellationToken>,
-        emit: &mut F,
+        emit: Option<&spoon_core::EventSender>,
+    ) -> Result<CommandResult> {
+        let request = msvc_request(tool_root);
+        command_result_from_msvc_result(
+            spoon_msvc::official::install_toolchain(&request, mode, cancel, emit).await,
+        )
+    }
+
+    pub async fn update_toolchain(
+        tool_root: &Path,
+        mode: OfficialInstallerMode,
+        cancel: Option<&CancellationToken>,
+        emit: Option<&spoon_core::EventSender>,
+    ) -> Result<CommandResult> {
+        let request = msvc_request(tool_root);
+        command_result_from_msvc_result(
+            spoon_msvc::official::update_toolchain(&request, mode, cancel, emit).await,
+        )
+    }
+
+    pub async fn uninstall_toolchain(
+        tool_root: &Path,
+        mode: OfficialInstallerMode,
+        cancel: Option<&CancellationToken>,
+        emit: Option<&spoon_core::EventSender>,
+    ) -> Result<CommandResult> {
+        let request = msvc_request(tool_root);
+        command_result_from_msvc_result(
+            spoon_msvc::official::uninstall_toolchain(&request, mode, cancel, emit).await,
+        )
+    }
+
+    /// Run a streaming official installer action using FnMut(StreamChunk) for CLI/TUI callers.
+    /// Creates an event_bus internally, forwards events via the callback.
+    pub(crate) async fn install_toolchain_with_emit<F>(
+        tool_root: &Path,
+        mode: OfficialInstallerMode,
+        cancel: Option<&CancellationToken>,
+        mut emit: F,
     ) -> Result<CommandResult>
     where
         F: FnMut(StreamChunk),
     {
         let request = msvc_request(tool_root);
-        let mut backend_emit = forward_backend_event_to_stream(emit);
-        command_result_from_msvc_result(
-            spoon_msvc::official::install_toolchain_streaming(
-                &request, mode, cancel, &mut backend_emit,
-            )
-            .await,
+        let (sender, mut receiver) = spoon_core::event_bus(64);
+        let result = spoon_msvc::official::install_toolchain(
+            &request, mode, cancel, Some(&sender),
         )
+        .await;
+        while let Ok(Some(event)) = receiver.try_recv() {
+            if let Some(chunk) = stream_chunk_from_event(event) {
+                emit(chunk);
+            }
+        }
+        command_result_from_msvc_result(result)
     }
 
-    pub async fn update_toolchain_streaming<F>(
+    pub(crate) async fn update_toolchain_with_emit<F>(
         tool_root: &Path,
         mode: OfficialInstallerMode,
         cancel: Option<&CancellationToken>,
-        emit: &mut F,
+        mut emit: F,
     ) -> Result<CommandResult>
     where
         F: FnMut(StreamChunk),
     {
         let request = msvc_request(tool_root);
-        let mut backend_emit = forward_backend_event_to_stream(emit);
-        command_result_from_msvc_result(
-            spoon_msvc::official::update_toolchain_streaming(
-                &request, mode, cancel, &mut backend_emit,
-            )
-            .await,
+        let (sender, mut receiver) = spoon_core::event_bus(64);
+        let result = spoon_msvc::official::update_toolchain(
+            &request, mode, cancel, Some(&sender),
         )
+        .await;
+        while let Ok(Some(event)) = receiver.try_recv() {
+            if let Some(chunk) = stream_chunk_from_event(event) {
+                emit(chunk);
+            }
+        }
+        command_result_from_msvc_result(result)
     }
 
-    pub async fn uninstall_toolchain_streaming<F>(
+    pub(crate) async fn uninstall_toolchain_with_emit<F>(
         tool_root: &Path,
         mode: OfficialInstallerMode,
         cancel: Option<&CancellationToken>,
-        emit: &mut F,
+        mut emit: F,
     ) -> Result<CommandResult>
     where
         F: FnMut(StreamChunk),
     {
         let request = msvc_request(tool_root);
-        let mut backend_emit = forward_backend_event_to_stream(emit);
-        command_result_from_msvc_result(
-            spoon_msvc::official::uninstall_toolchain_streaming(
-                &request, mode, cancel, &mut backend_emit,
-            )
-            .await,
+        let (sender, mut receiver) = spoon_core::event_bus(64);
+        let result = spoon_msvc::official::uninstall_toolchain(
+            &request, mode, cancel, Some(&sender),
         )
+        .await;
+        while let Ok(Some(event)) = receiver.try_recv() {
+            if let Some(chunk) = stream_chunk_from_event(event) {
+                emit(chunk);
+            }
+        }
+        command_result_from_msvc_result(result)
     }
 
     pub async fn validate_toolchain(tool_root: &Path) -> Result<CommandResult> {
@@ -163,13 +173,15 @@ pub mod official {
 }
 
 pub async fn status_report(tool_root: &Path) -> CommandResult {
-    let output = report::status_report_lines(spoon_msvc::status::status(tool_root).await);
+    let _output = report::status_report_lines(spoon_msvc::status::status(tool_root).await);
     CommandResult {
         title: "status MSVC runtimes".to_string(),
         status: CommandStatus::Success,
-        output,
-        streamed: false,
     }
+}
+
+pub async fn status_report_lines(tool_root: &Path) -> Vec<String> {
+    report::status_report_lines(spoon_msvc::status::status(tool_root).await)
 }
 
 pub async fn status(tool_root: &Path) -> spoon_msvc::status::MsvcStatus {
@@ -204,10 +216,9 @@ pub fn remove_managed_toolchain_wrappers(tool_root: &Path) -> Result<Vec<String>
         .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-pub async fn reapply_managed_command_surface_streaming(
+pub async fn reapply_managed_command_surface(
     tool_root: &Path,
     command_profile: &str,
-    _emit: &mut dyn FnMut(StreamChunk),
 ) -> Result<Vec<String>> {
     let runtime_state = spoon_msvc::paths::msvc_state_root(tool_root);
     if !runtime_state.exists() {
@@ -227,87 +238,93 @@ pub async fn reapply_managed_command_surface_streaming(
     Ok(lines)
 }
 
-pub async fn install_toolchain_async(tool_root: &Path) -> Result<CommandResult> {
-    let request = msvc_request(tool_root);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::install_toolchain_async(&request).await,
-    )
-}
-
-pub async fn update_toolchain_async(tool_root: &Path) -> Result<CommandResult> {
-    let request = msvc_request(tool_root);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::update_toolchain_async(&request).await,
-    )
-}
-
-pub(crate) async fn install_toolchain_async_streaming<F>(
+/// Run with FnMut(StreamChunk) forwarding for CLI/TUI callers.
+pub(crate) async fn reapply_managed_command_surface_with_emit<F>(
     tool_root: &Path,
-    emit: &mut F,
-) -> Result<CommandResult>
+    command_profile: &str,
+    mut emit: F,
+) -> Result<Vec<String>>
 where
     F: FnMut(StreamChunk),
 {
-    let request = msvc_request(tool_root);
-    let mut backend_emit = forward_backend_event_to_stream(emit);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::install_toolchain_streaming(&request, None, &mut backend_emit)
-            .await,
-    )
+    let lines = reapply_managed_command_surface(tool_root, command_profile).await?;
+    for line in &lines {
+        emit(StreamChunk::Append(line.clone()));
+    }
+    Ok(lines)
 }
 
-pub(crate) async fn update_toolchain_async_streaming<F>(
-    tool_root: &Path,
-    emit: &mut F,
-) -> Result<CommandResult>
-where
-    F: FnMut(StreamChunk),
-{
-    let request = msvc_request(tool_root);
-    let mut backend_emit = forward_backend_event_to_stream(emit);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::update_toolchain_streaming(&request, None, &mut backend_emit)
-            .await,
-    )
-}
-
-pub(crate) async fn install_toolchain_streaming<F>(
+pub async fn install_toolchain(
     tool_root: &Path,
     cancel: Option<&spoon_core::CancellationToken>,
-    emit: &mut F,
-) -> Result<CommandResult>
-where
-    F: FnMut(StreamChunk),
-{
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<CommandResult> {
     let request = msvc_request(tool_root);
-    let mut backend_emit = forward_backend_event_to_stream(emit);
     command_result_from_msvc_result(
-        spoon_msvc::execute::install_toolchain_streaming(&request, cancel, &mut backend_emit)
-            .await,
+        spoon_msvc::execute::install_toolchain(&request, cancel, emit).await,
     )
 }
 
-pub(crate) async fn update_toolchain_streaming<F>(
+pub async fn update_toolchain(
     tool_root: &Path,
     cancel: Option<&spoon_core::CancellationToken>,
-    emit: &mut F,
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<CommandResult> {
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::update_toolchain(&request, cancel, emit).await,
+    )
+}
+
+pub async fn uninstall_toolchain(
+    tool_root: &Path,
+    cancel: Option<&spoon_core::CancellationToken>,
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<CommandResult> {
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::uninstall_toolchain(&request, cancel, emit).await,
+    )
+}
+
+/// Run install_toolchain with FnMut(StreamChunk) forwarding for CLI/TUI callers.
+pub(crate) async fn install_toolchain_with_emit<F>(
+    tool_root: &Path,
+    cancel: Option<&spoon_core::CancellationToken>,
+    mut emit: F,
 ) -> Result<CommandResult>
 where
     F: FnMut(StreamChunk),
 {
     let request = msvc_request(tool_root);
-    let mut backend_emit = forward_backend_event_to_stream(emit);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::update_toolchain_streaming(&request, cancel, &mut backend_emit)
-            .await,
-    )
+    let (sender, mut receiver) = spoon_core::event_bus(64);
+    let result = spoon_msvc::execute::install_toolchain(&request, cancel, Some(&sender)).await;
+    while let Ok(Some(event)) = receiver.try_recv() {
+        if let Some(chunk) = stream_chunk_from_event(event) {
+            emit(chunk);
+        }
+    }
+    command_result_from_msvc_result(result)
 }
 
-pub async fn uninstall_toolchain(tool_root: &Path) -> Result<CommandResult> {
+/// Run update_toolchain with FnMut(StreamChunk) forwarding for CLI/TUI callers.
+pub(crate) async fn update_toolchain_with_emit<F>(
+    tool_root: &Path,
+    cancel: Option<&spoon_core::CancellationToken>,
+    mut emit: F,
+) -> Result<CommandResult>
+where
+    F: FnMut(StreamChunk),
+{
     let request = msvc_request(tool_root);
-    command_result_from_msvc_result(
-        spoon_msvc::execute::uninstall_toolchain_async(&request).await,
-    )
+    let (sender, mut receiver) = spoon_core::event_bus(64);
+    let result = spoon_msvc::execute::update_toolchain(&request, cancel, Some(&sender)).await;
+    while let Ok(Some(event)) = receiver.try_recv() {
+        if let Some(chunk) = stream_chunk_from_event(event) {
+            emit(chunk);
+        }
+    }
+    command_result_from_msvc_result(result)
 }
 
 pub(crate) fn latest_toolchain_version_label(tool_root: &Path) -> Option<String> {

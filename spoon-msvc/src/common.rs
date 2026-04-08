@@ -4,7 +4,7 @@ use reqwest::Client;
 use reqwest::redirect::Policy;
 use walkdir::WalkDir;
 
-use spoon_core::{SpoonEvent, NoticeEvent, ReqwestClientBuilder};
+use spoon_core::{NoticeEvent, ReqwestClientBuilder, SpoonEvent};
 
 pub use spoon_core::normalize_proxy_url;
 
@@ -69,16 +69,11 @@ pub fn join_windows_path(paths: &[PathBuf]) -> String {
         .join(";")
 }
 
-pub fn push_stream_line(
-    lines: &mut Vec<String>,
-    emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
-    line: String,
-) {
-    tracing::info!("{line}");
-    if let Some(callback) = emit.as_deref_mut() {
-        callback(SpoonEvent::Notice(NoticeEvent::info(&line)));
+pub fn emit_notice(emit: Option<&spoon_core::EventSender>, message: &str) {
+    tracing::info!("{message}");
+    if let Some(sender) = emit {
+        sender.send(SpoonEvent::Notice(NoticeEvent::info(message)));
     }
-    lines.push(line);
 }
 
 pub fn http_client(proxy: &str) -> spoon_core::Result<Client> {

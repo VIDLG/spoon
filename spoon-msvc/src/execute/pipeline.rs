@@ -12,7 +12,7 @@ use spoon_core::{
     extract_zip_archive_sync,
 };
 
-use crate::common::{http_client, push_stream_line};
+use crate::common::{emit_notice, http_client};
 use crate::facts::package_rules::ArchiveKind;
 use crate::facts::manifest;
 use crate::msi_extract;
@@ -132,7 +132,6 @@ async fn download_or_copy_payload(
     destination: &Path,
     file_name: &str,
     cancel: Option<&CancellationToken>,
-    _emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
 ) -> Result<()> {
     let label = integrity::download_progress_target_label(file_name).to_string();
     spoon_core::copy_or_download_to_file(
@@ -204,25 +203,25 @@ pub async fn ensure_cached_payloads(
     payloads: &[manifest::SelectedPayload],
     proxy: &str,
     cancel: Option<&CancellationToken>,
-    emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let cache_dir = payload_cache_dir(tool_root);
     fs::create_dir_all(&cache_dir)
         .map_err(|e| CoreError::fs("create_dir_all", &cache_dir, e))?;
     let client = http_client(proxy)?;
-    let mut lines = vec![format!(
+    let header = format!(
         "Caching {} MSVC payload archives under {}",
         payloads.len(),
         cache_dir.display()
-    )];
-    tracing::info!("{}", lines[0]);
+    );
+    tracing::info!("{header}");
     let mut downloaded = 0_usize;
     let mut reused = 0_usize;
 
     for (index, payload) in payloads.iter().enumerate() {
         check_token_cancel(cancel)?;
-        if let Some(callback) = emit.as_deref_mut() {
-            callback(SpoonEvent::Progress(ProgressEvent::items(
+        if let Some(sender) = emit {
+            sender.send(SpoonEvent::Progress(ProgressEvent::items(
                 progress_kind::CACHE,
                 format!(
                     "Caching payload {}/{}: {}",
@@ -264,7 +263,6 @@ pub async fn ensure_cached_payloads(
             &path,
             &payload.payload.file_name,
             cancel,
-            emit,
         )
         .await;
         if let Err(err) = download_result {
@@ -294,19 +292,23 @@ pub async fn ensure_cached_payloads(
         );
     }
 
-    lines.push(format!(
-        "Cached payload plan for {} (downloaded {}, reused {}).",
-        target.label(),
-        downloaded,
-        reused
-    ));
-    Ok(lines)
+    emit_notice(
+        emit,
+        &format!(
+            "Cached payload plan for {} (downloaded {}, reused {}).",
+            target.label(),
+            downloaded,
+            reused
+        ),
+    );
+    Ok(())
 }
 
 pub fn ensure_extracted_archives(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let extract_root = extracted_payload_cache_dir(tool_root);
     fs::create_dir_all(&extract_root)
         .map_err(|e| CoreError::fs("create_dir_all", &extract_root, e))?;
@@ -349,16 +351,21 @@ pub fn ensure_extracted_archives(
         extracted += 1;
     }
 
-    Ok(vec![format!(
-        "Prepared extracted archive payloads (extracted {}, reused {}, skipped {}).",
-        extracted, reused, skipped
-    )])
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared extracted archive payloads (extracted {}, reused {}, skipped {}).",
+            extracted, reused, skipped
+        ),
+    );
+    Ok(())
 }
 
 pub fn ensure_msi_media_metadata(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let metadata_root = msi_metadata_cache_dir(tool_root);
     fs::create_dir_all(&metadata_root)
         .map_err(|e| CoreError::fs("create_dir_all", &metadata_root, e))?;
@@ -407,18 +414,26 @@ pub fn ensure_msi_media_metadata(
         inspected += 1;
     }
 
-    let mut lines = vec![format!(
-        "Prepared MSI media metadata (inspected {}, reused {}, external cabs {}).",
-        inspected, reused, external_cabs
-    )];
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared MSI media metadata (inspected {}, reused {}, external cabs {}).",
+            inspected, reused, external_cabs
+        ),
+    );
     if unreadable > 0 {
-        lines.push(format!(
-            "Skipped MSI media inspection for {} unreadable payload(s).",
-            unreadable
-        ));
+        emit_notice(
+            emit,
+            &format!(
+                "Skipped MSI media inspection for {} unreadable payload(s).",
+                unreadable
+            ),
+        );
     }
-    lines.extend(warnings);
-    Ok(lines)
+    for warning in &warnings {
+        emit_notice(emit, warning);
+    }
+    Ok(())
 }
 
 pub async fn ensure_cached_companion_cabs(
@@ -426,8 +441,8 @@ pub async fn ensure_cached_companion_cabs(
     target: &manifest::ToolchainTarget,
     payloads: &[manifest::SelectedPayload],
     proxy: &str,
-    emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let mut companion_cabs = Vec::new();
 
     for payload in payloads {
@@ -466,31 +481,41 @@ pub async fn ensure_cached_companion_cabs(
     });
 
     if companion_cabs.is_empty() {
-        return Ok(vec![format!(
-            "Prepared external CAB payload cache plan for {} (selected 0).",
-            target.label()
-        )]);
+        emit_notice(
+            emit,
+            &format!(
+                "Prepared external CAB payload cache plan for {} (selected 0).",
+                target.label()
+            ),
+        );
+        return Ok(());
     }
 
-    let mut lines =
-        ensure_cached_payloads(tool_root, target, &companion_cabs, proxy, None, emit).await?;
-    lines[0] = format!(
-        "Caching {} external CAB payload archives under {}",
-        companion_cabs.len(),
-        payload_cache_dir(tool_root).display()
+    ensure_cached_payloads(tool_root, target, &companion_cabs, proxy, None, emit).await?;
+    emit_notice(
+        emit,
+        &format!(
+            "Caching {} external CAB payload archives under {}",
+            companion_cabs.len(),
+            payload_cache_dir(tool_root).display()
+        ),
     );
-    lines[1] = format!(
-        "Prepared external CAB payload cache plan for {} (selected {}).",
-        target.label(),
-        companion_cabs.len()
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared external CAB payload cache plan for {} (selected {}).",
+            target.label(),
+            companion_cabs.len()
+        ),
     );
-    Ok(lines)
+    Ok(())
 }
 
 pub fn ensure_staged_external_cabs(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let staging_root = msi_staging_cache_dir(tool_root);
     fs::create_dir_all(&staging_root)
         .map_err(|e| CoreError::fs("create_dir_all", &staging_root, e))?;
@@ -572,17 +597,21 @@ pub fn ensure_staged_external_cabs(
         staged += 1;
     }
 
-    Ok(vec![format!(
-        "Prepared MSI staging dirs for external CABs (staged {}, reused {}, skipped {}).",
-        staged, reused, skipped
-    )])
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared MSI staging dirs for external CABs (staged {}, reused {}, skipped {}).",
+            staged, reused, skipped
+        ),
+    );
+    Ok(())
 }
 
 pub fn ensure_extracted_msis(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
-    emit: &mut Option<&mut dyn FnMut(SpoonEvent)>,
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let extract_root = extracted_msi_cache_dir(tool_root);
     fs::create_dir_all(&extract_root)
         .map_err(|e| CoreError::fs("create_dir_all", &extract_root, e))?;
@@ -600,10 +629,9 @@ pub fn ensure_extracted_msis(
         })
         .count();
     if actionable > 0 {
-        push_stream_line(
-            &mut warnings,
+        emit_notice(
             emit,
-            format!(
+            &format!(
                 "Preparing extraction for {actionable} MSI payload(s) under {}",
                 extract_root.display()
             ),
@@ -633,8 +661,8 @@ pub fn ensure_extracted_msis(
         let marker = destination.join(".complete");
         if marker.exists() {
             reused += 1;
-            if let Some(callback) = emit.as_deref_mut() {
-                callback(SpoonEvent::Progress(ProgressEvent::items(
+            if let Some(sender) = emit {
+                sender.send(SpoonEvent::Progress(ProgressEvent::items(
                     progress_kind::EXTRACT,
                     format!(
                         "Reusing extracted MSI payload {}/{}: {}",
@@ -658,8 +686,8 @@ pub fn ensure_extracted_msis(
         }
         fs::create_dir_all(&destination)
             .map_err(|e| CoreError::fs("create_dir_all", &destination, e))?;
-        if let Some(callback) = emit.as_deref_mut() {
-            callback(SpoonEvent::Progress(ProgressEvent::items(
+        if let Some(sender) = emit {
+            sender.send(SpoonEvent::Progress(ProgressEvent::items(
                 progress_kind::EXTRACT,
                 format!(
                     "Extracting MSI payload {}/{}: {}",
@@ -688,8 +716,8 @@ pub fn ensure_extracted_msis(
             match rx.recv_timeout(Duration::from_secs(5)) {
                 Ok(result) => break result,
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if let Some(callback) = emit.as_deref_mut() {
-                        callback(SpoonEvent::Progress(ProgressEvent::activity(
+                    if let Some(sender) = emit {
+                        sender.send(SpoonEvent::Progress(ProgressEvent::activity(
                             progress_kind::EXTRACT,
                             format!(
                                 "Extracting MSI payload {}/{}: {} ({:.0}s elapsed)",
@@ -738,18 +766,24 @@ pub fn ensure_extracted_msis(
         }
     }
 
-    let mut lines = vec![format!(
-        "Prepared extracted MSI payloads (extracted {}, reused {}, skipped {}).",
-        extracted, reused, skipped
-    )];
-    lines.extend(warnings);
-    Ok(lines)
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared extracted MSI payloads (extracted {}, reused {}, skipped {}).",
+            extracted, reused, skipped
+        ),
+    );
+    for warning in &warnings {
+        emit_notice(emit, warning);
+    }
+    Ok(())
 }
 
 pub fn ensure_install_image(
     tool_root: &Path,
     payloads: &[manifest::SelectedPayload],
-) -> Result<Vec<String>> {
+    emit: Option<&spoon_core::EventSender>,
+) -> Result<()> {
     let image_root = install_image_cache_dir(tool_root);
     if image_root.exists() {
         fs::remove_dir_all(&image_root)
@@ -787,8 +821,12 @@ pub fn ensure_install_image(
         copied += copy_tree_into(&source_root, &image_root)?;
     }
 
-    Ok(vec![format!(
-        "Prepared install image from extracted payloads (copied {}, skipped {}).",
-        copied, skipped
-    )])
+    emit_notice(
+        emit,
+        &format!(
+            "Prepared install image from extracted payloads (copied {}, skipped {}).",
+            copied, skipped
+        ),
+    );
+    Ok(())
 }

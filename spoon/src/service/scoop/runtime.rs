@@ -19,11 +19,29 @@ pub(crate) fn resolved_pip_mirror_url_for_display(policy_value: &str) -> String 
     crate::service::resolved_pip_mirror_url_for_display(policy_value)
 }
 
-pub(crate) async fn reapply_package_integrations_streaming(
+pub(crate) async fn reapply_package_integrations(
     tool_root: &Path,
     package_name: &str,
-    emit: &mut dyn FnMut(StreamChunk),
 ) -> AnyResult<Vec<String>> {
+    let layout = spoon_core::RuntimeLayout::from_root(tool_root);
+    spoon_scoop::reapply_integrations(&layout.scoop, package_name, &APP_PORTS, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    Ok(vec![format!(
+        "Reapplied integrations for '{}'.",
+        package_name
+    )])
+}
+
+pub(crate) async fn reapply_package_integrations_with_emit<F>(
+    tool_root: &Path,
+    package_name: &str,
+    mut emit: F,
+) -> AnyResult<Vec<String>>
+where
+    F: FnMut(StreamChunk),
+{
     let layout = spoon_core::RuntimeLayout::from_root(tool_root);
     let (sender, mut receiver) = spoon_core::event_bus(64);
 
@@ -31,7 +49,6 @@ pub(crate) async fn reapply_package_integrations_streaming(
         .await
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    // Forward collected events
     while let Ok(Some(event)) = receiver.try_recv() {
         if let Some(chunk) = stream_chunk_from_event(event) {
             emit(chunk);
@@ -44,11 +61,35 @@ pub(crate) async fn reapply_package_integrations_streaming(
     )])
 }
 
-pub(crate) async fn reapply_package_command_surface_streaming(
+pub(crate) async fn reapply_package_command_surface(
     tool_root: &Path,
     package_name: &str,
-    emit: &mut dyn FnMut(StreamChunk),
 ) -> AnyResult<Vec<String>> {
+    let layout = spoon_core::RuntimeLayout::from_root(tool_root);
+    spoon_scoop::reapply_command_surface(
+        &layout.scoop,
+        &layout.shims,
+        package_name,
+        &APP_PORTS,
+        None,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    Ok(vec![format!(
+        "Reapplied command surface for '{}'.",
+        package_name
+    )])
+}
+
+pub(crate) async fn reapply_package_command_surface_with_emit<F>(
+    tool_root: &Path,
+    package_name: &str,
+    mut emit: F,
+) -> AnyResult<Vec<String>>
+where
+    F: FnMut(StreamChunk),
+{
     let layout = spoon_core::RuntimeLayout::from_root(tool_root);
     let (sender, mut receiver) = spoon_core::event_bus(64);
 
@@ -62,7 +103,6 @@ pub(crate) async fn reapply_package_command_surface_streaming(
     .await
     .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    // Forward collected events
     while let Ok(Some(event)) = receiver.try_recv() {
         if let Some(chunk) = stream_chunk_from_event(event) {
             emit(chunk);
@@ -78,7 +118,6 @@ pub(crate) async fn reapply_package_command_surface_streaming(
 /// Execute a package install/update/uninstall action using spoon-scoop.
 ///
 /// Events are forwarded to the caller's emit closure after the operation completes.
-/// Real-time streaming will be added when the TUI migrates to EventReceiver (Phase 2.6).
 pub(crate) async fn execute_package_action_outcome_streaming(
     tool_root: &Path,
     plan: &ScoopPackagePlan,
@@ -88,7 +127,6 @@ pub(crate) async fn execute_package_action_outcome_streaming(
 ) -> AnyResult<ScoopPackageOperationOutcome> {
     let layout = spoon_core::RuntimeLayout::from_root(tool_root);
     let scoop_layout = &layout.scoop;
-    let has_emit = emit.is_some();
 
     // Create event bus for collecting operation events
     let (sender, mut receiver) = spoon_core::event_bus(64);
@@ -141,11 +179,6 @@ pub(crate) async fn execute_package_action_outcome_streaming(
     } else {
         spoon_core::CommandStatus::Failed
     };
-    let output = result
-        .as_ref()
-        .err()
-        .map(|e| vec![e.to_string()])
-        .unwrap_or_default();
 
     Ok(ScoopPackageOperationOutcome {
         kind: "package_operation",
@@ -156,8 +189,6 @@ pub(crate) async fn execute_package_action_outcome_streaming(
         },
         status,
         title: plan.title(),
-        streamed: has_emit,
-        output,
         state: Default::default(),
     })
 }
