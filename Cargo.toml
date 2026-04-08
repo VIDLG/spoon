@@ -1,0 +1,4 @@
+[workspace]
+members = ["spoon", "spoon-core", "spoon-msvc", "spoon-scoop", "xtask"]
+default-members = ["spoon"]
+resolver = "3"

@@ -4,20 +4,15 @@ use anyhow::Result as AnyResult;
 
 use crate::runtime::block_on_sync;
 use crate::service::{
-    BackendEvent, CommandResult, CommandStatus, StreamChunk, stream_chunk_from_backend_event,
+    CommandResult, CommandStatus, StreamChunk,
 };
 
 pub use spoon_core::RepoSyncOutcome;
 
-fn configured_proxy() -> String {
-    crate::config::load_global_config().proxy.clone()
-}
-
 use super::{
     ScoopBucketInventory, BucketSpec, ScoopBucketOperationOutcome, ScoopDoctorDetails,
-    add_bucket_to_registry_outcome, command_result, load_buckets_from_registry,
+    add_bucket_to_registry_outcome, command_result, configured_proxy, load_buckets_from_registry,
     remove_bucket_from_registry_outcome, runtime, update_buckets_outcome,
-    update_buckets_streaming_outcome,
 };
 
 fn command_result_from_bucket_outcome(outcome: ScoopBucketOperationOutcome) -> CommandResult {
@@ -140,17 +135,10 @@ pub(crate) async fn bucket_update_streaming<F>(
 where
     F: FnMut(StreamChunk),
 {
-    let mut backend_emit = |event: BackendEvent| {
-        if let Some(chunk) = stream_chunk_from_backend_event(event) {
-            emit(chunk);
-        }
-    };
-    Ok(update_buckets_streaming_outcome(
-        tool_root,
-        names,
-        &configured_proxy(),
-        Some(&mut backend_emit),
-    )
-    .await
-    .map(command_result_from_bucket_outcome)?)
+    let result = update_buckets_outcome(tool_root, names, &configured_proxy()).await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    for line in &result.output {
+        emit(StreamChunk::Append(line.clone()));
+    }
+    Ok(command_result_from_bucket_outcome(result))
 }

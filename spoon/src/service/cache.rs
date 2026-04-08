@@ -1,13 +1,38 @@
 use serde::Serialize;
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
-use spoon_backend::scoop::{clear_cache as clear_scoop_cache, prune_cache as prune_scoop_cache};
+use anyhow::Result;
 use spoon_core::RuntimeLayout;
 use spoon_msvc::facts::cache::{clear as clear_msvc_cache, prune as prune_msvc_cache};
 use spoon_msvc::paths::msvc_cache_root;
 
-use super::{BackendError, CommandResult, CommandStatus, Result};
+use super::{CommandResult, CommandStatus};
+
+fn recreate_empty_dir(path: &Path) -> Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path)?;
+    }
+    fs::create_dir_all(path)?;
+    Ok(())
+}
+
+fn prune_scoop_cache(cache_root: &Path) -> Result<Vec<String>> {
+    recreate_empty_dir(cache_root)?;
+    Ok(vec![format!(
+        "Pruned Scoop download cache under {}.",
+        cache_root.display()
+    )])
+}
+
+fn clear_scoop_cache(cache_root: &Path) -> Result<Vec<String>> {
+    recreate_empty_dir(cache_root)?;
+    Ok(vec![
+        format!("Cleared Scoop cache under {}.", cache_root.display()),
+        "Retained Scoop buckets, apps, persist data, and state.".to_string(),
+    ])
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheScope {
@@ -70,10 +95,10 @@ pub fn prune(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
     match scope {
         CacheScope::All => {
             output.extend(prune_scoop_cache(&roots.scoop)?);
-            output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?);
+            output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?);
         }
         CacheScope::Scoop => output.extend(prune_scoop_cache(&roots.scoop)?),
-        CacheScope::Msvc => output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?),
+        CacheScope::Msvc => output.extend(prune_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?),
     }
     Ok(CommandResult {
         title: "prune cache".to_string(),
@@ -88,10 +113,10 @@ pub fn clear(roots: &CacheRoots, scope: CacheScope) -> Result<CommandResult> {
     match scope {
         CacheScope::All => {
             output.extend(clear_scoop_cache(&roots.scoop)?);
-            output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?);
+            output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?);
         }
         CacheScope::Scoop => output.extend(clear_scoop_cache(&roots.scoop)?),
-        CacheScope::Msvc => output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| BackendError::Other(e.to_string()))?),
+        CacheScope::Msvc => output.extend(clear_msvc_cache(&roots.msvc).map_err(|e| anyhow::anyhow!("{e}"))?),
     }
     Ok(CommandResult {
         title: "clear cache".to_string(),

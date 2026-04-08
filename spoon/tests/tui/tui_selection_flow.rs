@@ -82,7 +82,7 @@ fn installed_managed_tool_can_start_uninstall_from_tools_page() {
     })
     .unwrap();
 
-    let shims = config::shims_root_from(&tool_root);
+    let shims = spoon_core::RuntimeLayout::from_root(&tool_root).shims;
     std::fs::create_dir_all(&shims).unwrap();
     std::fs::write(shims.join("scoop.cmd"), "@echo off\r\n").unwrap();
     std::fs::write(shims.join("jq.exe"), "").unwrap();

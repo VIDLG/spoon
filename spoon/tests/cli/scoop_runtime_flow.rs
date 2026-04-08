@@ -13,8 +13,9 @@ use common::scoop::{
 use common::setup::{create_configured_home, create_configured_home_with_proxy};
 use sha2::{Digest, Sha256};
 use spoon::config;
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::scoop::{read_installed_state, load_buckets_from_registry};
+use spoon_core::RuntimeLayout;
+use spoon_scoop::load_buckets_from_registry;
+use spoon_scoop::read_installed_state;
 
 #[test]
 fn spoon_scoop_bucket_cli_handles_local_bucket_lifecycle() {
@@ -203,13 +204,13 @@ fn spoon_scoop_package_cli_handles_install_update_uninstall_with_local_bucket_so
         .join("demo")
         .join("1.0.0")
         .join("demo.exe");
-    let shim = config::shims_root_from(&tool_root).join("demo.cmd");
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let shim = layout.shims.join("demo.cmd");
     assert_path_exists(&current_exe);
     assert_path_exists(&versioned_exe);
     assert_path_exists(&shim);
-    let layout = RuntimeLayout::from_root(&tool_root);
-    let state = spoon::runtime::test_block_on(read_installed_state(&layout, "demo")).unwrap();
-    assert_eq!(state.version, "1.0.0");
+    let state = spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "demo"));
+    assert_eq!(state.unwrap().unwrap().identity.version, "1.0.0");
 
     let (archive_v2, hash_v2) = create_zip_archive(&temp_home, "demo.exe", b"demo-v2");
     write_demo_manifest(&bucket_source, "2.0.0", &archive_v2, &hash_v2);
@@ -226,8 +227,8 @@ fn spoon_scoop_package_cli_handles_install_update_uninstall_with_local_bucket_so
             "Reused cached archive",
         ],
     );
-    let updated_state = spoon::runtime::test_block_on(read_installed_state(&layout, "demo")).unwrap();
-    assert_eq!(updated_state.version, "2.0.0");
+    let updated_state = spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "demo"));
+    assert_eq!(updated_state.unwrap().unwrap().identity.version, "2.0.0");
 
     let (uninstall_ok, uninstall_stdout, uninstall_stderr) =
         run_in_home_without_test_mode(&["scoop", "uninstall", "demo"], &temp_home, &[]);
@@ -238,7 +239,7 @@ fn spoon_scoop_package_cli_handles_install_update_uninstall_with_local_bucket_so
     assert_contains(&uninstall_stdout, "Removed Scoop package 'demo'.");
     assert_path_missing(&current_exe);
     assert_path_missing(&shim);
-    assert!(spoon::runtime::test_block_on(read_installed_state(&layout, "demo")).is_none());
+    assert!(spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "demo")).unwrap().is_none());
 }
 
 #[test]
@@ -283,12 +284,12 @@ fn spoon_scoop_package_cli_handles_single_file_manifest_with_architecture_overri
         .join("solo")
         .join("current")
         .join("solo.exe");
-    let shim = config::shims_root_from(&tool_root).join("solo.cmd");
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let shim = layout.shims.join("solo.cmd");
     assert_path_exists(&installed);
     assert_path_exists(&shim);
-    let layout = RuntimeLayout::from_root(&tool_root);
-    let state = spoon::runtime::test_block_on(read_installed_state(&layout, "solo")).unwrap();
-    assert_eq!(state.package, "solo");
+    let state = spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "solo"));
+    assert_eq!(state.unwrap().unwrap().identity.package, "solo");
 }
 
 #[test]
@@ -318,8 +319,8 @@ fn spoon_scoop_package_cli_writes_shim_with_tuple_args() {
         "stdout: {install_stdout}\nstderr: {install_stderr}"
     );
 
-    let shim =
-        std::fs::read_to_string(config::shims_root_from(&tool_root).join("demo.cmd")).unwrap();
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let shim = std::fs::read_to_string(layout.shims.join("demo.cmd")).unwrap();
     assert!(shim.contains("--wrapped %*"), "shim: {shim}");
 }
 
@@ -382,14 +383,14 @@ fn spoon_scoop_package_cli_preserves_persisted_files_across_update() {
     );
 
     let layout = RuntimeLayout::from_root(&tool_root);
-    let state = spoon::runtime::test_block_on(read_installed_state(&layout, "demo")).unwrap();
-    assert_eq!(state.env_add_path, vec!["bin".to_string()]);
+    let state = spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "demo")).unwrap().unwrap();
+    assert_eq!(state.command_surface.env_add_path, vec!["bin".to_string()]);
     assert_eq!(
-        state.env_set.get("DEMO_MODE").map(String::as_str),
+        state.command_surface.env_set.get("DEMO_MODE").map(String::as_str),
         Some("2")
     );
-    assert_eq!(state.persist.len(), 1);
-    assert_eq!(state.persist[0].relative_path, "config");
+    assert_eq!(state.command_surface.persist.len(), 1);
+    assert_eq!(state.command_surface.persist[0].relative_path, "config");
 }
 
 #[test]
@@ -518,9 +519,9 @@ fn spoon_scoop_package_cli_creates_and_removes_shortcuts() {
     assert_path_exists(&shortcut);
 
     let layout = RuntimeLayout::from_root(&tool_root);
-    let state = spoon::runtime::test_block_on(read_installed_state(&layout, "demo")).unwrap();
-    assert_eq!(state.shortcuts.len(), 1);
-    assert_eq!(state.shortcuts[0].name, "Demo Shortcut");
+    let state = spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "demo")).unwrap().unwrap();
+    assert_eq!(state.command_surface.shortcuts.len(), 1);
+    assert_eq!(state.command_surface.shortcuts[0].name, "Demo Shortcut");
 
     let (uninstall_ok, uninstall_stdout, uninstall_stderr) =
         run_in_home_without_test_mode(&["scoop", "uninstall", "demo"], &temp_home, &[]);
@@ -570,7 +571,8 @@ fn spoon_scoop_package_cli_honors_extract_dir_and_extract_to() {
         .join("current")
         .join("portable")
         .join("demo.exe");
-    let shim = config::shims_root_from(&tool_root).join("demo.cmd");
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let shim = layout.shims.join("demo.cmd");
     assert_path_exists(&installed);
     assert_path_exists(&shim);
 }
@@ -636,11 +638,11 @@ fn spoon_scoop_real_remote_package_cli_handles_install_uninstall() {
         "stdout: {install_stdout}"
     );
 
-    let jq_shim = config::shims_root_from(&tool_root).join("jq.cmd");
-    assert!(jq_shim.exists(), "missing jq shim: {}", jq_shim.display());
     let layout = RuntimeLayout::from_root(&tool_root);
+    let jq_shim = layout.shims.join("jq.cmd");
+    assert!(jq_shim.exists(), "missing jq shim: {}", jq_shim.display());
     assert!(
-        spoon::runtime::test_block_on(read_installed_state(&layout, "jq")).is_some(),
+        spoon::runtime::test_block_on(read_installed_state(&layout.scoop, "jq")).unwrap().is_some(),
         "missing jq installed state in control plane"
     );
 

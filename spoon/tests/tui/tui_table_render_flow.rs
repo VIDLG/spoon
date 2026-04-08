@@ -9,7 +9,7 @@ use spoon::config;
 use spoon::status::ToolStatus;
 use spoon::tool;
 use spoon::tui::test_support::Harness;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -61,7 +61,7 @@ fn tools_table_shows_managed_and_external_ownership() {
     })
     .unwrap();
 
-    let scoop_shims = config::shims_root_from(&tool_root);
+    let scoop_shims = RuntimeLayout::from_root(&tool_root).shims;
     std::fs::create_dir_all(&scoop_shims).unwrap();
     std::fs::write(scoop_shims.join("scoop.cmd"), "@echo off\r\n").unwrap();
     std::fs::write(scoop_shims.join("jq.exe"), "").unwrap();
@@ -119,7 +119,8 @@ fn tools_table_hides_latest_when_same_as_current() {
         broken: false,
     }]);
     assert!(
-        app.wait_until(DEFAULT_WAIT, |h| h.tool_version("jq").flatten().as_deref() == Some("1.8.1")),
+        app.wait_until(DEFAULT_WAIT, |h| h.tool_version("jq").flatten().as_deref()
+            == Some("1.8.1")),
         "jq version never became visible"
     );
     select_tool_by_key(&mut app, "jq");
@@ -148,7 +149,7 @@ fn tools_table_shows_size_for_managed_tool() {
     let jq_root = RuntimeLayout::from_root(&tool_root)
         .scoop
         .package_current_root("jq");
-    let jq_shims = config::shims_root_from(&tool_root);
+    let jq_shims = RuntimeLayout::from_root(&tool_root).shims;
     std::fs::create_dir_all(&jq_root).unwrap();
     std::fs::create_dir_all(&jq_shims).unwrap();
     std::fs::write(jq_root.join("jq.exe"), vec![0_u8; 2048]).unwrap();

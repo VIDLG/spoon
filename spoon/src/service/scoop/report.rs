@@ -6,7 +6,7 @@ use super::{
     ScoopPackageDetailsOutcome, command_result, installed_package_states, package_info,
     runtime_status, search_results,
 };
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 fn lines_or_default<T, F>(items: Vec<T>, empty: &str, map: F) -> Vec<String>
 where
@@ -36,10 +36,12 @@ pub async fn package_list_report(tool_root: &Path) -> CommandResult {
     let packages = installed_package_states(tool_root)
         .await
         .into_iter()
-        .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
-            name: state.identity.package,
-            version: state.identity.version.trim().to_string(),
-        })
+        .map(
+            |state| spoon_scoop::InstalledPackageSummary {
+                name: state.identity.package,
+                version: state.identity.version.trim().to_string(),
+            },
+        )
         .collect::<Vec<_>>();
     let output = lines_or_default(
         packages,
@@ -156,7 +158,7 @@ pub async fn package_info_report(tool_root: &Path, package_name: &str) -> Comman
     }
 }
 
-fn format_package_section(package: spoon_backend::scoop::ScoopPackageMetadata) -> Vec<String> {
+fn format_package_section(package: spoon_scoop::ScoopPackageMetadata) -> Vec<String> {
     let mut output = vec![
         "Package:".to_string(),
         format!("  name: {}", package.name),
@@ -198,7 +200,7 @@ fn format_package_section(package: spoon_backend::scoop::ScoopPackageMetadata) -
     output
 }
 
-fn format_install_section(install: spoon_backend::scoop::ScoopPackageInstall) -> Vec<String> {
+fn format_install_section(install: spoon_scoop::ScoopPackageInstall) -> Vec<String> {
     let mut output = vec![
         "Install:".to_string(),
         format!(
@@ -230,7 +232,7 @@ fn format_install_section(install: spoon_backend::scoop::ScoopPackageInstall) ->
 }
 
 fn format_integration_section(
-    integration: spoon_backend::scoop::ScoopPackageIntegration<ConfigEntry>,
+    integration: spoon_scoop::ScoopPackageIntegration<ConfigEntry>,
 ) -> Vec<String> {
     let mut lines = Vec::new();
     if let Some(shims) = integration.commands.shims
@@ -287,7 +289,7 @@ fn format_integration_section(
 }
 
 pub async fn package_manifest(tool_root: &Path, package_name: &str) -> CommandResult {
-    let outcome = spoon_backend::scoop::package_manifest(tool_root, package_name).await;
+    let outcome = spoon_scoop::package_manifest(tool_root, package_name).await;
     let output = match (outcome.content, outcome.error) {
         (Some(content), _) => content.lines().map(str::to_string).collect(),
         (None, Some(error)) => vec![error.message],

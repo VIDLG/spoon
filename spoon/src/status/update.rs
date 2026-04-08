@@ -4,7 +4,7 @@ use crate::config;
 use crate::service::msvc;
 use crate::service::scoop as scoop_backend;
 use crate::status::ToolStatus;
-use crate::tool::{Backend, UpdateStrategy};
+use crate::packages::tool::{Backend, UpdateStrategy};
 
 fn managed_tool_root(install_root: Option<&Path>) -> Option<PathBuf> {
     install_root
@@ -42,7 +42,7 @@ pub fn populate_update_info(statuses: &mut [ToolStatus], install_root: Option<&P
                 }
                 Backend::Native => {
                     if status.tool.has_managed_toolchain_runtime() {
-                        if let Some(latest) = msvc::latest_toolchain_version_label(install_root) {
+                        if let Some(latest) = install_root.and_then(msvc::latest_toolchain_version_label) {
                             status.update_available = status
                                 .version
                                 .as_deref()
@@ -66,7 +66,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::status::ToolStatus;
-    use crate::tool;
+    use crate::packages::tool;
 
     use super::populate_update_info;
 
@@ -184,7 +184,7 @@ mod tests {
                 .as_nanos()
         ));
         let tool_root = base.join("root");
-        let manifest_root = crate::config::msvc_manifest_root_from(&tool_root).join("vs");
+        let manifest_root = spoon_core::RuntimeLayout::from_root(&tool_root).msvc.managed.manifest_root.join("vs");
         fs::create_dir_all(&manifest_root).unwrap();
         fs::write(
             manifest_root.join("latest.json"),

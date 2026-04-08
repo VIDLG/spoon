@@ -5,7 +5,7 @@ use common::assertions::{assert_contains, assert_ok, assert_path_exists, assert_
 use common::cli::{create_test_home, run, run_in_home, run_in_home_without_test_mode};
 use common::setup::create_configured_home;
 use spoon::config;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 #[test]
 fn status_command_prints_core_sections() {
@@ -44,7 +44,7 @@ fn doctor_prepares_default_bucket_and_shims() {
         "main bucket should be prepared"
     );
     assert!(
-        config::shims_root_from(&tool_root).exists(),
+        RuntimeLayout::from_root(&tool_root).shims.exists(),
         "shims root should be prepared"
     );
 }
@@ -73,12 +73,12 @@ fn cache_commands_clean_scoped_domain_cache() {
     let tool_root = env.root;
 
     let scoop_cache = RuntimeLayout::from_root(&tool_root).scoop.cache_root;
-    let msvc_cache = config::msvc_cache_root_from(&tool_root);
+    let msvc_cache = RuntimeLayout::from_root(&tool_root).msvc.managed.cache_root;
     let msvc_validate = msvc_cache.join("validate");
     let msvc_metadata = msvc_cache.join("metadata");
     let msvc_archives = msvc_cache.join("archives");
-    let msvc_state = config::msvc_state_root_from(&tool_root);
-    let msvc_toolchain = config::msvc_toolchain_root_from(&tool_root);
+    let msvc_state = RuntimeLayout::from_root(&tool_root).msvc.managed.state_root;
+    let msvc_toolchain = RuntimeLayout::from_root(&tool_root).msvc.managed.toolchain_root;
 
     std::fs::create_dir_all(&scoop_cache).unwrap();
     std::fs::create_dir_all(&msvc_validate).unwrap();

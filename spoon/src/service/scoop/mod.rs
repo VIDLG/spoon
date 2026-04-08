@@ -23,7 +23,7 @@ pub use report::{
     runtime_status_report, search_report,
 };
 
-pub use spoon_backend::scoop::ensure_main_bucket_ready;
+pub use spoon_scoop::ensure_main_bucket_ready;
 pub use spoon_scoop::{
     latest_version, latest_version_async, load_manifest,
     load_manifest_sync, load_package_manifest, load_package_manifest_sync, parse_manifest,
@@ -31,12 +31,13 @@ pub use spoon_scoop::{
 };
 pub use spoon_scoop::{BucketSpec, known_bucket_source};
 
-pub(crate) use spoon_backend::scoop::{
-    ScoopBucketOperationOutcome, ScoopDoctorDetails,
-    add_bucket_to_registry_outcome,
-    remove_bucket_from_registry_outcome, update_buckets_outcome,
-    update_buckets_streaming_outcome,
+pub(crate) use spoon_scoop::{
+    ScoopBucketOperationOutcome,
+    add_bucket as add_bucket_to_registry_outcome,
+    remove_bucket as remove_bucket_from_registry_outcome,
+    update_buckets as update_buckets_outcome,
 };
+pub(crate) use spoon_scoop::ScoopDoctorDetails;
 pub(crate) use spoon_scoop::{
     ScoopActionPackage, ScoopBucketInventory, ScoopPackageActionOutcome,
     ScoopPackageInstallState, ScoopPackageOperationOutcome, ScoopPackagePlan,
@@ -58,6 +59,10 @@ pub fn set_real_backend_test_mode(enabled: bool) {
 
 pub(super) fn should_fake() -> bool {
     super::test_mode_enabled() && !REAL_BACKEND_TEST_MODE.load(Ordering::Relaxed)
+}
+
+pub(super) fn configured_proxy() -> String {
+    crate::config::load_global_config().proxy.clone()
 }
 
 pub(super) fn command_result(

@@ -1,0 +1,8 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytesize = "2"
+humantime = "2"

@@ -1,4 +1,4 @@
-pub(super) fn status_report_lines(data: spoon_backend::msvc::MsvcStatus) -> Vec<String> {
+pub(super) fn status_report_lines(data: spoon_msvc::status::MsvcStatus) -> Vec<String> {
     let mut output = vec!["MSVC runtimes:".to_string(), "Managed:".to_string()];
     output.push(format!("  status: {}", data.managed.status));
     output.push(format!("  root: {}", data.managed.root));
@@ -43,9 +43,9 @@ fn runtime_state_label(present: bool) -> &'static str {
     if present { "present" } else { "missing" }
 }
 
-fn managed_integration_lines(integration: spoon_backend::msvc::MsvcIntegration) -> Vec<String> {
+fn managed_integration_lines(integration: spoon_msvc::status::MsvcIntegration) -> Vec<String> {
     match integration {
-        spoon_backend::msvc::MsvcIntegration::ActiveManaged(integration) => vec![
+        spoon_msvc::status::MsvcIntegration::ActiveManaged(integration) => vec![
             "    Commands:".to_string(),
             format!(
                 "      wrappers: {}",
@@ -66,9 +66,9 @@ fn managed_integration_lines(integration: spoon_backend::msvc::MsvcIntegration) 
     }
 }
 
-fn official_integration_lines(integration: spoon_backend::msvc::MsvcIntegration) -> Vec<String> {
+fn official_integration_lines(integration: spoon_msvc::status::MsvcIntegration) -> Vec<String> {
     match integration {
-        spoon_backend::msvc::MsvcIntegration::ActiveOfficial(integration) => vec![
+        spoon_msvc::status::MsvcIntegration::ActiveOfficial(integration) => vec![
             "    System:".to_string(),
             format!(
                 "      vswhere discovery: {}",

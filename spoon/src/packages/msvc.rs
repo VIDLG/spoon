@@ -1,10 +1,10 @@
 use crate::config;
-use spoon_backend::layout::RuntimeLayout;
-use crate::tool::{
+use crate::packages::tool::{
     Backend, DetailRuntimeKind, EntityKind, OwnedRootMarkers, ProbePathPolicy, Tool, ToolCategory,
     ToolTag, UpdateStrategy,
 };
 use serde_json::json;
+use spoon_core::RuntimeLayout;
 
 use super::{
     ConfigEntry, ConfigScopeDetails, ConfigTargetDescriptor, PackageConfigDetails,
@@ -205,9 +205,7 @@ fn config_scope_details() -> ConfigScopeDetails {
         )],
         config_files: root
             .as_deref()
-            .map(|root| {
-                vec![RuntimeLayout::from_root(root).shims.display().to_string()]
-            })
+            .map(|root| vec![RuntimeLayout::from_root(root).shims.display().to_string()])
             .unwrap_or_default(),
         conflicts,
     }

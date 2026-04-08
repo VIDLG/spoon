@@ -95,7 +95,7 @@ pub fn ensure_msvc_root_exists() -> Result<PathBuf> {
     if trimmed.is_empty() {
         anyhow::bail!("root is not configured");
     }
-    let path = msvc_root_from(Path::new(trimmed));
+    let path = spoon_core::RuntimeLayout::from_root(Path::new(trimmed)).msvc.managed.root;
     fs::create_dir_all(&path).with_context(|| format!("failed to create {}", path.display()))?;
     Ok(path)
 }
@@ -109,32 +109,8 @@ pub fn configured_tool_root() -> Option<PathBuf> {
     None
 }
 
-// Deprecated: use RuntimeLayout::from_root(root).msvc.root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_domain_root_from(tool_root: &Path) -> PathBuf {
-    tool_root.join("msvc")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).shims instead (per D-10, D-11)
-#[deprecated]
-pub fn shims_root_from(tool_root: &Path) -> PathBuf {
-    tool_root.join("shims")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.managed.root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_root_from(tool_root: &Path) -> PathBuf {
-    msvc_domain_root_from(tool_root).join("managed")
-}
-
 pub fn native_msvc_arch() -> &'static str {
-    match std::env::consts::ARCH {
-        "x86_64" => "x64",
-        "x86" => "x86",
-        "aarch64" => "arm64",
-        "arm" => "arm",
-        _ => "x64",
-    }
+    spoon_msvc::paths::native_msvc_arch()
 }
 
 pub fn msvc_arch_config_value(global: &super::model::GlobalConfig) -> String {
@@ -153,52 +129,4 @@ pub fn msvc_arch_from_config(global: &super::model::GlobalConfig) -> String {
         "auto" => native_msvc_arch().to_string(),
         explicit => explicit.to_string(),
     }
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.official.instance_root instead (per D-10, D-11)
-#[deprecated]
-pub fn official_msvc_root_from(tool_root: &Path) -> PathBuf {
-    msvc_domain_root_from(tool_root)
-        .join("official")
-        .join("instance")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.official.cache_root instead (per D-10, D-11)
-#[deprecated]
-pub fn official_msvc_cache_root_from(tool_root: &Path) -> PathBuf {
-    msvc_domain_root_from(tool_root)
-        .join("official")
-        .join("cache")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.official.state_root instead (per D-10, D-11)
-#[deprecated]
-pub fn official_msvc_state_root_from(tool_root: &Path) -> PathBuf {
-    msvc_domain_root_from(tool_root)
-        .join("official")
-        .join("state")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.managed.cache_root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_cache_root_from(tool_root: &Path) -> PathBuf {
-    msvc_root_from(tool_root).join("cache")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.managed.state_root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_state_root_from(tool_root: &Path) -> PathBuf {
-    msvc_root_from(tool_root).join("state")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.managed.toolchain_root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_toolchain_root_from(tool_root: &Path) -> PathBuf {
-    msvc_root_from(tool_root).join("toolchain")
-}
-
-// Deprecated: use RuntimeLayout::from_root(root).msvc.managed.manifest_root instead (per D-10, D-11)
-#[deprecated]
-pub fn msvc_manifest_root_from(tool_root: &Path) -> PathBuf {
-    msvc_cache_root_from(tool_root).join("manifest")
 }

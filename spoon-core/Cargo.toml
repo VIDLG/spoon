@@ -1,0 +1,24 @@
+[package]
+name = "spoon-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-recursion = "1"
+fs-err = "3"
+gix = { version = "0.81", default-features = false, features = ["blocking-http-transport-reqwest-rust-tls", "blocking-network-client", "blocking-http-transport-reqwest", "worktree-mutation", "sha1"] }
+reqwest = { version = "0.13", default-features = false }
+serde = { version = "1", features = ["derive"] }
+sha1 = "0.10"
+sha2 = "0.10"
+strum_macros = "0.27"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "macros", "process", "rt", "rt-multi-thread", "sync"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing = "0.1"
+url = "2"
+zip = "8"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
+tempfile = "3"

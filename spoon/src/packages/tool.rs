@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolCategory {

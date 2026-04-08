@@ -7,16 +7,15 @@ use common::constants::{CHUNK_STANDARD, PAYLOAD_CHUNK_DELAY_MS, PAYLOAD_STANDARD
 use common::fixtures::spawn_slow_payload_server;
 use common::setup::{create_configured_home, write_test_config};
 use spoon::config;
-use spoon_backend::{RuntimeLayout, msvc as backend_msvc};
+use spoon_core::RuntimeLayout;
+use spoon_msvc::{MsvcRuntimeKind, MsvcOperationKind, MsvcValidationStatus, state::MsvcCanonicalState};
 use std::process::Command;
 
-fn read_canonical_msvc_state(tool_root: &std::path::Path) -> Option<backend_msvc::MsvcCanonicalState> {
-    let layout = RuntimeLayout::from_root(tool_root);
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(backend_msvc::read_canonical_state(&layout))
+fn read_canonical_msvc_state(
+    tool_root: &std::path::Path,
+) -> Option<MsvcCanonicalState> {
+    let layout = spoon_core::RuntimeLayout::from_root(tool_root);
+    spoon_msvc::state::read_canonical_state(&layout)
 }
 
 #[test]
@@ -24,9 +23,10 @@ fn msvc_status_lists_managed_and_official_runtime_state() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let managed_state_root = config::msvc_state_root_from(&tool_root);
-    let official_state_root = config::official_msvc_state_root_from(&tool_root);
-    let shims_root = config::shims_root_from(&tool_root);
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let managed_state_root = layout.msvc.managed.state_root.clone();
+    let official_state_root = layout.msvc.official.state_root.clone();
+    let shims_root = layout.shims.clone();
     std::fs::create_dir_all(&managed_state_root).unwrap();
     std::fs::create_dir_all(&official_state_root).unwrap();
     std::fs::create_dir_all(&shims_root).unwrap();
@@ -122,16 +122,19 @@ exit /b 0\r\n",
     assert_ok(ok, &stdout, &stderr);
     assert_contains(&stdout, "Caching official MSVC bootstrapper");
     assert_contains(&stdout, "Installed official MSVC runtime into");
-    assert_path_exists(&config::official_msvc_root_from(&tool_root));
-    assert_path_exists(&config::official_msvc_state_root_from(&tool_root).join("runtime.json"));
+    assert_path_exists(&RuntimeLayout::from_root(&tool_root).msvc.official.instance_root);
+    assert_path_exists(&RuntimeLayout::from_root(&tool_root).msvc.official.state_root.join("runtime.json"));
     let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
-    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert_eq!(
+        canonical.runtime_kind,
+        spoon_msvc::MsvcRuntimeKind::Official
+    );
     assert!(canonical.installed);
     assert_eq!(canonical.version.as_deref(), Some("14.44.35207"));
     assert_eq!(canonical.sdk_version.as_deref(), Some("10.0.26100.0"));
     assert_eq!(
         canonical.last_operation,
-        Some(backend_msvc::MsvcOperationKind::Install)
+        Some(spoon_msvc::MsvcOperationKind::Install)
     );
 }
 
@@ -156,9 +159,10 @@ type nul > \"%SPOON_OFFICIAL_INSTANCE_ROOT%\\VC\\Tools\\MSVC\\14.44.35207\\bin\\
 exit /b 0\r\n",
     )
     .unwrap();
-    let instance_root = config::official_msvc_root_from(&tool_root);
-    let state_root = config::official_msvc_state_root_from(&tool_root);
-    let cache_root = config::official_msvc_cache_root_from(&tool_root);
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let instance_root = layout.msvc.official.instance_root.clone();
+    let state_root = layout.msvc.official.state_root.clone();
+    let cache_root = layout.msvc.official.cache_root.clone();
     std::fs::create_dir_all(&instance_root).unwrap();
     std::fs::create_dir_all(&state_root).unwrap();
     std::fs::create_dir_all(&cache_root).unwrap();
@@ -182,11 +186,14 @@ exit /b 0\r\n",
     assert_path_missing(&state_root);
     assert_path_exists(&cache_root);
     let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
-    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert_eq!(
+        canonical.runtime_kind,
+        spoon_msvc::MsvcRuntimeKind::Official
+    );
     assert!(!canonical.installed);
     assert_eq!(
         canonical.last_operation,
-        Some(backend_msvc::MsvcOperationKind::Uninstall)
+        Some(spoon_msvc::MsvcOperationKind::Uninstall)
     );
 }
 
@@ -267,7 +274,10 @@ exit /b 0\r\n",
         "Showing official installer UI in passive mode; follow Microsoft setup for detailed progress.",
     );
     let metadata = std::fs::read_to_string(
-        config::official_msvc_cache_root_from(&tool_root)
+        RuntimeLayout::from_root(&tool_root)
+            .msvc
+            .official
+            .cache_root
             .join("commands")
             .join("last-command.json"),
     )
@@ -306,7 +316,10 @@ exit /b 0\r\n",
     assert_ok(ok, &stdout, &stderr);
     assert_contains(&stdout, "Official installer mode: quiet");
     let metadata = std::fs::read_to_string(
-        config::official_msvc_cache_root_from(&tool_root)
+        RuntimeLayout::from_root(&tool_root)
+            .msvc
+            .official
+            .cache_root
             .join("commands")
             .join("last-command.json"),
     )
@@ -320,8 +333,9 @@ fn msvc_validate_without_runtime_uses_installed_runtime_set() {
     std::fs::create_dir_all(&temp_home).unwrap();
     let tool_root = temp_home.join("tool-root");
     write_test_config(&temp_home, &tool_root, "");
-    let official_root = config::official_msvc_root_from(&tool_root);
-    let official_state = config::official_msvc_state_root_from(&tool_root);
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let official_root = layout.msvc.official.instance_root.clone();
+    let official_state = layout.msvc.official.state_root.clone();
     let compiler_root = official_root
         .join("VC")
         .join("Tools")
@@ -488,15 +502,18 @@ fn msvc_validate_without_runtime_uses_installed_runtime_set() {
     );
     assert_contains(&stdout, "Ran official validation sample successfully.");
     let canonical = read_canonical_msvc_state(&tool_root).expect("canonical MSVC state");
-    assert_eq!(canonical.runtime_kind, backend_msvc::MsvcRuntimeKind::Official);
+    assert_eq!(
+        canonical.runtime_kind,
+        spoon_msvc::MsvcRuntimeKind::Official
+    );
     assert!(canonical.installed);
     assert_eq!(
         canonical.last_operation,
-        Some(backend_msvc::MsvcOperationKind::Validate)
+        Some(spoon_msvc::MsvcOperationKind::Validate)
     );
     assert_eq!(
         canonical.validation_status,
-        Some(backend_msvc::MsvcValidationStatus::Valid)
+        Some(spoon_msvc::MsvcValidationStatus::Valid)
     );
 }
 
@@ -505,9 +522,10 @@ fn msvc_update_is_noop_when_cached_target_matches_installed_state() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let manifest_root = config::msvc_manifest_root_from(&tool_root).join("vs");
-    let state_root = config::msvc_state_root_from(&tool_root);
-    let toolchain_root = config::msvc_toolchain_root_from(&tool_root);
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let manifest_root = layout.msvc.managed.manifest_root.join("vs");
+    let state_root = layout.msvc.managed.state_root.clone();
+    let toolchain_root = layout.msvc.managed.toolchain_root.clone();
     std::fs::create_dir_all(&manifest_root).unwrap();
     std::fs::create_dir_all(&state_root).unwrap();
     std::fs::create_dir_all(&toolchain_root).unwrap();
@@ -515,7 +533,7 @@ fn msvc_update_is_noop_when_cached_target_matches_installed_state() {
         state_root.join("runtime.json"),
         serde_json::json!({
             "toolchain_root": toolchain_root,
-            "wrappers_root": config::shims_root_from(&tool_root),
+            "wrappers_root": layout.shims.clone(),
             "runtime": "managed"
         })
         .to_string(),

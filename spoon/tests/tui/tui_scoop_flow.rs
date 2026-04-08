@@ -4,7 +4,7 @@ use std::path::Path;
 use crossterm::event::KeyCode;
 use spoon::config;
 use spoon::tui::test_support::Harness;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 #[path = "../common/mod.rs"]
 mod common;

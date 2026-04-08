@@ -4,14 +4,14 @@ mod common;
 use common::assertions::assert_ok;
 use common::cli::run_in_home;
 use common::setup::create_configured_home;
+use serde_json::Value;
 use spoon::service::{
-    BackendEvent, CommandStatus, FinishEvent, NoticeEvent, StageEvent, StreamChunk,
+    SpoonEvent, CommandStatus, FinishEvent, NoticeEvent, StageEvent, StreamChunk,
     stream_chunk_from_backend_event,
 };
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
-use spoon_backend::{LifecycleStage};
-use serde_json::Value;
+use spoon_core::LifecycleStage;
+use spoon_core::RuntimeLayout;
+use spoon_scoop::{InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState, InstalledPackageUninstall, write_installed_state};
 
 fn parse_json(stdout: &str) -> Value {
     serde_json::from_str(stdout).expect("stdout should be valid json")
@@ -28,22 +28,28 @@ fn json_status_uses_backend_read_models() {
     // Seed canonical state through the backend store so the backend snapshot has content.
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "git".to_string(),
-            version: "2.53.0.2".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "git".to_string(),
+                version: "2.53.0.2".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
@@ -86,8 +92,8 @@ fn json_status_uses_backend_read_models() {
 
 #[test]
 fn backend_stage_events_drive_app_stream_translation() {
-    let running = BackendEvent::Stage(StageEvent::started(LifecycleStage::Planned));
-    let completed = BackendEvent::Stage(StageEvent::completed(LifecycleStage::Completed));
+    let running = SpoonEvent::Stage(StageEvent::started(LifecycleStage::Planned));
+    let completed = SpoonEvent::Stage(StageEvent::completed(LifecycleStage::Completed));
 
     let running_chunk = stream_chunk_from_backend_event(running);
     let completed_chunk = stream_chunk_from_backend_event(completed);
@@ -104,19 +110,19 @@ fn backend_stage_events_drive_app_stream_translation() {
 
 #[test]
 fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementation() {
-    let cancelled = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+    let cancelled = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Cancelled,
         None,
     )));
-    let failed = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+    let failed = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Failed,
         None,
     )));
-    let blocked = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::new(
+    let blocked = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::new(
         CommandStatus::Blocked,
         None,
     )));
-    let explicit = stream_chunk_from_backend_event(BackendEvent::Finished(FinishEvent::failed(
+    let explicit = stream_chunk_from_backend_event(SpoonEvent::Finished(FinishEvent::failed(
         "hook failed before commit",
     )));
 
@@ -140,10 +146,9 @@ fn backend_finish_events_drive_app_shell_messages_without_backend_reimplementati
 
 #[test]
 fn backend_notice_events_append_visible_messages() {
-    let info = stream_chunk_from_backend_event(BackendEvent::Notice(NoticeEvent::info("hello")));
-    let warning = stream_chunk_from_backend_event(BackendEvent::Notice(NoticeEvent::warning(
-        "careful now",
-    )));
+    let info = stream_chunk_from_backend_event(SpoonEvent::Notice(NoticeEvent::info("hello")));
+    let warning =
+        stream_chunk_from_backend_event(SpoonEvent::Notice(NoticeEvent::warning("careful now")));
 
     match info {
         Some(StreamChunk::Append(line)) => assert_eq!(line, "hello"),

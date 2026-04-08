@@ -4,9 +4,80 @@ mod common;
 use common::assertions::{assert_contains, assert_ok, assert_path_exists};
 use common::cli::{create_test_home, run, run_in_home};
 use common::setup::{create_configured_home, create_configured_home_with_proxy, write_test_config};
-use spoon::config;
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::scoop::{InstalledPackageState, read_installed_state, write_installed_state};
+use spoon_core::RuntimeLayout;
+use spoon_scoop::{InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState, InstalledPackageUninstall, AppliedIntegration, write_installed_state};
+
+fn empty_python_state() -> InstalledPackageState {
+    InstalledPackageState {
+        identity: InstalledPackageIdentity {
+            package: "python".to_string(),
+            version: "3.14.3".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+        },
+        command_surface: InstalledPackageCommandSurface {
+            bins: vec![
+                "python".to_string(),
+                "python3".to_string(),
+                "pip".to_string(),
+            ],
+            shortcuts: vec![],
+            env_add_path: vec!["Scripts".to_string(), ".".to_string()],
+            env_set: std::collections::BTreeMap::new(),
+            persist: vec![],
+        },
+        integrations: vec![],
+        uninstall: InstalledPackageUninstall {
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        },
+    }
+}
+
+fn empty_git_state() -> InstalledPackageState {
+    InstalledPackageState {
+        identity: InstalledPackageIdentity {
+            package: "git".to_string(),
+            version: "2.53.0.2".to_string(),
+            bucket: "main".to_string(),
+            architecture: Some("x64".to_string()),
+            cache_size_bytes: None,
+        },
+        command_surface: InstalledPackageCommandSurface {
+            bins: vec![
+                "git".to_string(),
+                "git-bash".to_string(),
+                "bash".to_string(),
+            ],
+            shortcuts: vec![],
+            env_add_path: vec!["cmd".to_string()],
+            env_set: std::collections::BTreeMap::from([(
+                "GIT_INSTALL_ROOT".to_string(),
+                "$dir".to_string(),
+            )]),
+            persist: vec![],
+        },
+        integrations: vec![],
+        uninstall: InstalledPackageUninstall {
+            pre_uninstall: vec![],
+            uninstaller_script: vec![],
+            post_uninstall: vec![],
+        },
+    }
+}
+
+fn integration(key: &str, value: &str) -> AppliedIntegration {
+    AppliedIntegration {
+        key: key.to_string(),
+        value: value.to_string(),
+    }
+}
+
+fn get_integration<'a>(state: &'a InstalledPackageState, key: &str) -> Option<&'a str> {
+    state.integrations.iter().find(|i| i.key == key).map(|i| i.value.as_str())
+}
 
 #[test]
 fn config_prints_current_typed_package_settings_view() {
@@ -288,30 +359,8 @@ fn config_python_set_reapplies_pip_mirror_for_installed_python() {
     let layout = RuntimeLayout::from_root(&tool_root);
     let current_root = layout.scoop.package_current_root("python");
     std::fs::create_dir_all(&current_root).unwrap();
-    spoon::runtime::test_block_on(write_installed_state(
-        &layout,
-        &InstalledPackageState {
-            package: "python".to_string(),
-            version: "3.14.3".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![
-                "python".to_string(),
-                "python3".to_string(),
-                "pip".to_string(),
-            ],
-            shortcuts: vec![],
-            env_add_path: vec!["Scripts".to_string(), ".".to_string()],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        },
-    ))
-    .unwrap();
+    let mut state = empty_python_state();
+    spoon::runtime::test_block_on(write_installed_state(&layout.scoop, &state)).unwrap();
 
     let (ok, stdout, stderr) =
         run_in_home(&["config", "python", "pip_mirror", "tuna"], &temp_home, &[]);
@@ -331,14 +380,9 @@ fn config_python_set_reapplies_pip_mirror_for_installed_python() {
         "index-url=https://pypi.tuna.tsinghua.edu.cn/simple",
     );
 
-    let state = spoon::runtime::test_block_on(spoon_backend::scoop::read_installed_state(
-        &layout, "python",
-    ))
-    .unwrap();
-    assert_eq!(
-        state.integrations.get("python.pip_mirror").map(String::as_str),
-        Some("tuna")
-    );
+    let state = spoon::runtime::test_block_on(spoon_scoop::read_installed_state(&layout.scoop, "python"))
+        .unwrap().unwrap();
+    assert_eq!(get_integration(&state, "python.pip_mirror"), Some("tuna"));
 }
 
 #[test]
@@ -349,29 +393,7 @@ fn config_git_set_reapplies_proxy_policy_for_installed_git() {
     let layout = RuntimeLayout::from_root(&tool_root);
     let current_root = layout.scoop.package_current_root("git");
     std::fs::create_dir_all(&current_root).unwrap();
-    spoon::runtime::test_block_on(write_installed_state(
-        &layout,
-        &InstalledPackageState {
-            package: "git".to_string(),
-            version: "2.53.0.2".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["git".to_string(), "git-bash".to_string(), "bash".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec!["cmd".to_string()],
-            env_set: std::collections::BTreeMap::from([(
-                "GIT_INSTALL_ROOT".to_string(),
-                "$dir".to_string(),
-            )]),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        },
-    ))
-    .unwrap();
+    spoon::runtime::test_block_on(write_installed_state(&layout.scoop, &empty_git_state())).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(
         &["config", "git", "follow_spoon_proxy", "true"],
@@ -387,14 +409,9 @@ fn config_git_set_reapplies_proxy_policy_for_installed_git() {
     let gitconfig_text = std::fs::read_to_string(gitconfig).unwrap();
     assert_contains(&gitconfig_text, "proxy=http://127.0.0.1:7897");
 
-    let state = spoon::runtime::test_block_on(spoon_backend::scoop::read_installed_state(
-        &layout, "git",
-    ))
-    .unwrap();
-    assert_eq!(
-        state.integrations.get("git.follow_spoon_proxy").map(String::as_str),
-        Some("true")
-    );
+    let state = spoon::runtime::test_block_on(spoon_scoop::read_installed_state(&layout.scoop, "git"))
+        .unwrap().unwrap();
+    assert_eq!(get_integration(&state, "git.follow_spoon_proxy"), Some("true"));
 }
 
 #[test]
@@ -536,26 +553,7 @@ fn config_python_set_reapplies_command_profile_for_installed_python() {
     ))
     .unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
-    spoon::runtime::test_block_on(write_installed_state(
-        &layout,
-        &InstalledPackageState {
-            package: "python".to_string(),
-            version: "3.14.3".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["python".to_string(), "python3".to_string(), "pip".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec!["Scripts".to_string(), ".".to_string()],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        },
-    ))
-    .unwrap();
+    spoon::runtime::test_block_on(write_installed_state(&layout.scoop, &empty_python_state())).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(
         &["config", "python", "command_profile", "extended"],
@@ -564,12 +562,14 @@ fn config_python_set_reapplies_command_profile_for_installed_python() {
     );
     assert_ok(ok, &stdout, &stderr);
     assert_contains(&stdout, "command_profile: extended");
-    assert_path_exists(&config::shims_root_from(&tool_root).join("pip3.cmd"));
-    assert_path_exists(&config::shims_root_from(&tool_root).join("pip3.14.cmd"));
+    let layout = RuntimeLayout::from_root(&tool_root);
+    assert_path_exists(&layout.shims.join("pip3.cmd"));
+    assert_path_exists(&layout.shims.join("pip3.14.cmd"));
 
-    let state = spoon::runtime::test_block_on(read_installed_state(&layout, "python")).unwrap();
-    assert!(state.bins.iter().any(|bin| bin == "pip3"));
-    assert!(state.bins.iter().any(|bin| bin == "pip3.14"));
+    let state = spoon::runtime::test_block_on(spoon_scoop::read_installed_state(&layout.scoop, "python"))
+        .unwrap().unwrap();
+    assert!(state.command_surface.bins.iter().any(|bin| bin == "pip3"));
+    assert!(state.command_surface.bins.iter().any(|bin| bin == "pip3.14"));
     let config_text =
         std::fs::read_to_string(temp_home.join(".spoon").join("config.toml")).unwrap();
     assert_contains(&config_text, "command_profile = \"extended\"");
@@ -580,8 +580,9 @@ fn config_msvc_set_reapplies_command_profile_for_installed_managed_msvc() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let toolchain_root = config::msvc_toolchain_root_from(&tool_root);
-    let state_root = config::msvc_state_root_from(&tool_root);
+    let layout = RuntimeLayout::from_root(&tool_root);
+    let toolchain_root = layout.msvc.managed.toolchain_root.clone();
+    let state_root = layout.msvc.managed.root.join("state");
     let bin_root = toolchain_root
         .join("VC")
         .join("Tools")
@@ -650,7 +651,7 @@ fn config_msvc_set_reapplies_command_profile_for_installed_managed_msvc() {
         state_root.join("runtime.json"),
         serde_json::json!({
             "toolchain_root": toolchain_root,
-            "wrappers_root": config::shims_root_from(&tool_root),
+            "wrappers_root": layout.shims.clone(),
             "runtime": "managed"
         })
         .to_string(),
@@ -676,10 +677,10 @@ fn config_msvc_set_reapplies_command_profile_for_installed_managed_msvc() {
         &stdout,
         "command_profile: extended (spoon-cl, spoon-link, spoon-lib, spoon-rc, spoon-mt, spoon-nmake, spoon-dumpbin)",
     );
-    assert_path_exists(&config::shims_root_from(&tool_root).join("spoon-rc.cmd"));
-    assert_path_exists(&config::shims_root_from(&tool_root).join("spoon-mt.cmd"));
-    assert_path_exists(&config::shims_root_from(&tool_root).join("spoon-nmake.cmd"));
-    assert_path_exists(&config::shims_root_from(&tool_root).join("spoon-dumpbin.cmd"));
+    assert_path_exists(&layout.shims.join("spoon-rc.cmd"));
+    assert_path_exists(&layout.shims.join("spoon-mt.cmd"));
+    assert_path_exists(&layout.shims.join("spoon-nmake.cmd"));
+    assert_path_exists(&layout.shims.join("spoon-dumpbin.cmd"));
 
     let (ok, stdout, stderr) = run_in_home(
         &["config", "msvc", "command_profile", "default"],
@@ -692,9 +693,7 @@ fn config_msvc_set_reapplies_command_profile_for_installed_managed_msvc() {
         "command_profile: default (spoon-cl, spoon-link, spoon-lib)",
     );
     assert!(
-        !config::shims_root_from(&tool_root)
-            .join("spoon-rc.cmd")
-            .exists(),
+        !layout.shims.join("spoon-rc.cmd").exists(),
         "optional wrapper spoon-rc.cmd should be removed"
     );
 }
@@ -738,39 +737,16 @@ fn scoop_info_shows_applied_policy_integrations() {
         },
     ))
     .unwrap();
+    let layout = RuntimeLayout::from_root(&tool_root);
     let current_root = layout.scoop.package_current_root("python");
     std::fs::create_dir_all(&current_root).unwrap();
-    let layout = RuntimeLayout::from_root(&tool_root);
-    spoon::runtime::test_block_on(write_installed_state(
-        &layout,
-        &InstalledPackageState {
-            package: "python".to_string(),
-            version: "3.14.3".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["python".to_string(), "python3".to_string(), "pip".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec!["Scripts".to_string(), ".".to_string()],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::from([
-                ("python.pip_mirror".to_string(), "tuna".to_string()),
-                (
-                    "python.pip_config".to_string(),
-                    "C:\\Users\\vision\\AppData\\Roaming\\pip\\pip.ini".to_string(),
-                ),
-                (
-                    "python.pip_index_url".to_string(),
-                    "https://pypi.tuna.tsinghua.edu.cn/simple".to_string(),
-                ),
-            ]),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
-        },
-    ))
-    .unwrap();
+    let mut state = empty_python_state();
+    state.integrations = vec![
+        integration("python.pip_mirror", "tuna"),
+        integration("python.pip_config", "C:\\Users\\vision\\AppData\\Roaming\\pip\\pip.ini"),
+        integration("python.pip_index_url", "https://pypi.tuna.tsinghua.edu.cn/simple"),
+    ];
+    spoon::runtime::test_block_on(write_installed_state(&layout.scoop, &state)).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(&["scoop", "info", "python"], &temp_home, &[]);
     assert_ok(ok, &stdout, &stderr);
@@ -829,33 +805,36 @@ fn scoop_info_does_not_repeat_desired_policy_inside_applied_values() {
         },
     ))
     .unwrap();
+    let layout = RuntimeLayout::from_root(&tool_root);
     let current_root = layout.scoop.package_current_root("git");
     std::fs::create_dir_all(&current_root).unwrap();
-    let layout = RuntimeLayout::from_root(&tool_root);
-    spoon::runtime::test_block_on(write_installed_state(
-        &layout,
-        &InstalledPackageState {
+    let mut state = InstalledPackageState {
+        identity: InstalledPackageIdentity {
             package: "git".to_string(),
             version: "2.53.0.2".to_string(),
             bucket: "main".to_string(),
             architecture: Some("x64".to_string()),
             cache_size_bytes: None,
+        },
+        command_surface: InstalledPackageCommandSurface {
             bins: vec!["git".to_string(), "bash".to_string()],
             shortcuts: vec![],
             env_add_path: vec![],
             env_set: std::collections::BTreeMap::new(),
             persist: vec![],
-            integrations: std::collections::BTreeMap::from([
-                ("git.follow_spoon_proxy".to_string(), "true".to_string()),
-                ("git.proxy".to_string(), "http://127.0.0.1:7897".to_string()),
-                ("git.config".to_string(), "C:\\Users\\vision\\.gitconfig".to_string()),
-            ]),
+        },
+        integrations: vec![
+            integration("git.follow_spoon_proxy", "true"),
+            integration("git.proxy", "http://127.0.0.1:7897"),
+            integration("git.config", "C:\\Users\\vision\\.gitconfig"),
+        ],
+        uninstall: InstalledPackageUninstall {
             pre_uninstall: vec![],
             uninstaller_script: vec![],
             post_uninstall: vec![],
         },
-    ))
-    .unwrap();
+    };
+    spoon::runtime::test_block_on(write_installed_state(&layout.scoop, &state)).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(&["scoop", "info", "git"], &temp_home, &[]);
     assert_ok(ok, &stdout, &stderr);

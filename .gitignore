@@ -7,5 +7,22 @@ install.ps1
 # Rust build artifacts
 ai-setup/target/
 
+# OMC state
+.omc/
+.omx/
+
 # Compiled binary (build with: cargo xtask deploy)
 ai-setup.exe
+
+tmp/
+/*.log
+/_tmp*
+/tmp_debug.ps1
+/*.obj
+
+contrib/
+.env
+.env.local
+.env.test.local
+
+target/

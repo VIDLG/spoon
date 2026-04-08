@@ -6,8 +6,8 @@ use common::cli::{run_in_home, run_in_home_without_test_mode};
 use common::scoop::{create_zip_archive, file_url};
 use common::setup::create_configured_home;
 use spoon::config;
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
+use spoon_core::RuntimeLayout;
+use spoon_scoop::{InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState, InstalledPackageUninstall, write_installed_state};
 
 #[test]
 fn scoop_status_lists_buckets_and_installed_packages() {
@@ -32,22 +32,28 @@ fn scoop_status_lists_buckets_and_installed_packages() {
     .unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "jq".to_string(),
-            version: "1.8.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "jq".to_string(),
+                version: "1.8.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
@@ -71,22 +77,28 @@ fn scoop_list_lists_installed_packages() {
     let tool_root = env.root;
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "jq".to_string(),
-            version: "1.8.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "jq".to_string(),
+                version: "1.8.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
@@ -132,35 +144,38 @@ fn scoop_info_prints_manifest_and_install_details() {
     .unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "jq".to_string(),
-            version: "1.8.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec!["jq".to_string()],
-            shortcuts: vec![],
-            env_add_path: vec!["bin".to_string()],
-            env_set: std::collections::BTreeMap::from([(
-                "JQ_HOME".to_string(),
-                "current".to_string(),
-            )]),
-            persist: vec![spoon_backend::scoop::PersistEntry {
-                relative_path: "config".to_string(),
-                store_name: "config".to_string(),
-            }],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "jq".to_string(),
+                version: "1.8.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec!["jq".to_string()],
+                shortcuts: vec![],
+                env_add_path: vec!["bin".to_string()],
+                env_set: std::collections::BTreeMap::from([(
+                    "JQ_HOME".to_string(),
+                    "current".to_string(),
+                )]),
+                persist: vec![spoon_scoop::PersistEntry {
+                    relative_path: "config".to_string(),
+                    store_name: "config".to_string(),
+                }],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
-    std::fs::create_dir_all(
-        layout.scoop.package_current_root("jq"),
-    )
-    .unwrap();
+    std::fs::create_dir_all(layout.scoop.package_current_root("jq")).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(&["scoop", "info", "jq"], &temp_home, &[]);
     assert_ok(ok, &stdout, &stderr);
@@ -228,22 +243,28 @@ fn scoop_prefix_prints_current_install_root() {
     std::fs::create_dir_all(&current_root).unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "jq".to_string(),
-            version: "1.8.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "jq".to_string(),
+                version: "1.8.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
@@ -336,7 +357,15 @@ fn scoop_install_package_runs_spoon_owned_runtime_for_real() {
     .unwrap();
     let bucket_source_str = bucket_source.display().to_string();
     let (add_ok, add_stdout, add_stderr) = run_in_home(
-        &["scoop", "bucket", "add", "extras", &bucket_source_str, "--branch", "main"],
+        &[
+            "scoop",
+            "bucket",
+            "add",
+            "extras",
+            &bucket_source_str,
+            "--branch",
+            "main",
+        ],
         &temp_home,
         &[],
     );
@@ -363,7 +392,8 @@ fn scoop_install_package_runs_spoon_owned_runtime_for_real() {
             .exists()
     );
     assert!(
-        config::shims_root_from(&tool_root)
+        RuntimeLayout::from_root(&tool_root)
+            .shims
             .join("demo.cmd")
             .exists()
     );

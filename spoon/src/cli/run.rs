@@ -662,10 +662,12 @@ async fn run_scoop_command(
                 let packages = scoop::installed_package_states(root)
                     .await
                     .into_iter()
-                    .map(|state| spoon_backend::scoop::state::InstalledPackageSummary {
-                        name: state.identity.package,
-                        version: state.identity.version.trim().to_string(),
-                    })
+                    .map(
+                        |state| spoon_scoop::InstalledPackageSummary {
+                            name: state.identity.package,
+                            version: state.identity.version.trim().to_string(),
+                        },
+                    )
                     .collect::<Vec<_>>();
                 output::print_json_value(&json!({
                     "kind": "scoop_package_list",
@@ -690,8 +692,7 @@ async fn run_scoop_command(
                 return Ok(());
             };
             if scoop::load_buckets_from_registry(root).await.is_empty() {
-                let proxy = config::load_global_config().proxy;
-                scoop::ensure_main_bucket_ready(root, &proxy).await?;
+                scoop::ensure_main_bucket_ready(root).await?;
             }
             if json_mode {
                 output::print_json_value(&scoop::search_results(root, query.as_deref()).await);
@@ -745,7 +746,7 @@ async fn run_scoop_command(
                 return Ok(());
             };
             if json_mode {
-                let layout = spoon_backend::layout::RuntimeLayout::from_root(root);
+                let layout = spoon_core::RuntimeLayout::from_root(root);
                 let prefix = layout.scoop.apps_root.join(&package).join("current");
                 let status_data = scoop::runtime_status(root).await;
                 let installed_version = status_data

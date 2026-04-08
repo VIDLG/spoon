@@ -8,7 +8,7 @@ use crate::service::{CancellationToken, PackageRef, StreamChunk};
 use super::runtime;
 use super::{
     CommandResult, CommandStatus, RunMode, ScoopPackageActionOutcome, ScoopPackageInstallState,
-    command_result, command_result_from_scoop_package_outcome, infer_tool_root,
+    command_result, command_result_from_scoop_package_outcome, configured_proxy, infer_tool_root,
     plan_package_action,
 };
 
@@ -43,10 +43,6 @@ fn configured_root_override() -> Option<String> {
     } else {
         Some(trimmed)
     }
-}
-
-fn configured_proxy() -> String {
-    crate::config::load_global_config().proxy.clone()
 }
 
 fn run_scoop(action: &str, pkg: PackageRef) -> AnyResult<CommandResult> {

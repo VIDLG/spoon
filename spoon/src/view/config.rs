@@ -2,8 +2,8 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::config;
-use crate::packages::{self, ConfigEntry};
-use spoon_backend::layout::RuntimeLayout;
+use crate::packages::{self, ConfigEntry, empty_to_none};
+use spoon_core::RuntimeLayout;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfigModel {
@@ -179,11 +179,4 @@ pub fn build_package_config_detail_sections(package_key: &str) -> Vec<ConfigDeta
     }
 }
 
-fn empty_to_none(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
+

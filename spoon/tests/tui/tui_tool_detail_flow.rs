@@ -7,7 +7,7 @@ use common::fixtures::{seed_msvc_manifest, select_tool_by_key, unique_temp_dir};
 use common::tui::open_tools;
 use spoon::config;
 use spoon::tui::test_support::Harness;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 #[test]
 fn tools_detail_opens_and_closes_with_escape() {
@@ -145,7 +145,7 @@ fn tool_detail_prioritizes_summary_ops_versions_and_config() {
     let claude_root = RuntimeLayout::from_root(&tool_root)
         .scoop
         .package_current_root("claude-code");
-    let claude_shims = config::shims_root_from(&tool_root);
+    let claude_shims = RuntimeLayout::from_root(&tool_root).shims;
     std::fs::create_dir_all(&claude_root).unwrap();
     std::fs::create_dir_all(&claude_shims).unwrap();
     std::fs::write(claude_root.join("claude.exe"), vec![0_u8; 2048]).unwrap();
@@ -282,18 +282,23 @@ fn tool_detail_uses_backend_models() {
     // or installed_package_states_filtered.
 
     // Verify the module compiles without those imports by checking that
-    // RuntimeLayout from spoon_backend is used for path derivation.
+    // RuntimeLayout from spoon_core is used for path derivation.
     let tool_root = unique_temp_dir("spoon-detail-backend");
     let _ = std::fs::remove_dir_all(&tool_root);
 
     // Set up the backend state so we can verify RuntimeLayout drives the detail.
-    let layout = spoon_backend::layout::RuntimeLayout::from_root(&tool_root);
+    let layout = spoon_core::RuntimeLayout::from_root(&tool_root);
     assert!(
         layout.scoop.apps_root.to_string_lossy().contains("scoop"),
         "RuntimeLayout should derive scoop apps root"
     );
     assert!(
-        layout.msvc.managed.toolchain_root.to_string_lossy().contains("toolchain"),
+        layout
+            .msvc
+            .managed
+            .toolchain_root
+            .to_string_lossy()
+            .contains("toolchain"),
         "RuntimeLayout should derive managed MSVC toolchain root"
     );
 
@@ -306,7 +311,13 @@ fn tool_detail_uses_backend_models() {
             },
             spoon::view::ToolDetailRow::Field {
                 label: "install root".to_string(),
-                value: layout.scoop.apps_root.join("test").join("current").display().to_string(),
+                value: layout
+                    .scoop
+                    .apps_root
+                    .join("test")
+                    .join("current")
+                    .display()
+                    .to_string(),
                 value_kind: spoon::view::ToolDetailValueKind::Path,
             },
         ],
@@ -332,9 +343,10 @@ fn msvc_detail_shows_managed_paths_and_payload_plan() {
         "msvc-14.44.17.14",
         "sdk-10.0.22621.7",
     );
-    let msvc_toolchain = config::msvc_toolchain_root_from(&tool_root);
-    let msvc_cache = config::msvc_cache_root_from(&tool_root);
-    let msvc_state = config::msvc_state_root_from(&tool_root);
+    let msvc_layout = RuntimeLayout::from_root(&tool_root).msvc.managed;
+    let msvc_toolchain = msvc_layout.toolchain_root.clone();
+    let msvc_cache = msvc_layout.cache_root.clone();
+    let msvc_state = msvc_layout.state_root.clone();
     std::fs::create_dir_all(&msvc_toolchain).unwrap();
     std::fs::create_dir_all(&msvc_cache).unwrap();
     std::fs::create_dir_all(&msvc_state).unwrap();
@@ -345,7 +357,7 @@ fn msvc_detail_shows_managed_paths_and_payload_plan() {
         serde_json::json!({
             "runtime": "managed",
             "toolchain_root": msvc_toolchain,
-            "wrappers_root": config::shims_root_from(&tool_root),
+            "wrappers_root": RuntimeLayout::from_root(&tool_root).shims,
         })
         .to_string(),
     )

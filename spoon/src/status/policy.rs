@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use crate::actions::ToolAction;
-use crate::tool::{Backend, EntityKind};
-use crate::{config, tool};
-use spoon_backend::layout::RuntimeLayout;
+use crate::packages::tool::{Backend, EntityKind};
+use crate::{config, packages::tool};
+use spoon_core::RuntimeLayout;
 
 use super::{ToolStatus, collect_statuses};
 
@@ -107,7 +107,7 @@ fn ownership_for_status(status: &ToolStatus) -> ToolOwnership {
     };
     let layout = RuntimeLayout::from_root(&tool_root);
 
-    let scoop_root = layout.scoop.root;
+    let _scoop_root = layout.scoop.root;
     let msvc_root = layout.msvc.managed.root;
     let owned = match status.tool.backend {
         Backend::Native if status.tool.has_managed_toolchain_runtime() => {
@@ -170,7 +170,8 @@ pub fn action_policy(status: &ToolStatus, statuses: &[ToolStatus]) -> ActionPoli
 
 #[cfg(test)]
 mod tests {
-    use crate::tool;
+    use crate::packages::tool;
+    use spoon_core::RuntimeLayout;
 
     use super::{ToolOwnership, ToolStatus, action_policy};
 
@@ -202,7 +203,7 @@ mod tests {
         let managed = ToolStatus {
             tool: jq_tool,
             path: Some(
-                spoon_backend::layout::RuntimeLayout::from_root(&tool_root)
+                RuntimeLayout::from_root(&tool_root)
                     .shims
                     .join("jq.exe"),
             ),

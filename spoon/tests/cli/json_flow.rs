@@ -4,9 +4,9 @@ mod common;
 use common::assertions::assert_ok;
 use common::cli::run_in_home;
 use common::setup::create_configured_home;
-use spoon_backend::layout::RuntimeLayout;
-use spoon_backend::scoop::{InstalledPackageState, write_installed_state};
 use serde_json::Value;
+use spoon_core::RuntimeLayout;
+use spoon_scoop::{InstalledPackageCommandSurface, InstalledPackageIdentity, InstalledPackageState, InstalledPackageUninstall, write_installed_state};
 
 fn parse_json(stdout: &str) -> Value {
     serde_json::from_str(stdout).expect("stdout should be valid json")
@@ -124,22 +124,28 @@ fn scoop_status_json_prints_structured_runtime_view() {
     .unwrap();
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: "jq".to_string(),
-            version: "1.8.1".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: "jq".to_string(),
+                version: "1.8.1".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
@@ -193,7 +199,9 @@ fn scoop_bucket_remove_json_prints_structured_action_result() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        RuntimeLayout::from_root(&tool_root).scoop.bucket_root("extras"),
+        RuntimeLayout::from_root(&tool_root)
+            .scoop
+            .bucket_root("extras"),
     )
     .unwrap();
 
@@ -251,8 +259,9 @@ fn msvc_status_json_prints_structured_runtime_status() {
     let env = create_configured_home();
     let temp_home = env.home;
     let tool_root = env.root;
-    let state_root = spoon::config::msvc_state_root_from(&tool_root);
-    std::fs::create_dir_all(spoon::config::msvc_toolchain_root_from(&tool_root)).unwrap();
+    let layout = spoon_core::RuntimeLayout::from_root(&tool_root);
+    let state_root = layout.msvc.managed.state_root;
+    std::fs::create_dir_all(layout.msvc.managed.toolchain_root).unwrap();
     std::fs::create_dir_all(&state_root).unwrap();
     std::fs::write(state_root.join("runtime.json"), "{}").unwrap();
     std::fs::write(
@@ -287,7 +296,9 @@ fn doctor_json_prints_structured_scoop_runtime_repair_summary() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        RuntimeLayout::from_root(&env.root).scoop.bucket_root("main"),
+        RuntimeLayout::from_root(&env.root)
+            .scoop
+            .bucket_root("main"),
     )
     .unwrap();
 
@@ -309,29 +320,32 @@ fn scoop_prefix_json_prints_structured_prefix_view() {
     let package_name = "git";
     let layout = RuntimeLayout::from_root(&tool_root);
     spoon::runtime::test_block_on(write_installed_state(
-        &layout,
+        &layout.scoop,
         &InstalledPackageState {
-            package: package_name.to_string(),
-            version: "2.53.0.2".to_string(),
-            bucket: "main".to_string(),
-            architecture: Some("x64".to_string()),
-            cache_size_bytes: None,
-            bins: vec![],
-            shortcuts: vec![],
-            env_add_path: vec![],
-            env_set: std::collections::BTreeMap::new(),
-            persist: vec![],
-            integrations: std::collections::BTreeMap::new(),
-            pre_uninstall: vec![],
-            uninstaller_script: vec![],
-            post_uninstall: vec![],
+            identity: InstalledPackageIdentity {
+                package: package_name.to_string(),
+                version: "2.53.0.2".to_string(),
+                bucket: "main".to_string(),
+                architecture: Some("x64".to_string()),
+                cache_size_bytes: None,
+            },
+            command_surface: InstalledPackageCommandSurface {
+                bins: vec![],
+                shortcuts: vec![],
+                env_add_path: vec![],
+                env_set: std::collections::BTreeMap::new(),
+                persist: vec![],
+            },
+            integrations: vec![],
+            uninstall: InstalledPackageUninstall {
+                pre_uninstall: vec![],
+                uninstaller_script: vec![],
+                post_uninstall: vec![],
+            },
         },
     ))
     .unwrap();
-    std::fs::create_dir_all(
-        layout.scoop.package_current_root(package_name),
-    )
-    .unwrap();
+    std::fs::create_dir_all(layout.scoop.package_current_root(package_name)).unwrap();
 
     let (ok, stdout, stderr) = run_in_home(
         &["--json", "scoop", "prefix", package_name],
@@ -431,7 +445,7 @@ fn package_report_uses_backend_models() {
 
     // Verify RuntimeLayout derives the same prefix path that package_current_root did
     let tool_root = std::path::PathBuf::from("D:/test-root");
-    let layout = spoon_backend::layout::RuntimeLayout::from_root(&tool_root);
+    let layout = spoon_core::RuntimeLayout::from_root(&tool_root);
     let package_name = "git";
 
     // RuntimeLayout should derive: <root>/scoop/apps/<package>/current
@@ -487,15 +501,13 @@ fn bucket_json_uses_backend_repo_sync_outcome() {
     ))
     .unwrap();
     std::fs::create_dir_all(
-        RuntimeLayout::from_root(&tool_root).scoop.bucket_root("main"),
+        RuntimeLayout::from_root(&tool_root)
+            .scoop
+            .bucket_root("main"),
     )
     .unwrap();
 
-    let (ok, stdout, stderr) = run_in_home(
-        &["--json", "scoop", "bucket", "list"],
-        &temp_home,
-        &[],
-    );
+    let (ok, stdout, stderr) = run_in_home(&["--json", "scoop", "bucket", "list"], &temp_home, &[]);
     assert_ok(ok, &stdout, &stderr);
     let json = parse_json(&stdout);
     assert_eq!(json["kind"], "scoop_bucket_list");

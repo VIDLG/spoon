@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use crate::tool::{self, EntityKind, Tool, ToolCategory};
+use crate::packages::tool::{self, EntityKind, Tool, ToolCategory};
 use crossterm::style::Stylize;
 use serde::Serialize;
 use walkdir::WalkDir;
@@ -690,7 +690,7 @@ mod tests {
         ToolOwnership, ToolStatus, colorize_status_line, should_surface_update,
         status_label_from_strings, tool_keys_for_category, tool_keys_for_kind,
     };
-    use crate::tool::{EntityKind, ToolCategory};
+    use crate::packages::tool::{EntityKind, ToolCategory};
 
     #[test]
     fn status_summary_lists_keep_kinds_separate() {
@@ -752,7 +752,7 @@ mod tests {
         })
         .unwrap();
 
-        let claude = crate::tool::find_tool("claude").unwrap();
+        let claude = crate::packages::tool::find_tool("claude").unwrap();
         let external = ToolStatus {
             tool: claude,
             path: Some(PathBuf::from("C:/Users/vision/.local/bin/claude.exe")),

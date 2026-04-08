@@ -5,52 +5,54 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::service::{
-    BackendEvent, CancellationToken, CommandResult, CommandStatus, StreamChunk, backend_to_anyhow,
-    build_msvc_backend_context, command_result_from_msvc_outcome, stream_chunk_from_backend_event,
-};
-/// MSVC adapter functions construct an explicit [BackendContext](spoon_backend::BackendContext)
-/// at the app boundary and delegate to context-driven backend entry points.
-/// See [`build_msvc_backend_context`] for the context construction helper.
+use crate::service::{CommandResult, CommandStatus, StreamChunk, stream_chunk_from_event};
+pub use spoon_msvc::ToolchainFlags;
+pub(crate) use spoon_msvc::status::installed_toolchain_version_label;
 
-pub use spoon_backend::msvc::ToolchainFlags;
-pub(crate) use spoon_backend::msvc::{
-    installed_toolchain_version_label, latest_toolchain_version_label,
-};
-
-type MsvcBackendContext = spoon_backend::BackendContext<()>;
-type MsvcBackendOutcome = spoon_backend::msvc::MsvcOperationOutcome;
-
-fn context_for(tool_root: &Path) -> MsvcBackendContext {
-    build_msvc_backend_context(tool_root)
+fn configured_proxy() -> String {
+    crate::config::load_global_config().proxy.clone()
 }
 
-fn forward_backend_event_to_stream<'a, F>(emit: &'a mut F) -> impl FnMut(BackendEvent) + 'a
+fn msvc_request(tool_root: &Path) -> spoon_msvc::MsvcRequest {
+    spoon_msvc::MsvcRequest::for_tool_root(tool_root).proxy(configured_proxy())
+}
+
+fn command_result_from_msvc_outcome(
+    outcome: spoon_msvc::MsvcOperationOutcome,
+) -> CommandResult {
+    CommandResult {
+        title: outcome.title,
+        status: if outcome.status {
+            CommandStatus::Success
+        } else {
+            CommandStatus::Failed
+        },
+        output: outcome.output,
+        streamed: outcome.streamed,
+    }
+}
+
+pub(crate) fn command_result_from_msvc_result(
+    result: spoon_core::Result<spoon_msvc::MsvcOperationOutcome>,
+) -> Result<CommandResult> {
+    result
+        .map(command_result_from_msvc_outcome)
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+pub(crate) fn forward_backend_event_to_stream<'a, F>(emit: &'a mut F) -> impl FnMut(spoon_core::SpoonEvent) + 'a
 where
     F: FnMut(StreamChunk),
 {
-    move |event: BackendEvent| {
-        if let Some(chunk) = stream_chunk_from_backend_event(event) {
+    move |event: spoon_core::SpoonEvent| {
+        if let Some(chunk) = stream_chunk_from_event(event) {
             emit(chunk);
         }
     }
 }
 
-fn command_result_from_backend_outcome(
-    result: spoon_backend::Result<MsvcBackendOutcome>,
-) -> Result<CommandResult> {
-    backend_to_anyhow(result.map(command_result_from_msvc_outcome))
-}
-
-fn command_result_from_streamed_msvc_outcome(
-    mut outcome: spoon_backend::msvc::MsvcOperationOutcome,
-) -> CommandResult {
-    outcome.streamed = false;
-    command_result_from_msvc_outcome(outcome)
-}
-
 pub(crate) fn runtime_state_path(tool_root: &Path) -> PathBuf {
-    spoon_backend::msvc::runtime_state_path(tool_root)
+    spoon_msvc::paths::msvc_state_root(tool_root)
 }
 
 pub mod official {
@@ -58,28 +60,23 @@ pub mod official {
 
     use anyhow::Result;
 
-    use crate::service::{
-        CancellationToken, CommandResult, StreamChunk, backend_to_anyhow,
-        msvc::command_result_from_backend_outcome, msvc::command_result_from_streamed_msvc_outcome,
-        msvc::context_for, msvc::forward_backend_event_to_stream,
-    };
-
-    pub use spoon_backend::msvc::official::{
-        OfficialInstalledState, OfficialInstallerMode, installed_state_path,
+    use crate::service::{CommandResult, StreamChunk};
+    use spoon_core::CancellationToken;
+    pub use spoon_msvc::OfficialInstallerMode;
+    pub use spoon_msvc::official::{
+        OfficialInstalledState, installed_state_path,
         official_instance_root, probe, read_installed_version_label, runtime_state_path,
         vswhere_path, windows_kits_root,
     };
+
+    use super::{command_result_from_msvc_result, forward_backend_event_to_stream, msvc_request};
 
     pub async fn install_toolchain_async_with_mode(
         tool_root: &Path,
         mode: OfficialInstallerMode,
     ) -> Result<CommandResult> {
-        let context = context_for(tool_root);
-        command_result_from_backend_outcome(
-            spoon_backend::msvc::official::install_toolchain_async_with_mode_and_context(
-                &context, mode,
-            )
-            .await,
+        command_result_from_msvc_result(
+            spoon_msvc::official::install_toolchain_async(&msvc_request(tool_root), mode).await,
         )
     }
 
@@ -87,12 +84,8 @@ pub mod official {
         tool_root: &Path,
         mode: OfficialInstallerMode,
     ) -> Result<CommandResult> {
-        let context = context_for(tool_root);
-        command_result_from_backend_outcome(
-            spoon_backend::msvc::official::update_toolchain_async_with_mode_and_context(
-                &context, mode,
-            )
-            .await,
+        command_result_from_msvc_result(
+            spoon_msvc::official::update_toolchain_async(&msvc_request(tool_root), mode).await,
         )
     }
 
@@ -100,11 +93,8 @@ pub mod official {
         tool_root: &Path,
         mode: OfficialInstallerMode,
     ) -> Result<CommandResult> {
-        let context = context_for(tool_root);
-        backend_to_anyhow(
-            spoon_backend::msvc::official::uninstall_toolchain_async_with_context(&context, mode)
-                .await
-                .map(super::command_result_from_msvc_outcome),
+        command_result_from_msvc_result(
+            spoon_msvc::official::uninstall_toolchain_async(&msvc_request(tool_root), mode).await,
         )
     }
 
@@ -117,17 +107,13 @@ pub mod official {
     where
         F: FnMut(StreamChunk),
     {
-        let context = context_for(tool_root);
+        let request = msvc_request(tool_root);
         let mut backend_emit = forward_backend_event_to_stream(emit);
-        backend_to_anyhow(
-            spoon_backend::msvc::official::install_toolchain_streaming_with_context(
-                &context,
-                mode,
-                cancel,
-                &mut backend_emit,
+        command_result_from_msvc_result(
+            spoon_msvc::official::install_toolchain_streaming(
+                &request, mode, cancel, &mut backend_emit,
             )
-            .await
-            .map(command_result_from_streamed_msvc_outcome),
+            .await,
         )
     }
 
@@ -140,17 +126,13 @@ pub mod official {
     where
         F: FnMut(StreamChunk),
     {
-        let context = context_for(tool_root);
+        let request = msvc_request(tool_root);
         let mut backend_emit = forward_backend_event_to_stream(emit);
-        backend_to_anyhow(
-            spoon_backend::msvc::official::update_toolchain_streaming_with_context(
-                &context,
-                mode,
-                cancel,
-                &mut backend_emit,
+        command_result_from_msvc_result(
+            spoon_msvc::official::update_toolchain_streaming(
+                &request, mode, cancel, &mut backend_emit,
             )
-            .await
-            .map(command_result_from_streamed_msvc_outcome),
+            .await,
         )
     }
 
@@ -163,32 +145,25 @@ pub mod official {
     where
         F: FnMut(StreamChunk),
     {
-        let context = context_for(tool_root);
+        let request = msvc_request(tool_root);
         let mut backend_emit = forward_backend_event_to_stream(emit);
-        backend_to_anyhow(
-            spoon_backend::msvc::official::uninstall_toolchain_streaming_with_context(
-                &context,
-                mode,
-                cancel,
-                &mut backend_emit,
+        command_result_from_msvc_result(
+            spoon_msvc::official::uninstall_toolchain_streaming(
+                &request, mode, cancel, &mut backend_emit,
             )
-            .await
-            .map(command_result_from_streamed_msvc_outcome),
+            .await,
         )
     }
 
     pub async fn validate_toolchain(tool_root: &Path) -> Result<CommandResult> {
-        let context = context_for(tool_root);
-        command_result_from_backend_outcome(
-            spoon_backend::msvc::official::validate_toolchain_with_context(&context).await,
+        command_result_from_msvc_result(
+            spoon_msvc::official::validate_official_toolchain_async(&msvc_request(tool_root)).await,
         )
     }
 }
 
 pub async fn status_report(tool_root: &Path) -> CommandResult {
-    let context = context_for(tool_root);
-    let output =
-        report::status_report_lines(spoon_backend::msvc::status_with_context(&context).await);
+    let output = report::status_report_lines(spoon_msvc::status::status(tool_root).await);
     CommandResult {
         title: "status MSVC runtimes".to_string(),
         status: CommandStatus::Success,
@@ -197,21 +172,22 @@ pub async fn status_report(tool_root: &Path) -> CommandResult {
     }
 }
 
-pub async fn status(tool_root: &Path) -> spoon_backend::msvc::MsvcStatus {
-    let context = context_for(tool_root);
-    spoon_backend::msvc::status_with_context(&context).await
+pub async fn status(tool_root: &Path) -> spoon_msvc::status::MsvcStatus {
+    spoon_msvc::status::status(tool_root).await
 }
 
 pub async fn validate_toolchain(tool_root: &Path) -> Result<CommandResult> {
-    let context = context_for(tool_root);
-    command_result_from_backend_outcome(
-        spoon_backend::msvc::validate_toolchain_with_context(&context).await,
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::validate_toolchain_async(&request).await,
     )
 }
 
 pub async fn managed_toolchain_flags(tool_root: &Path) -> Result<ToolchainFlags> {
-    let context = context_for(tool_root);
-    backend_to_anyhow(spoon_backend::msvc::managed_toolchain_flags_with_context(&context).await)
+    let request = msvc_request(tool_root);
+    spoon_msvc::execute::managed_toolchain_flags_with_request(&request)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 pub fn write_managed_toolchain_wrappers(
@@ -219,50 +195,49 @@ pub fn write_managed_toolchain_wrappers(
     command_profile: &str,
     flags: &ToolchainFlags,
 ) -> Result<Vec<String>> {
-    backend_to_anyhow(spoon_backend::msvc::write_managed_toolchain_wrappers(
-        tool_root,
-        command_profile,
-        flags,
-    ))
+    spoon_msvc::wrappers::write_managed_toolchain_wrappers(tool_root, command_profile, flags)
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 pub fn remove_managed_toolchain_wrappers(tool_root: &Path) -> Result<Vec<String>> {
-    backend_to_anyhow(spoon_backend::msvc::remove_managed_toolchain_wrappers(
-        tool_root,
-    ))
+    spoon_msvc::wrappers::remove_managed_toolchain_wrappers(tool_root)
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 pub async fn reapply_managed_command_surface_streaming(
     tool_root: &Path,
     command_profile: &str,
-    emit: &mut dyn FnMut(StreamChunk),
+    _emit: &mut dyn FnMut(StreamChunk),
 ) -> Result<Vec<String>> {
-    let mut backend_emit = |event: BackendEvent| {
-        if let Some(chunk) = stream_chunk_from_backend_event(event) {
-            emit(chunk);
-        }
-    };
-    backend_to_anyhow(
-        spoon_backend::msvc::reapply_managed_command_surface_streaming(
-            tool_root,
-            command_profile,
-            &mut backend_emit,
-        )
-        .await,
-    )
+    let runtime_state = spoon_msvc::paths::msvc_state_root(tool_root);
+    if !runtime_state.exists() {
+        return Ok(vec![
+            "Managed MSVC toolchain is not installed; no wrapper changes were applied.".to_string(),
+        ]);
+    }
+
+    let flags = managed_toolchain_flags(tool_root).await?;
+    let mut lines = write_managed_toolchain_wrappers(tool_root, command_profile, &flags)?;
+    if lines.is_empty() {
+        lines.push("Managed wrapper set already matches the selected command profile.".to_string());
+    }
+    for line in &lines {
+        tracing::info!("{line}");
+    }
+    Ok(lines)
 }
 
 pub async fn install_toolchain_async(tool_root: &Path) -> Result<CommandResult> {
-    let context = context_for(tool_root);
-    command_result_from_backend_outcome(
-        spoon_backend::msvc::install_toolchain_async_with_context(&context).await,
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::install_toolchain_async(&request).await,
     )
 }
 
 pub async fn update_toolchain_async(tool_root: &Path) -> Result<CommandResult> {
-    let context = context_for(tool_root);
-    command_result_from_backend_outcome(
-        spoon_backend::msvc::update_toolchain_async_with_context(&context).await,
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::update_toolchain_async(&request).await,
     )
 }
 
@@ -273,16 +248,11 @@ pub(crate) async fn install_toolchain_async_streaming<F>(
 where
     F: FnMut(StreamChunk),
 {
-    let context = context_for(tool_root);
+    let request = msvc_request(tool_root);
     let mut backend_emit = forward_backend_event_to_stream(emit);
-    backend_to_anyhow(
-        spoon_backend::msvc::install_toolchain_streaming_with_context(
-            &context,
-            None,
-            &mut backend_emit,
-        )
-        .await
-        .map(command_result_from_streamed_msvc_outcome),
+    command_result_from_msvc_result(
+        spoon_msvc::execute::install_toolchain_streaming(&request, None, &mut backend_emit)
+            .await,
     )
 }
 
@@ -293,64 +263,61 @@ pub(crate) async fn update_toolchain_async_streaming<F>(
 where
     F: FnMut(StreamChunk),
 {
-    let context = context_for(tool_root);
+    let request = msvc_request(tool_root);
     let mut backend_emit = forward_backend_event_to_stream(emit);
-    backend_to_anyhow(
-        spoon_backend::msvc::update_toolchain_streaming_with_context(
-            &context,
-            None,
-            &mut backend_emit,
-        )
-        .await
-        .map(command_result_from_streamed_msvc_outcome),
+    command_result_from_msvc_result(
+        spoon_msvc::execute::update_toolchain_streaming(&request, None, &mut backend_emit)
+            .await,
     )
 }
 
 pub(crate) async fn install_toolchain_streaming<F>(
     tool_root: &Path,
-    cancel: Option<&CancellationToken>,
+    cancel: Option<&spoon_core::CancellationToken>,
     emit: &mut F,
 ) -> Result<CommandResult>
 where
     F: FnMut(StreamChunk),
 {
-    let context = context_for(tool_root);
+    let request = msvc_request(tool_root);
     let mut backend_emit = forward_backend_event_to_stream(emit);
-    backend_to_anyhow(
-        spoon_backend::msvc::install_toolchain_streaming_with_context(
-            &context,
-            cancel,
-            &mut backend_emit,
-        )
-        .await
-        .map(command_result_from_streamed_msvc_outcome),
+    command_result_from_msvc_result(
+        spoon_msvc::execute::install_toolchain_streaming(&request, cancel, &mut backend_emit)
+            .await,
     )
 }
 
 pub(crate) async fn update_toolchain_streaming<F>(
     tool_root: &Path,
-    cancel: Option<&CancellationToken>,
+    cancel: Option<&spoon_core::CancellationToken>,
     emit: &mut F,
 ) -> Result<CommandResult>
 where
     F: FnMut(StreamChunk),
 {
-    let context = context_for(tool_root);
+    let request = msvc_request(tool_root);
     let mut backend_emit = forward_backend_event_to_stream(emit);
-    backend_to_anyhow(
-        spoon_backend::msvc::update_toolchain_streaming_with_context(
-            &context,
-            cancel,
-            &mut backend_emit,
-        )
-        .await
-        .map(command_result_from_streamed_msvc_outcome),
+    command_result_from_msvc_result(
+        spoon_msvc::execute::update_toolchain_streaming(&request, cancel, &mut backend_emit)
+            .await,
     )
 }
 
 pub async fn uninstall_toolchain(tool_root: &Path) -> Result<CommandResult> {
-    let context = context_for(tool_root);
-    command_result_from_backend_outcome(
-        spoon_backend::msvc::uninstall_toolchain_with_context(&context).await,
+    let request = msvc_request(tool_root);
+    command_result_from_msvc_result(
+        spoon_msvc::execute::uninstall_toolchain_async(&request).await,
     )
+}
+
+pub(crate) fn latest_toolchain_version_label(tool_root: &Path) -> Option<String> {
+    let request = msvc_request(tool_root);
+    let manifest_root = spoon_msvc::paths::msvc_manifest_root(&request.root);
+    let target_arch = request.normalized_target_arch();
+    spoon_msvc::facts::manifest::latest_toolchain_target_from_cached_manifest(
+        &manifest_root,
+        spoon_msvc::platform::native_host_arch(),
+        &target_arch,
+    )
+    .map(|target| spoon_msvc::status::user_facing_toolchain_label(&target.label()))
 }

@@ -7,7 +7,7 @@ use common::tui::open_global_form;
 use spoon::config;
 use spoon::editor;
 use spoon::tui::test_support::Harness;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 use std::fs;
 
 fn set_available_test_editor() {

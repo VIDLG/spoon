@@ -8,7 +8,7 @@ use crate::status::StatusSnapshot;
 use crate::config;
 use crate::service::msvc;
 use crate::status::ToolStatus;
-use crate::tool::{self, Tool};
+use crate::packages::tool::{self, Tool};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProbeResult {
@@ -113,7 +113,7 @@ fn managed_scoop_state_version(
     _install_root: Option<&Path>,
     snapshot: Option<&StatusSnapshot>,
 ) -> Option<String> {
-    if tool.backend != crate::tool::Backend::Scoop {
+    if tool.backend != crate::packages::tool::Backend::Scoop {
         return None;
     }
     // D-07/D-08: consume backend snapshot, not app-side state file IO
@@ -136,7 +136,7 @@ fn configured_probe_path(tool: &'static Tool, install_root: Option<&Path>) -> Op
         .map(Path::to_path_buf)
         .or_else(config::configured_tool_root)?;
     match tool.backend {
-        crate::tool::Backend::Scoop => {
+        crate::packages::tool::Backend::Scoop => {
             let layout = RuntimeLayout::from_root(&root);
             command_path_in_dirs(tool.command, std::iter::once(layout.shims))
         }
@@ -312,7 +312,7 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use crate::tool;
+    use crate::packages::tool;
     use spoon_core::RuntimeLayout;
     use spoon_scoop::InstalledPackageSummary;
     use crate::status::StatusSnapshot;

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::config;
 use crate::editor::model::{EDITOR_CANDIDATES, EditorCandidate, EditorStatus};
 use crate::editor::state;
-use spoon_backend::layout::RuntimeLayout;
+use spoon_core::RuntimeLayout;
 
 pub fn candidates() -> &'static [EditorCandidate] {
     &EDITOR_CANDIDATES
