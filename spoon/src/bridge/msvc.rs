@@ -1,11 +1,8 @@
-#[path = "report.rs"]
-mod report;
-
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::service::{CommandResult, CommandStatus, StreamChunk, stream_chunk_from_event};
+use crate::bridge::{CommandResult, CommandStatus, StreamChunk, stream_chunk_from_event};
 pub use spoon_msvc::ToolchainFlags;
 pub(crate) use spoon_msvc::status::installed_toolchain_version_label;
 
@@ -47,7 +44,7 @@ pub mod official {
 
     use anyhow::Result;
 
-    use crate::service::{CommandResult, StreamChunk, stream_chunk_from_event};
+    use crate::bridge::{CommandResult, StreamChunk, stream_chunk_from_event};
     use spoon_core::CancellationToken;
     pub use spoon_msvc::OfficialInstallerMode;
     pub use spoon_msvc::official::{
@@ -173,7 +170,7 @@ pub mod official {
 }
 
 pub async fn status_report(tool_root: &Path) -> CommandResult {
-    let _output = report::status_report_lines(spoon_msvc::status::status(tool_root).await);
+    let _output = crate::cli::report::msvc::status_report_lines(spoon_msvc::status::status(tool_root).await);
     CommandResult {
         title: "status MSVC runtimes".to_string(),
         status: CommandStatus::Success,
@@ -181,7 +178,7 @@ pub async fn status_report(tool_root: &Path) -> CommandResult {
 }
 
 pub async fn status_report_lines(tool_root: &Path) -> Vec<String> {
-    report::status_report_lines(spoon_msvc::status::status(tool_root).await)
+    crate::cli::report::msvc::status_report_lines(spoon_msvc::status::status(tool_root).await)
 }
 
 pub async fn status(tool_root: &Path) -> spoon_msvc::status::MsvcStatus {

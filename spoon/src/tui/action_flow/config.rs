@@ -174,7 +174,7 @@ fn start_open_form_in_editor(form: &FormState) -> Result<FormOutcome> {
         },
         BackgroundAction {
             rx,
-            cancel: crate::service::CancellationToken::new(),
+            cancel: crate::bridge::CancellationToken::new(),
         },
     ))
 }
@@ -230,7 +230,7 @@ fn start_open_form_in_explorer(form: &FormState) -> Result<FormOutcome> {
         },
         BackgroundAction {
             rx,
-            cancel: crate::service::CancellationToken::new(),
+            cancel: crate::bridge::CancellationToken::new(),
         },
     ))
 }

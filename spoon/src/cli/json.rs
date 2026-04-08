@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::cli::response::CliResponse;
 use crate::config;
-use crate::service::{CommandResult, CommandStatus};
+use crate::bridge::{CommandResult, CommandStatus};
 use crate::status;
 use crate::view;
 

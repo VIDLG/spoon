@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::config;
-use crate::service::msvc;
-use crate::service::scoop as scoop_backend;
+use crate::bridge::msvc;
+use crate::bridge::scoop as scoop_backend;
 use crate::status::ToolStatus;
 use crate::packages::tool::{Backend, UpdateStrategy};
 

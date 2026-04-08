@@ -12,7 +12,7 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 
 use crate::cli::ColorModeArg;
 use crate::cli::response::{CliEntry, CliKind, CliResponse};
-use crate::service::StreamChunk;
+use crate::bridge::StreamChunk;
 
 const CLI_SECTION_HEADERS: &[&str] = &[
     "config:",

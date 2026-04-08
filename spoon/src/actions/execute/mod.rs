@@ -6,9 +6,9 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::logger;
-use crate::service::CancellationToken;
-use crate::service::CommandResult;
-use crate::service::StreamChunk;
+use crate::bridge::CancellationToken;
+use crate::bridge::CommandResult;
+use crate::bridge::StreamChunk;
 use crate::packages::tool::{Backend, Tool};
 
 use super::ToolAction;

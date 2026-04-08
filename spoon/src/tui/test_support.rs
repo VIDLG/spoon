@@ -12,7 +12,7 @@ use crate::clipboard;
 use crate::config;
 use crate::editor;
 use crate::launcher;
-use crate::service::scoop;
+use crate::bridge::scoop;
 use crate::status::ToolStatus;
 
 use super::{App, Modal, OutputState, Screen, background, keys};

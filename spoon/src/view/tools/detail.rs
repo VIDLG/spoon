@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::actions::ToolAction;
 use crate::formatting::format_bytes;
 use crate::packages;
-use crate::service::scoop::resolve_manifest;
+use crate::bridge::scoop::resolve_manifest;
 use crate::status::{self, ToolOwnership, ToolStatus};
 use serde::Serialize;
 use walkdir::WalkDir;

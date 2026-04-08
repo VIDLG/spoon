@@ -1,4 +1,4 @@
-use crate::service::CommandResult;
+use crate::bridge::CommandResult;
 
 #[derive(Debug, Clone, Copy)]
 pub struct EventScope {

@@ -102,7 +102,7 @@ impl spoon_scoop::ScoopPorts for AppSystemPort {
     }
 }
 
-static APP_PORTS: AppSystemPort = AppSystemPort;
+pub(crate) static APP_PORTS: AppSystemPort = AppSystemPort;
 
 pub fn msvc_arch_from_config(global: &GlobalConfig) -> String {
     crate::config::msvc_arch_from_config(global)

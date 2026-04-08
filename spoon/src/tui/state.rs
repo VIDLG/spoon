@@ -108,7 +108,7 @@ pub(crate) struct EditorSetupState {
 
 pub(crate) struct BackgroundAction {
     pub(crate) rx: UnboundedReceiver<BackgroundEvent>,
-    pub(crate) cancel: crate::service::CancellationToken,
+    pub(crate) cancel: crate::bridge::CancellationToken,
 }
 
 pub(crate) struct ActionOutcome {

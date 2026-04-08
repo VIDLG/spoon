@@ -46,24 +46,6 @@ spoon/
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json
-├── skills/
-│   ├── scoop/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── commands.md / commands-zh.md
-│   │       ├── guide-zh.md
-│   │       └── recipes/            # 安装后配置 recipe（英文 + 中文）
-│   │           └── android-clt, flutter, nodejs, pixi, pkl-cli, rustup
-│   ├── proxy/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       └── guide-zh.md
-│   └── ai-toolchain/
-│       ├── SKILL.md
-│       └── SKILL-zh.md
-├── scripts/
-│   ├── run-cmd.ps1
-│   └── add-path.ps1
 ├── CLAUDE.md
 ├── README.md
 └── README-zh.md

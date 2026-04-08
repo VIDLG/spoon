@@ -1,4 +1,4 @@
-use crate::service::CommandResult;
+use crate::bridge::CommandResult;
 
 pub fn flatten_command_results(results: Vec<CommandResult>) -> Vec<String> {
     let mut lines = Vec::new();
@@ -29,13 +29,13 @@ pub fn summarize_streamed_command_results(results: Vec<CommandResult>) -> (Vec<S
 pub fn summarize_command_status(results: &[CommandResult]) -> String {
     if results
         .iter()
-        .any(|r| matches!(r.status, crate::service::CommandStatus::Cancelled))
+        .any(|r| matches!(r.status, crate::bridge::CommandStatus::Cancelled))
     {
         return "action cancelled".to_string();
     }
     if results
         .iter()
-        .any(|r| matches!(r.status, crate::service::CommandStatus::Blocked))
+        .any(|r| matches!(r.status, crate::bridge::CommandStatus::Blocked))
     {
         return "blocked by prerequisites".to_string();
     }

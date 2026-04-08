@@ -9,8 +9,8 @@ use crate::logger;
 use crate::packages::{
     self, PackageConfigImportResult, PackageConfigReapply, PackageConfigSetResult,
 };
-use crate::service::StreamChunk;
-use crate::service::{CacheScope, cache_action_result, clear_cache, msvc, prune_cache, scoop};
+use crate::bridge::StreamChunk;
+use crate::bridge::{CacheScope, cache_action_result, clear_cache, msvc, prune_cache, scoop};
 use crate::status;
 use crate::view;
 
@@ -27,7 +27,7 @@ fn effective_root(install_root: Option<&Path>) -> Option<PathBuf> {
         .or_else(config::configured_tool_root)
 }
 
-fn print_command_result(result: &crate::service::CommandResult, json_mode: bool) {
+fn print_command_result(result: &crate::bridge::CommandResult, json_mode: bool) {
     if json_mode {
         output::print_json_value(&cli_json::command_result(result));
     }
@@ -228,16 +228,16 @@ async fn reapply_package_config_change(
         PackageConfigReapply::None => Ok(Vec::new()),
         PackageConfigReapply::ScoopIntegrations => {
             if json_mode {
-                scoop::runtime::reapply_package_integrations(&root, package_key).await
+                scoop::reapply_package_integrations(&root, package_key).await
             } else {
-                scoop::runtime::reapply_package_integrations_with_emit(&root, package_key, output::print_stream_chunk).await
+                scoop::reapply_package_integrations_with_emit(&root, package_key, output::print_stream_chunk).await
             }
         }
         PackageConfigReapply::ScoopCommandSurface => {
             if json_mode {
-                scoop::runtime::reapply_package_command_surface(&root, package_key).await
+                scoop::reapply_package_command_surface(&root, package_key).await
             } else {
-                scoop::runtime::reapply_package_command_surface_with_emit(&root, package_key, output::print_stream_chunk).await
+                scoop::reapply_package_command_surface_with_emit(&root, package_key, output::print_stream_chunk).await
             }
         }
         PackageConfigReapply::ManagedMsvcCommandSurface => {
@@ -533,15 +533,15 @@ fn run_domain_cache_command(
     root: &Path,
     json_mode: bool,
 ) {
-    let roots = crate::service::cache_roots_for_tool_root(root);
+    let roots = crate::bridge::cache_roots_for_tool_root(root);
     let (action, result, lines) = match command {
         DomainCacheSubcommand::Prune => {
-            let lines = crate::service::cache_prune_lines(&roots, scope)
+            let lines = crate::bridge::cache_prune_lines(&roots, scope)
                 .expect("cache prune should succeed once root is configured");
             ("prune", prune_cache(root, scope), lines)
         }
         DomainCacheSubcommand::Clear => {
-            let lines = crate::service::cache_clear_lines(&roots, scope)
+            let lines = crate::bridge::cache_clear_lines(&roots, scope)
                 .expect("cache clear should succeed once root is configured");
             ("clear", clear_cache(root, scope), lines)
         }

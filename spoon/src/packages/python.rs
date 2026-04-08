@@ -194,7 +194,7 @@ fn config_scope_details() -> ConfigScopeDetails {
     let detected_index_url = config::load_pip_index_url();
     let mut conflicts = Vec::new();
     if !policy.python.pip_mirror.trim().is_empty() {
-        let desired_index_url = crate::service::scoop::runtime::resolved_pip_mirror_url_for_display(
+        let desired_index_url = crate::bridge::scoop::resolved_pip_mirror_url_for_display(
             &policy.python.pip_mirror,
         );
         if !detected_index_url.trim().is_empty() && detected_index_url.trim() != desired_index_url {

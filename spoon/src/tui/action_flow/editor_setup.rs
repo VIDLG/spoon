@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 use crate::editor;
 use crate::logger;
 use crate::runtime;
-use crate::service::StreamChunk;
+use crate::bridge::StreamChunk;
 
 use super::super::{
     ActionOutcome, BackgroundAction, BackgroundEvent, ConfigKind, EditorSetupState, Modal,
@@ -130,7 +130,7 @@ pub(crate) fn handle_editor_setup_key(
                 },
                 BackgroundAction {
                     rx,
-                    cancel: crate::service::CancellationToken::new(),
+                    cancel: crate::bridge::CancellationToken::new(),
                 },
             ))
         }
@@ -220,7 +220,7 @@ pub(crate) fn handle_editor_setup_key(
                 },
                 BackgroundAction {
                     rx,
-                    cancel: crate::service::CancellationToken::new(),
+                    cancel: crate::bridge::CancellationToken::new(),
                 },
             ))
         }

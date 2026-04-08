@@ -10,7 +10,7 @@ pub mod logger;
 pub mod packages;
 pub mod platform;
 pub mod runtime;
-pub mod service;
+pub mod bridge;
 pub mod settings;
 pub mod status;
 pub mod tui;

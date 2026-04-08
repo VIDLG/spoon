@@ -6,7 +6,7 @@ use spoon_core::RuntimeLayout;
 
 use crate::status::StatusSnapshot;
 use crate::config;
-use crate::service::msvc;
+use crate::bridge::msvc;
 use crate::status::ToolStatus;
 use crate::packages::tool::{self, Tool};
 
@@ -360,7 +360,7 @@ mod tests {
             .toolchain_root;
         let state_root = RuntimeLayout::from_root(&tool_root).msvc.managed.state_root;
         fs::create_dir_all(&state_root).unwrap();
-        fs::write(crate::service::msvc::runtime_state_path(&tool_root), "{}").unwrap();
+        fs::write(crate::bridge::msvc::runtime_state_path(&tool_root), "{}").unwrap();
 
         let installed = state_root.join("installed.json");
         fs::write(

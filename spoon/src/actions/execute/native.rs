@@ -3,8 +3,8 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::runtime::block_on_sync;
-use crate::service::msvc;
-use crate::service::{CancellationToken, CommandResult, CommandStatus, StreamChunk};
+use crate::bridge::msvc;
+use crate::bridge::{CancellationToken, CommandResult, CommandStatus, StreamChunk};
 use crate::packages::tool::Tool;
 
 use super::super::ToolAction;

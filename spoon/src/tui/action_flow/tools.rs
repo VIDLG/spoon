@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::actions::{self, ToolAction};
 use crate::logger;
 use crate::runtime;
-use crate::service::{CancellationToken, StreamChunk};
+use crate::bridge::{CancellationToken, StreamChunk};
 
 use super::super::{
     ActionOutcome, BackgroundAction, BackgroundEvent, Modal, OutputState, ToolManagerState,

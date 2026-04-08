@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::service::{
+use crate::bridge::{
     CancellationToken, CommandResult, CommandStatus, PackageRef, StreamChunk, scoop,
 };
 use crate::status::{self, ToolOwnership, ToolStatus};

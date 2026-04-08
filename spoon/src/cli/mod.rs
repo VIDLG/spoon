@@ -2,6 +2,7 @@ mod args;
 mod json;
 mod messages;
 mod output;
+pub mod report;
 mod response;
 mod run;
 

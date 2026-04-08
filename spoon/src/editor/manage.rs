@@ -4,8 +4,8 @@ use crate::config;
 use crate::editor::model::EditorCandidate;
 use crate::editor::state;
 use crate::logger;
-use crate::service::StreamChunk;
-use crate::service::{CommandResult, CommandStatus, scoop};
+use crate::bridge::StreamChunk;
+use crate::bridge::{CommandResult, CommandStatus, scoop};
 
 pub fn apply_candidate(candidate: EditorCandidate) -> Result<()> {
     let mut global = config::load_global_config();
@@ -46,7 +46,7 @@ where
             title: format!("install editor {}", candidate.label),
             status: CommandStatus::Success,
         };
-        let plan = crate::service::scoop::plan_package_action(
+        let plan = crate::bridge::scoop::plan_package_action(
             "install",
             candidate.label,
             candidate.package_name,
@@ -105,7 +105,7 @@ where
             title: format!("uninstall editor {}", candidate.label),
             status: CommandStatus::Success,
         };
-        let plan = crate::service::scoop::plan_package_action(
+        let plan = crate::bridge::scoop::plan_package_action(
             "uninstall",
             candidate.label,
             candidate.package_name,
